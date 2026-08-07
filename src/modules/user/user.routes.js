@@ -1,0 +1,62 @@
+"use strict";
+
+const express = require("express");
+const UserController = require("./user.controller");
+const validate = require("../../middleware/validate");
+const authenticate = require("../../middleware/authenticate");
+const checkPermission = require("../../middleware/checkPermission");
+const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
+const {
+    createUserValidation,
+    updateUserValidation,
+    userIdValidation
+} = require("./user.validation");
+
+const router = express.Router();
+
+// All routes require authentication
+router.use(authenticate);
+
+// List users
+router.get(
+    "/",
+    checkPermission(MODULES.STAFF_MANAGEMENT, PERMISSION_LEVELS.VIEW),
+    UserController.getUsers
+);
+
+// Create user
+router.post(
+    "/",
+    checkPermission(MODULES.STAFF_MANAGEMENT, PERMISSION_LEVELS.FULL),
+    createUserValidation,
+    validate,
+    UserController.createUser
+);
+
+// Get single user
+router.get(
+    "/:id",
+    userIdValidation,
+    validate,
+    UserController.getUser
+);
+
+// Update user
+router.patch(
+    "/:id",
+    checkPermission(MODULES.STAFF_MANAGEMENT, PERMISSION_LEVELS.FULL),
+    updateUserValidation,
+    validate,
+    UserController.updateUser
+);
+
+// Delete user
+router.delete(
+    "/:id",
+    checkPermission(MODULES.STAFF_MANAGEMENT, PERMISSION_LEVELS.FULL),
+    userIdValidation,
+    validate,
+    UserController.deleteUser
+);
+
+module.exports = router;

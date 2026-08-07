@@ -1,0 +1,472 @@
+"use strict";
+
+// ─── User Roles ────────────────────────────────────────────────────────────────
+// 8 distinct roles across the platform
+const ROLES = Object.freeze({
+    // MSquare platform-level
+    SUPER_ADMIN:      "super_admin",
+
+    // Society-level management
+    ADMIN:            "admin",            // Committee / Society Admin
+    COMMITTEE_MEMBER: "committee_member", // Alias for admin — same permissions
+
+    // Finance
+    ACCOUNTANT:       "accountant",
+
+    // Residents
+    RESIDENT_OWNER:   "resident_owner",
+    RESIDENT_TENANT:  "resident_tenant",
+    RESIDENT:         "resident",         // Legacy alias → treated as resident_owner
+
+    // Operations
+    SECURITY_GUARD:   "security_guard",
+    SECURITY:         "security",         // Legacy alias → treated as security_guard
+    FACILITY_MANAGER: "facility_manager",
+
+    // External
+    VENDOR:           "vendor",
+    STAFF:            "staff",            // Legacy generic staff
+});
+
+// ─── Modules (13 platform modules) ────────────────────────────────────────────
+const MODULES = Object.freeze({
+    SOCIETY_FLAT_SETUP:    "society_flat_setup",
+    BILLING_ACCOUNTS:      "billing_accounts",
+    VISITOR_MANAGEMENT:    "visitor_management",
+    COMPLAINTS_HELPDESK:   "complaints_helpdesk",
+    NOTICE_BOARD_POLLS:    "notice_board_polls",
+    AMENITY_BOOKING:       "amenity_booking",
+    PARKING_MANAGEMENT:    "parking_management",
+    VENDOR_MANAGEMENT:     "vendor_management",
+    STAFF_MANAGEMENT:      "staff_management",
+    DOCUMENTS_MANAGER:     "documents_manager",
+    REPORTS_DASHBOARD:     "reports_dashboard",
+    AI_ASSISTANT:          "ai_assistant",
+    FESTIVAL_COLLECTION:   "festival_collection",
+});
+
+// ─── Permission Levels ────────────────────────────────────────────────────────
+// Numeric — higher number = more access. Use >= for "at least VIEW", etc.
+const PERMISSION_LEVELS = Object.freeze({
+    NO_ACCESS: 0,
+    VIEW:      1,
+    MANAGE:    2, // Read + update/process assigned items
+    FULL:      3, // Create, Read, Update, Delete
+});
+
+// ─── Scope qualifiers (used alongside level to restrict data visibility) ──────
+const PERMISSION_SCOPE = Object.freeze({
+    ALL:        "all",        // Platform-wide or society-wide
+    SOCIETY:    "society",    // Restricted to the user's society
+    PLATFORM:   "platform",   // Super Admin — cross-society platform view
+    OWN:        "own",        // Only the user's own records / flat
+    ASSIGNED:   "assigned",   // Only records explicitly assigned to this user
+    FINANCIAL:  "financial",  // Only financial reports / queries
+    FACILITY:   "facility",   // Facility-related reports/operations only
+    RESTRICTED: "restricted", // View permitted, but certain categories blocked
+    NONE:       null,
+});
+
+// ─── Role → Module Permission Matrix ──────────────────────────────────────────
+// Each cell: { level: PERMISSION_LEVELS.*, scope: PERMISSION_SCOPE.* }
+// Level drives the BE gate; scope drives the FE filter and query filter.
+const ROLE_PERMISSIONS = Object.freeze({
+
+    // ── 1. Super Admin (MSquare) ──────────────────────────────────────────────
+    [ROLES.SUPER_ADMIN]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.PLATFORM },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.PLATFORM },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.PLATFORM },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.PLATFORM },
+    },
+
+    // ── 2. Committee / Society Admin ─────────────────────────────────────────
+    [ROLES.ADMIN]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+    },
+
+    // ── 3. Accountant ────────────────────────────────────────────────────────
+    [ROLES.ACCOUNTANT]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.FINANCIAL },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.FINANCIAL },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.FINANCIAL },
+    },
+
+    // ── 4. Resident (Owner) ───────────────────────────────────────────────────
+    [ROLES.RESIDENT_OWNER]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.ALL },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+    },
+
+    // ── 5. Resident (Tenant) ──────────────────────────────────────────────────
+    // Identical to Owner except Documents Manager scope is RESTRICTED
+    [ROLES.RESIDENT_TENANT]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.RESTRICTED }, // ← Restricted (no ownership/legal docs)
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+    },
+
+    // ── 6. Security Guard ─────────────────────────────────────────────────────
+    [ROLES.SECURITY_GUARD]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+    },
+
+    // ── 7. Facility Manager ───────────────────────────────────────────────────
+    [ROLES.FACILITY_MANAGER]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.FACILITY },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.FACILITY },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.FACILITY },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.FACILITY },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.FACILITY },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.FACILITY },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+    },
+
+    // ── 8. Vendor ─────────────────────────────────────────────────────────────
+    [ROLES.VENDOR]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.ASSIGNED },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.OWN },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+    },
+});
+
+// ─── Legacy Role Aliases (maps old role strings to the new matrix) ────────────
+// Used in getRolePermissions() for backward compatibility
+const ROLE_ALIAS_MAP = Object.freeze({
+    [ROLES.COMMITTEE_MEMBER]: ROLES.ADMIN,         // committee_member → admin permissions
+    [ROLES.RESIDENT]:         ROLES.RESIDENT_OWNER,// resident → resident_owner permissions
+    [ROLES.SECURITY]:         ROLES.SECURITY_GUARD,// security → security_guard permissions
+    [ROLES.STAFF]:            ROLES.FACILITY_MANAGER, // staff → facility_manager permissions
+});
+
+/**
+ * Returns the full permission map for a given role.
+ * Resolves legacy aliases automatically.
+ *
+ * @param {string} role - One of ROLES values
+ * @returns {Object} - Map of module → { level, scope }
+ */
+const getRolePermissions = (role) => {
+    const resolvedRole = ROLE_ALIAS_MAP[role] || role;
+    return ROLE_PERMISSIONS[resolvedRole] || null;
+};
+
+// ─── Society Status ────────────────────────────────────────────────────────────
+const SOCIETY_STATUS = Object.freeze({
+    ACTIVE: "active",
+    INACTIVE: "inactive",
+    SUSPENDED: "suspended",
+    TRIAL: "trial",
+});
+
+// ─── Subscription Status ───────────────────────────────────────────────────────
+const SUBSCRIPTION_STATUS = Object.freeze({
+    ACTIVE: "active",
+    EXPIRED: "expired",
+    CANCELLED: "cancelled",
+    TRIAL: "trial",
+});
+
+// ─── Flat Status ───────────────────────────────────────────────────────────────
+const FLAT_STATUS = Object.freeze({
+    OCCUPIED: "occupied",
+    VACANT: "vacant",
+    UNDER_RENOVATION: "under_renovation",
+});
+
+// ─── Flat Type ─────────────────────────────────────────────────────────────────
+const FLAT_TYPE = Object.freeze({
+    OWNED: "owned",
+    RENTED: "rented",
+});
+
+// ─── Resident Type ─────────────────────────────────────────────────────────────
+const RESIDENT_TYPE = Object.freeze({
+    OWNER: "owner",
+    TENANT: "tenant",
+    FAMILY_MEMBER: "family_member",
+});
+
+// ─── Visitor Status ────────────────────────────────────────────────────────────
+const VISITOR_STATUS = Object.freeze({
+    PENDING: "pending",
+    APPROVED: "approved",
+    REJECTED: "rejected",
+    CHECKED_IN: "checked_in",
+    CHECKED_OUT: "checked_out",
+});
+
+// ─── Complaint Status ──────────────────────────────────────────────────────────
+const COMPLAINT_STATUS = Object.freeze({
+    OPEN: "open",
+    IN_PROGRESS: "in_progress",
+    RESOLVED: "resolved",
+    CLOSED: "closed",
+    REJECTED: "rejected",
+});
+
+// ─── Complaint Priority ────────────────────────────────────────────────────────
+const COMPLAINT_PRIORITY = Object.freeze({
+    LOW: "low",
+    MEDIUM: "medium",
+    HIGH: "high",
+    URGENT: "urgent",
+});
+
+// ─── Maintenance Status ────────────────────────────────────────────────────────
+const MAINTENANCE_STATUS = Object.freeze({
+    PENDING: "pending",
+    PAID: "paid",
+    OVERDUE: "overdue",
+    WAIVED: "waived",
+});
+
+// ─── Payment Methods ───────────────────────────────────────────────────────────
+const PAYMENT_METHOD = Object.freeze({
+    CASH: "cash",
+    ONLINE: "online",
+    CHEQUE: "cheque",
+    UPI: "upi",
+    NEFT: "neft",
+    BANK_TRANSFER: "bank_transfer",
+});
+
+// ─── Payment Status ────────────────────────────────────────────────────────────
+const PAYMENT_STATUS = Object.freeze({
+    PENDING: "pending",
+    SUCCESS: "success",
+    FAILED: "failed",
+    REFUNDED: "refunded",
+});
+
+// ─── Booking Status ────────────────────────────────────────────────────────────
+const BOOKING_STATUS = Object.freeze({
+    PENDING: "pending",
+    CONFIRMED: "confirmed",
+    CANCELLED: "cancelled",
+    COMPLETED: "completed",
+});
+
+// ─── Notice Type ───────────────────────────────────────────────────────────────
+const NOTICE_TYPE = Object.freeze({
+    GENERAL: "general",
+    MAINTENANCE: "maintenance",
+    EMERGENCY: "emergency",
+    EVENT: "event",
+    CIRCULAR: "circular",
+});
+
+// ─── Poll Status ───────────────────────────────────────────────────────────────
+const POLL_STATUS = Object.freeze({
+    ACTIVE: "active",
+    CLOSED: "closed",
+    DRAFT: "draft",
+});
+
+// ─── Vehicle Type ──────────────────────────────────────────────────────────────
+const VEHICLE_TYPE = Object.freeze({
+    CAR: "car",
+    BIKE: "bike",
+    SCOOTER: "scooter",
+    BICYCLE: "bicycle",
+    TRUCK: "truck",
+    AUTO: "auto",
+    OTHER: "other",
+});
+
+// ─── Parking Type ─────────────────────────────────────────────────────────────
+const PARKING_TYPE = Object.freeze({
+    OPEN: "open",
+    COVERED: "covered",
+    BASEMENT: "basement",
+});
+
+// ─── Parking Status ────────────────────────────────────────────────────────────
+const PARKING_STATUS = Object.freeze({
+    AVAILABLE: "available",
+    OCCUPIED: "occupied",
+    RESERVED: "reserved",
+    MAINTENANCE: "maintenance",
+});
+
+// ─── Attendance Status ─────────────────────────────────────────────────────────
+const ATTENDANCE_STATUS = Object.freeze({
+    PRESENT: "present",
+    ABSENT: "absent",
+    HALF_DAY: "half_day",
+    ON_LEAVE: "on_leave",
+});
+
+// ─── Staff Type ────────────────────────────────────────────────────────────────
+const STAFF_TYPE = Object.freeze({
+    SECURITY: "security",
+    HOUSEKEEPING: "housekeeping",
+    PLUMBER: "plumber",
+    ELECTRICIAN: "electrician",
+    GARDENER: "gardener",
+    LIFT_OPERATOR: "lift_operator",
+    WATCHMAN: "watchman",
+    OTHER: "other",
+});
+
+// ─── Document Type ─────────────────────────────────────────────────────────────
+const DOCUMENT_TYPE = Object.freeze({
+    AGREEMENT: "agreement",
+    NOC: "noc",
+    CIRCULAR: "circular",
+    MINUTES: "minutes",
+    AUDIT_REPORT: "audit_report",
+    OTHER: "other",
+});
+
+// ─── Notification Type ─────────────────────────────────────────────────────────
+const NOTIFICATION_TYPE = Object.freeze({
+    INFO: "info",
+    WARNING: "warning",
+    ALERT: "alert",
+    PAYMENT: "payment",
+    VISITOR: "visitor",
+    COMPLAINT: "complaint",
+    BOOKING: "booking",
+    GENERAL: "general",
+});
+
+// ─── Audit Log Actions ─────────────────────────────────────────────────────────
+const AUDIT_ACTION = Object.freeze({
+    CREATE: "create",
+    UPDATE: "update",
+    DELETE: "delete",
+    LOGIN: "login",
+    LOGOUT: "logout",
+    APPROVE: "approve",
+    REJECT: "reject",
+    EXPORT: "export",
+});
+
+// ─── Token Types ───────────────────────────────────────────────────────────────
+const TOKEN_TYPE = Object.freeze({
+    ACCESS: "access",
+    REFRESH: "refresh",
+    OTP: "otp",
+});
+
+// ─── Pagination Defaults ───────────────────────────────────────────────────────
+const PAGINATION = Object.freeze({
+    DEFAULT_PAGE: 1,
+    DEFAULT_LIMIT: 10,
+    MAX_LIMIT: 100,
+});
+
+module.exports = {
+    ROLES,
+    SOCIETY_STATUS,
+    SUBSCRIPTION_STATUS,
+    FLAT_STATUS,
+    FLAT_TYPE,
+    RESIDENT_TYPE,
+    VISITOR_STATUS,
+    COMPLAINT_STATUS,
+    COMPLAINT_PRIORITY,
+    MAINTENANCE_STATUS,
+    PAYMENT_METHOD,
+    PAYMENT_STATUS,
+    BOOKING_STATUS,
+    NOTICE_TYPE,
+    POLL_STATUS,
+    VEHICLE_TYPE,
+    PARKING_TYPE,
+    PARKING_STATUS,
+    ATTENDANCE_STATUS,
+    STAFF_TYPE,
+    DOCUMENT_TYPE,
+    NOTIFICATION_TYPE,
+    AUDIT_ACTION,
+    TOKEN_TYPE,
+    PAGINATION,
+    MODULES,
+    PERMISSION_LEVELS,
+    PERMISSION_SCOPE,
+    ROLE_PERMISSIONS,
+    ROLE_ALIAS_MAP,
+    getRolePermissions,
+};

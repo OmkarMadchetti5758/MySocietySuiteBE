@@ -1,6 +1,9 @@
-module.exports = (req, res) => {
-    res.status(404).json({
-        success: false,
-        message: "Route not found",
-    });
+"use strict";
+
+const AppError = require("../common/AppError");
+
+const notFound = (req, res, next) => {
+    next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 };
+
+module.exports = notFound;
