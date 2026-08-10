@@ -24,6 +24,7 @@ class SocietyRepository {
     }
 
     async checkIdentifierExists(identifier) {
+        if (!identifier) return false;
         const Mapping = await this._getMappingModel();
         return Mapping.findOne({ identifier: identifier.toLowerCase() }).lean();
     }

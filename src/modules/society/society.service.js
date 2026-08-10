@@ -37,8 +37,8 @@ class SocietyService {
         const societyData = {
             name: societyName,
             databaseName: databaseName,
-            contactEmail: adminEmail,
-            contactPhone: adminMobile,
+            contactEmail: adminEmail || undefined,
+            contactPhone: adminMobile || undefined,
             address: address || {},
             status: "active"
         };
@@ -61,9 +61,9 @@ class SocietyService {
 
         // 5. Create mapping in Master DB so they can login globally
         const mappings = [
-            { identifier: adminEmail, databaseName: databaseName },
-            { identifier: adminMobile, databaseName: databaseName }
-        ];
+            adminEmail ? { identifier: adminEmail, databaseName: databaseName } : null,
+            adminMobile ? { identifier: adminMobile, databaseName: databaseName } : null,
+        ].filter(Boolean);
         await SocietyRepository.createUserMappings(mappings);
 
         return {
