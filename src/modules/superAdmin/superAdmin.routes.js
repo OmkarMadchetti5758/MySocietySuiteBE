@@ -24,6 +24,7 @@ router.use(requireSuperAdmin);
 
 router.get("/stats", SuperAdminController.getStats);
 router.get("/societies", SuperAdminController.getSocieties);
+router.post("/societies", SuperAdminController.createSociety);
 router.post("/admins", SuperAdminController.createSuperAdmin);
 
 module.exports = router;

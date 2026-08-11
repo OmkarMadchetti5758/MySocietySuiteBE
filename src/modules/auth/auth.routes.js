@@ -33,8 +33,6 @@ router.post(
 router.post(
     "/super-admin/login",
     authLimiter,
-    // Add validation if needed, or re-use loginValidation if it fits. 
-    // loginValidation likely requires identifier/password.
     AuthController.superAdminLogin
 );
 
@@ -44,6 +42,11 @@ router.post(
     validate,
     AuthController.refreshToken
 );
+
+// ── Invite / Account Activation (Public) ──────────────────────────────────────
+router.get("/invite/validate", AuthController.validateInvite);
+router.post("/invite/activate", AuthController.activateInvite);
+router.post("/invite/resend", AuthController.resendInvite);
 
 // Protected Routes
 router.use(authenticate);

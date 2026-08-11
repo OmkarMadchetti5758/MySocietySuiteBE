@@ -237,6 +237,15 @@ const SOCIETY_STATUS = Object.freeze({
     INACTIVE: "inactive",
     SUSPENDED: "suspended",
     TRIAL: "trial",
+    PENDING_VERIFICATION: "pending_verification",
+});
+
+// ─── User Status ───────────────────────────────────────────────────────────────
+const USER_STATUS = Object.freeze({
+    INVITED: "invited",
+    ACTIVE: "active",
+    INACTIVE: "inactive",
+    SUSPENDED: "suspended",
 });
 
 // ─── Subscription Status ───────────────────────────────────────────────────────
@@ -440,6 +449,7 @@ const PAGINATION = Object.freeze({
 module.exports = {
     ROLES,
     SOCIETY_STATUS,
+    USER_STATUS,
     SUBSCRIPTION_STATUS,
     FLAT_STATUS,
     FLAT_TYPE,

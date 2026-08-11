@@ -10,14 +10,7 @@ const societySchema = new mongoose.Schema(
             required: [true, "Society name is required"],
             trim: true,
         },
-        databaseName: {
-            type: String,
-            required: false, // Legacy field, no longer needed for new societies
-            unique: true,
-            sparse: true,
-            lowercase: true,
-            trim: true,
-        },
+
         address: {
             street: String,
             city: String,
@@ -28,7 +21,7 @@ const societySchema = new mongoose.Schema(
         status: {
             type: String,
             enum: Object.values(SOCIETY_STATUS),
-            default: SOCIETY_STATUS.TRIAL,
+            default: SOCIETY_STATUS.ACTIVE,
         },
         subscriptionPlanId: {
             type: mongoose.Schema.Types.ObjectId,

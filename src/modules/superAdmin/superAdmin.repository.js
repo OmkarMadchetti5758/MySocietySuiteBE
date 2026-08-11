@@ -62,6 +62,77 @@ class SuperAdminRepository {
         
         return SuperAdmin.create(adminData);
     }
+
+    async createSocietyWithAdmin(societyData, adminData) {
+        const masterDb = getMasterConnection();
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        
+        const Society = masterDb.model("Society");
+        const User = opsDb.model("User");
+        const InviteToken = masterDb.model("InviteToken");
+        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
+
+        // 1. Create Society (PENDING_VERIFICATION)
+        const society = await Society.create([{
+            name: societyData.name,
+            address: {
+                city: societyData.city,
+                state: societyData.state,
+            },
+            contactEmail: adminData.email,
+            contactPhone: adminData.phone,
+            status: "pending_verification"
+        }]);
+
+        const newSocietyId = society[0]._id;
+
+        // 2. Create User in Ops DB (INVITED)
+        const adminUser = await User.create([{
+            societyId: newSocietyId,
+            name: adminData.name,
+            email: adminData.email,
+            mobile: adminData.phone,
+            role: "admin",
+            status: "invited"
+        }]);
+
+        const newAdminId = adminUser[0]._id;
+
+        // 3. Update Society with adminId
+        await Society.findByIdAndUpdate(newSocietyId, { adminId: newAdminId });
+
+        // 4. Create UserSocietyMapping for login resolution later
+        await UserSocietyMapping.create([{
+            identifier: adminData.email, // using email as primary identifier for admin
+            societyId: newSocietyId,
+            userId: newAdminId,
+            role: "admin"
+        }]);
+        await UserSocietyMapping.create([{
+            identifier: adminData.phone, // mapping phone as well
+            societyId: newSocietyId,
+            userId: newAdminId,
+            role: "admin"
+        }]);
+
+        // 5. Generate and store Invite Token (24 hours expiry)
+        const { plainToken, tokenHash } = InviteToken.generateToken();
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+
+        await InviteToken.create([{
+            tokenHash,
+            societyId: newSocietyId,
+            adminId: newAdminId,
+            expiresAt
+        }]);
+
+        return {
+            society: society[0],
+            admin: adminUser[0],
+            plainToken // Return plain token so service can format the invite link
+        };
+    }
 }
 
 module.exports = new SuperAdminRepository();

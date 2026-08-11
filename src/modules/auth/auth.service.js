@@ -181,6 +181,146 @@ class AuthService {
         }
         return true;
     }
+
+    async validateInvite(token) {
+        if (!token) throw new AppError("Token is required", 400);
+
+        const { getMasterConnection } = require("../../config/masterDb");
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        const masterDb = getMasterConnection();
+        const InviteToken = masterDb.model("InviteToken");
+        const User = opsDb.model("User");
+        const Society = masterDb.model("Society");
+
+        const tokenHash = InviteToken.hashToken(token);
+        const invite = await InviteToken.findOne({ tokenHash });
+
+        if (!invite) throw new AppError("Invalid or expired invite link", 400);
+        if (invite.used) throw new AppError("Invite link has already been used", 400);
+        if (invite.expiresAt < new Date()) throw new AppError("Invite link has expired", 400);
+
+        const society = await Society.findById(invite.societyId);
+        if (!society || society.status !== "pending_verification") {
+            throw new AppError("Society is no longer pending verification", 400);
+        }
+
+        const user = await User.findById(invite.adminId);
+        if (!user) throw new AppError("Associated user not found", 404);
+
+        return {
+            adminName: user.name,
+            adminEmail: user.email,
+            adminPhone: user.mobile,
+            societyName: society.name
+        };
+    }
+
+    async activateInvite(token, password) {
+        if (!token || !password) throw new AppError("Token and password are required", 400);
+        if (password.length < 6) throw new AppError("Password must be at least 6 characters", 400);
+
+        const { getMasterConnection } = require("../../config/masterDb");
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        const masterDb = getMasterConnection();
+        
+        const InviteToken = masterDb.model("InviteToken");
+        const User = opsDb.model("User");
+        const Society = masterDb.model("Society");
+
+        const tokenHash = InviteToken.hashToken(token);
+        const invite = await InviteToken.findOne({ tokenHash });
+
+        if (!invite) throw new AppError("Invalid or expired invite link", 400);
+        if (invite.used) throw new AppError("Invite link has already been used", 400);
+        if (invite.expiresAt < new Date()) throw new AppError("Invite link has expired", 400);
+
+        const society = await Society.findById(invite.societyId);
+        const user = await User.findById(invite.adminId);
+        
+        if (!society || !user) throw new AppError("Invalid invite data", 400);
+
+        // Mark as used
+        invite.used = true;
+        await invite.save();
+
+        // Update User
+        user.password = password; // Will be hashed by pre-save hook
+        user.status = "active";
+        await user.save();
+
+        // Update Society
+        society.status = "trial"; // Start their trial
+        await society.save();
+
+        // Generate tokens
+        const payload = {
+            id: user._id,
+            role: user.role,
+            societyId: user.societyId,
+        };
+
+        const accessToken = generateAccessToken(payload);
+        const refreshToken = generateRefreshToken(payload);
+
+        await AuthRepository.saveRefreshToken(user._id, refreshToken);
+        
+        user.password = undefined;
+        
+        const permissions = getRolePermissions(user.role);
+        return { user, accessToken, refreshToken, permissions };
+    }
+
+    async resendInvite(email) {
+        if (!email) throw new AppError("Email is required", 400);
+
+        const { getMasterConnection } = require("../../config/masterDb");
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        const masterDb = getMasterConnection();
+
+        const User = opsDb.model("User");
+        const InviteToken = masterDb.model("InviteToken");
+        const Society = masterDb.model("Society");
+
+        // Find the invited user by email
+        const user = await User.findOne({ email: email.toLowerCase().trim(), status: "invited" });
+        if (!user) throw new AppError("No pending invite found for this email address", 404);
+
+        const society = await Society.findById(user.societyId);
+        if (!society) throw new AppError("Associated society not found", 404);
+
+        // Invalidate any existing unused tokens for this user
+        await InviteToken.updateMany(
+            { adminId: user._id, used: false },
+            { $set: { used: true } }
+        );
+
+        // Generate a fresh token
+        const { plainToken, tokenHash } = InviteToken.generateToken();
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+
+        await InviteToken.create({
+            tokenHash,
+            societyId: user.societyId,
+            adminId: user._id,
+            expiresAt
+        });
+
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
+
+        console.log("\n=============================================");
+        console.log("=== DEV INVITE LINK (RESEND) ===");
+        console.log(`Society: ${society.name}`);
+        console.log(`Admin: ${user.name} (${user.email})`);
+        console.log(`Link: ${inviteLink}`);
+        console.log("=============================================\n");
+
+        return {
+            message: "Invite resent",
+            ...(process.env.NODE_ENV === 'development' ? { devInviteLink: inviteLink } : {})
+        };
+    }
 }
 
 module.exports = new AuthService();

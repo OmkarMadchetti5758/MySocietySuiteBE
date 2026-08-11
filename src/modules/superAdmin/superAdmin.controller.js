@@ -52,6 +52,20 @@ class SuperAdminController {
             next(error);
         }
     }
+
+    /**
+     * @desc    Create a new society and invite admin
+     * @route   POST /api/v1/super-admin/societies
+     * @access  Private (Super Admin)
+     */
+    async createSociety(req, res, next) {
+        try {
+            const data = await SuperAdminService.createSociety(req.body);
+            return sendSuccess(res, 201, "Society created and admin invited successfully", data);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new SuperAdminController();

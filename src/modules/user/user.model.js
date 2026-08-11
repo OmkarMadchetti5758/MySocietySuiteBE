@@ -2,7 +2,7 @@
 
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const { ROLES } = require("../../common/constants");
+const { ROLES, USER_STATUS } = require("../../common/constants");
 
 /**
  * Operational Users schema.
@@ -42,7 +42,10 @@ const userSchema = new mongoose.Schema(
         },
         password: {
             type: String,
-            required: [true, "Password is required"],
+            required: [
+                function () { return this.status !== USER_STATUS.INVITED; }, 
+                "Password is required"
+            ],
             minlength: [6, "Password must be at least 6 characters"],
             select: false,
         },
@@ -50,6 +53,11 @@ const userSchema = new mongoose.Schema(
             type: String,
             enum: Object.values(ROLES),
             default: ROLES.RESIDENT_OWNER,
+        },
+        status: {
+            type: String,
+            enum: Object.values(USER_STATUS),
+            default: USER_STATUS.ACTIVE,
         },
         isActive: {
             type: Boolean,

@@ -28,6 +28,7 @@ const connectMasterDB = async () => {
         masterConnection.model("GlobalSetting", require("../modules/globalSetting/globalSetting.model"));
         masterConnection.model("Role", require("../modules/role/role.model"));
         masterConnection.model("Permission", require("../modules/permission/permission.model"));
+        masterConnection.model("InviteToken", require("../modules/auth/inviteToken.model"));
         // UserSocietyMapping is also registered on master for login-identifier → societyId lookup
         masterConnection.model("UserSocietyMapping", require("../modules/userSocietyMapping/userSocietyMapping.model"));
 

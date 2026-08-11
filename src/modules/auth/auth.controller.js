@@ -92,6 +92,51 @@ class AuthController {
             next(error);
         }
     }
+
+    /**
+     * @desc    Validate an invite token (check it's valid, not expired, not used)
+     * @route   GET /api/v1/auth/invite/validate?token=...
+     * @access  Public
+     */
+    async validateInvite(req, res, next) {
+        try {
+            const { token } = req.query;
+            const data = await AuthService.validateInvite(token);
+            return sendSuccess(res, 200, "Invite token is valid", data);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @desc    Activate account using invite token (set password, mark user & society active)
+     * @route   POST /api/v1/auth/invite/activate
+     * @access  Public
+     */
+    async activateInvite(req, res, next) {
+        try {
+            const { token, password } = req.body;
+            const data = await AuthService.activateInvite(token, password);
+            return sendSuccess(res, 200, "Account activated successfully", data);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @desc    Resend an invite link (regenerates token, re-logs link)
+     * @route   POST /api/v1/auth/invite/resend
+     * @access  Public
+     */
+    async resendInvite(req, res, next) {
+        try {
+            const { email } = req.body;
+            const data = await AuthService.resendInvite(email);
+            return sendSuccess(res, 200, "Invite resent successfully", data);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new AuthController();
