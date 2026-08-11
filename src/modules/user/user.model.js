@@ -4,8 +4,24 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const { ROLES } = require("../../common/constants");
 
+/**
+ * Operational Users schema.
+ *
+ * Lives in mysociety_operations.users
+ * Each document represents one user's membership in ONE society.
+ * A person belonging to two societies has two user documents (one per society).
+ *
+ * societyId is the leading field in all compound indexes to ensure
+ * MongoDB uses the most selective prefix for every query.
+ */
 const userSchema = new mongoose.Schema(
     {
+        societyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Society",
+            required: [true, "societyId is required"],
+            index: true,
+        },
         name: {
             type: String,
             required: [true, "Name is required"],
@@ -21,8 +37,8 @@ const userSchema = new mongoose.Schema(
         mobile: {
             type: String,
             required: [true, "Mobile number is required"],
-            unique: true,
             trim: true,
+            // Uniqueness is enforced via compound index {societyId, mobile}
         },
         password: {
             type: String,
@@ -45,24 +61,28 @@ const userSchema = new mongoose.Schema(
         },
         lastLogin: {
             type: Date,
-        }
+        },
     },
     { timestamps: true }
 );
 
-// Hash password before saving
+// ── Compound Indexes (societyId always leading field) ─────────────────────────
+// Unique per society: one mobile per society
+userSchema.index({ societyId: 1, mobile: 1 }, { unique: true });
+// Fast lookup by email within a society
+userSchema.index({ societyId: 1, email: 1 });
+
+// ── Hooks ─────────────────────────────────────────────────────────────────────
 userSchema.pre("save", async function () {
     if (!this.isModified("password")) return;
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Remove sensitive fields from JSON output
 userSchema.methods.toJSON = function () {
     const obj = this.toObject();
     delete obj.password;

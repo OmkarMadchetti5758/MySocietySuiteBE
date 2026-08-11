@@ -1,58 +1,78 @@
 "use strict";
 
-const userSchema = require("./user.model");
+const { getOperationsConnection } = require("../../config/operationsDb");
 
+/**
+ * UserRepository
+ *
+ * After migration to the shared-collection model, all methods:
+ *   - Use getOperationsConnection() instead of a per-tenant DB connection
+ *   - Require `societyId` as the first filter parameter — NEVER optional
+ *   - Inject societyId into EVERY query so cross-society leakage is impossible
+ *
+ * SECURITY INVARIANT:
+ *   societyId must come from the authenticated JWT (req.user.societyId or req.societyId).
+ *   It is never accepted from request body, query params, or route params.
+ */
 class UserRepository {
-    _getModel(tenantDb) {
-        if (!tenantDb.models.User) {
-            tenantDb.model("User", userSchema);
-        }
-        return tenantDb.model("User");
+    _getModel() {
+        return getOperationsConnection().model("User");
     }
 
-    async create(tenantDb, userData) {
-        const User = this._getModel(tenantDb);
-        return User.create(userData);
+    /**
+     * Creates a new user document with societyId stamped at the DB layer.
+     * The societyId must be validated by the caller (service/controller) before calling this.
+     */
+    async create(societyId, userData) {
+        const User = this._getModel();
+        return User.create({ ...userData, societyId });
     }
 
-    // Alias for create — used by SocietyService during tenant provisioning
-    async createUser(tenantDb, userData) {
-        return this.create(tenantDb, userData);
+    // Alias for backward compatibility with SocietyService
+    async createUser(societyId, userData) {
+        return this.create(societyId, userData);
     }
 
-    async findById(tenantDb, userId) {
-        const User = this._getModel(tenantDb);
-        return User.findById(userId);
+    async findById(societyId, userId) {
+        const User = this._getModel();
+        return User.findOne({ _id: userId, societyId });
     }
 
-    async findByEmailOrMobile(tenantDb, email, mobile) {
-        const User = this._getModel(tenantDb);
-        const query = [];
-        if (email) query.push({ email });
-        if (mobile) query.push({ mobile });
-        
-        if (query.length === 0) return null;
+    async findByEmailOrMobile(societyId, email, mobile) {
+        const User = this._getModel();
+        const query = [{ societyId }];
+        const orConditions = [];
+        if (email)  orConditions.push({ email });
+        if (mobile) orConditions.push({ mobile });
 
-        return User.findOne({ $or: query });
+        if (orConditions.length === 0) return null;
+
+        return User.findOne({ societyId, $or: orConditions });
     }
 
-    async findAll(tenantDb, filter = {}, skip = 0, limit = 10) {
-        const User = this._getModel(tenantDb);
+    async findAll(societyId, filter = {}, skip = 0, limit = 10) {
+        const User = this._getModel();
+        const scopedFilter = { ...filter, societyId };
         const [users, total] = await Promise.all([
-            User.find(filter).skip(skip).limit(limit).sort({ createdAt: -1 }),
-            User.countDocuments(filter)
+            User.find(scopedFilter).skip(skip).limit(limit).sort({ createdAt: -1 }),
+            User.countDocuments(scopedFilter),
         ]);
         return { users, total };
     }
 
-    async update(tenantDb, userId, updateData) {
-        const User = this._getModel(tenantDb);
-        return User.findByIdAndUpdate(userId, updateData, { new: true, runValidators: true });
+    async update(societyId, userId, updateData) {
+        const User = this._getModel();
+        // societyId is part of the filter to prevent cross-society update
+        return User.findOneAndUpdate(
+            { _id: userId, societyId },
+            updateData,
+            { new: true, runValidators: true }
+        );
     }
 
-    async delete(tenantDb, userId) {
-        const User = this._getModel(tenantDb);
-        return User.findByIdAndDelete(userId);
+    async delete(societyId, userId) {
+        const User = this._getModel();
+        return User.findOneAndDelete({ _id: userId, societyId });
     }
 }
 

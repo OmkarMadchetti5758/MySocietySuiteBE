@@ -2,13 +2,20 @@
 
 const jwt = require("jsonwebtoken");
 const env = require("../config/env");
-const { getTenantConnection } = require("../config/tenantDb");
-const { getMasterConnection } = require("../config/masterDb");
+const { getOperationsConnection } = require("../config/operationsDb");
 const AppError = require("../common/AppError");
 const { TOKEN_TYPE } = require("../common/constants");
 
 /**
- * Middleware to authenticate user via JWT and attach user info and tenant DB to request.
+ * Middleware to authenticate a user via JWT and attach context to the request.
+ *
+ * After migration to the shared-collection model, this middleware:
+ *   - Decodes the JWT to get { id, role, societyId }
+ *   - Attaches req.user = { id, role, societyId }
+ *   - Attaches req.opsDb = the single shared operations DB connection
+ *
+ * It no longer resolves a per-tenant database or attaches req.tenantDb.
+ * All repositories use req.opsDb (or call getOperationsConnection() directly).
  */
 const authenticate = async (req, res, next) => {
     try {
@@ -38,21 +45,16 @@ const authenticate = async (req, res, next) => {
             return next(new AppError("Invalid token type.", 401, "INVALID_TOKEN_TYPE"));
         }
 
+        // Attach user context from JWT — societyId replaces databaseName
         req.user = {
-            id: decoded.id,
-            role: decoded.role,
-            societyId: decoded.societyId,
-            databaseName: decoded.databaseName,
+            id:        decoded.id,
+            role:      decoded.role,
+            societyId: decoded.societyId, // ObjectId string
         };
 
-        // Attach tenant DB if applicable
-        if (decoded.databaseName) {
-            try {
-                req.tenantDb = await getTenantConnection(decoded.databaseName);
-            } catch (dbError) {
-                return next(new AppError("Failed to connect to tenant database.", 500));
-            }
-        }
+        // Attach the single shared operations DB connection
+        // All downstream repositories use this instead of a per-tenant connection
+        req.opsDb = getOperationsConnection();
 
         next();
     } catch (error) {

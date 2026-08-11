@@ -27,6 +27,13 @@ const superAdminSchema = new mongoose.Schema(
             default: "super_admin",
             immutable: true,
         },
+        refreshToken: {
+            type: String,
+            select: false,
+        },
+        lastLogin: {
+            type: Date,
+        },
         isActive: {
             type: Boolean,
             default: true,

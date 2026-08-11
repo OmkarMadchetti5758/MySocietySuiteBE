@@ -3,14 +3,18 @@
 const app = require("./app");
 const env = require("./config/env");
 const { connectMasterDB } = require("./config/masterDb");
+const { connectOperationsDB } = require("./config/operationsDb");
 const { logger } = require("./middleware/logger");
 
 const startServer = async () => {
     try {
-        // 1. Connect to Master Database first
+        // 1. Connect to Master Database (control plane)
         await connectMasterDB();
 
-        // 2. Start Express Server
+        // 2. Connect to shared Operations Database (all society operational data)
+        await connectOperationsDB();
+
+        // 3. Start Express Server
         const server = app.listen(env.PORT, () => {
             logger.info(`🚀 Server running on http://localhost:${env.PORT}`);
             logger.info(`Environment: ${env.NODE_ENV}`);

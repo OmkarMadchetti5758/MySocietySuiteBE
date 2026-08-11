@@ -4,6 +4,7 @@ const express = require("express");
 const UserController = require("./user.controller");
 const validate = require("../../middleware/validate");
 const authenticate = require("../../middleware/authenticate");
+const injectSocietyId = require("../../middleware/injectSocietyId");
 const checkPermission = require("../../middleware/checkPermission");
 const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
 const {
@@ -14,8 +15,8 @@ const {
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(authenticate);
+// All routes require authentication and society scoping
+router.use(authenticate, injectSocietyId);
 
 // List users
 router.get(

@@ -20,7 +20,7 @@ const connectMasterDB = async () => {
             dbName: env.MASTER_DB_NAME,
         }).asPromise();
 
-        // Register Master Models
+        // Register Master-only (control plane) Models
         masterConnection.model("Society", require("../modules/society/society.model"));
         masterConnection.model("SubscriptionPlan", require("../modules/subscriptionPlan/subscriptionPlan.model"));
         masterConnection.model("Subscription", require("../modules/subscription/subscription.model"));
@@ -28,6 +28,7 @@ const connectMasterDB = async () => {
         masterConnection.model("GlobalSetting", require("../modules/globalSetting/globalSetting.model"));
         masterConnection.model("Role", require("../modules/role/role.model"));
         masterConnection.model("Permission", require("../modules/permission/permission.model"));
+        // UserSocietyMapping is also registered on master for login-identifier → societyId lookup
         masterConnection.model("UserSocietyMapping", require("../modules/userSocietyMapping/userSocietyMapping.model"));
 
         console.log(`✅ Master DB connected: ${masterConnection.name}`);

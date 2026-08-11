@@ -21,7 +21,6 @@ const authLimiter = rateLimit({
     }
 });
 
-// Public Routes
 router.post(
     "/login",
     authLimiter,
@@ -29,6 +28,14 @@ router.post(
     loginValidation,
     validate,
     AuthController.login
+);
+
+router.post(
+    "/super-admin/login",
+    authLimiter,
+    // Add validation if needed, or re-use loginValidation if it fits. 
+    // loginValidation likely requires identifier/password.
+    AuthController.superAdminLogin
 );
 
 router.post(

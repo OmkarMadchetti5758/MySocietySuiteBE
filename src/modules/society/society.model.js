@@ -12,8 +12,9 @@ const societySchema = new mongoose.Schema(
         },
         databaseName: {
             type: String,
-            required: [true, "Database name is required"],
+            required: false, // Legacy field, no longer needed for new societies
             unique: true,
+            sparse: true,
             lowercase: true,
             trim: true,
         },

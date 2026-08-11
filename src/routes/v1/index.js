@@ -20,6 +20,7 @@ router.get("/health", (req, res) => {
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/societies", societyRoutes);
+router.use("/super-admin", require("../../modules/superAdmin/superAdmin.routes"));
 
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);

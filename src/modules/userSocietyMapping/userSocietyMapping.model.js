@@ -2,24 +2,44 @@
 
 const mongoose = require("mongoose");
 
+/**
+ * UserSocietyMapping — Master DB
+ *
+ * Maps a login identifier (email or mobile) to the society the user belongs to.
+ * This is the global login-lookup table: given an identifier, find which society
+ * to scope the authentication query against in mysociety_operations.users.
+ *
+ * Replaces the old `databaseName` field (which pointed to a per-tenant MongoDB DB).
+ * Now points to `societyId` (an ObjectId reference to mysociety_master.societies).
+ *
+ * A single person can belong to multiple societies → multiple rows, one per (identifier, societyId) pair.
+ */
 const userSocietyMappingSchema = new mongoose.Schema(
     {
         identifier: {
-            type: String, // email or mobile
-            required: true,
+            type: String, // email or mobile number
+            required: [true, "Identifier (email or mobile) is required"],
             index: true,
             lowercase: true,
             trim: true,
         },
-        databaseName: {
-            type: String,
-            required: true,
-        }
+        societyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Society",
+            required: [true, "societyId is required"],
+        },
+        userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            // References the user document in mysociety_operations.users
+            // Not a cross-DB ref, stored for informational reverse-lookup only
+        },
     },
     { timestamps: true }
 );
 
-// Create compound index to ensure one identifier maps to one database (assuming 1-to-1 for simplicity, though multi-tenant can support 1-to-N)
-userSocietyMappingSchema.index({ identifier: 1, databaseName: 1 }, { unique: true });
+// Compound unique: one identifier maps to one society (prevents duplicate mappings)
+userSocietyMappingSchema.index({ identifier: 1, societyId: 1 }, { unique: true });
+// Fast forward lookup by societyId (e.g. list all users for a society)
+userSocietyMappingSchema.index({ userId: 1, societyId: 1 });
 
 module.exports = userSocietyMappingSchema;

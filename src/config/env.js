@@ -9,6 +9,7 @@ require("dotenv").config();
 const required = [
     "MONGODB_URI",
     "MASTER_DB_NAME",
+    "OPERATIONS_DB_NAME",
     "JWT_SECRET",
     "JWT_REFRESH_SECRET",
     "JWT_ACCESS_EXPIRES_IN",
@@ -31,6 +32,7 @@ module.exports = {
     // Database
     MONGODB_URI: process.env.MONGODB_URI,
     MASTER_DB_NAME: process.env.MASTER_DB_NAME || "mysociety_master",
+    OPERATIONS_DB_NAME: process.env.OPERATIONS_DB_NAME || "mysociety_operations",
 
     // JWT
     JWT_SECRET: process.env.JWT_SECRET,
