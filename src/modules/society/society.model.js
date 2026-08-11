@@ -38,15 +38,24 @@ const societySchema = new mongoose.Schema(
         },
         contactEmail: {
             type: String,
-            required: true,
+            required: false,
             lowercase: true,
+            trim: true,
         },
         contactPhone: {
             type: String,
-            required: true,
+            required: false,
+            trim: true,
         }
     },
     { timestamps: true }
 );
+
+// At least one contact method must be present
+societySchema.pre("validate", async function () {
+    if (!this.contactEmail && !this.contactPhone) {
+        throw new Error("At least one of contactEmail or contactPhone is required.");
+    }
+});
 
 module.exports = societySchema;
