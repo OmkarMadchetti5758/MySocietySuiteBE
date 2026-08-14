@@ -21,7 +21,6 @@ const authLimiter = rateLimit({
     }
 });
 
-// Public Routes
 router.post(
     "/login",
     authLimiter,
@@ -32,16 +31,29 @@ router.post(
 );
 
 router.post(
+    "/super-admin/login",
+    authLimiter,
+    AuthController.superAdminLogin
+);
+
+router.post(
     "/refresh-token",
     refreshTokenValidation,
     validate,
     AuthController.refreshToken
 );
 
+// ── Invite / Account Activation (Public) ──────────────────────────────────────
+router.get("/invite/validate", AuthController.validateInvite);
+router.post("/invite/activate", AuthController.activateInvite);
+router.post("/invite/resend", AuthController.resendInvite);
+
 // Protected Routes
 router.use(authenticate);
 
 router.post("/logout", AuthController.logout);
 router.get("/me", AuthController.getMe);
+router.patch("/me", AuthController.updateMe);
+router.get("/permissions", AuthController.refreshPermissions);
 
 module.exports = router;

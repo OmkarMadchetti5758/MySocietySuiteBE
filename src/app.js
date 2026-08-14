@@ -23,6 +23,10 @@ app.use(morganMiddleware);
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
+// Serve static files
+const path = require("path");
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
 // API Versioning - mount v1 routes
 app.use("/api/v1", v1Routes);
 

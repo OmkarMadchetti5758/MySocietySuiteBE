@@ -1,87 +1,134 @@
 "use strict";
 
 const { getMasterConnection } = require("../../config/masterDb");
-const { getTenantConnection } = require("../../config/tenantDb");
+const { getOperationsConnection } = require("../../config/operationsDb");
 const userSchema = require("../user/user.model");
 
+/**
+ * AuthRepository
+ *
+ * Handles all DB interactions for authentication.
+ * After migration to the shared-collection model:
+ *   - Identifier → societyId lookups go to mysociety_master.usersocietymappings
+ *   - User lookups go to mysociety_operations.users (always scoped by societyId)
+ *   - No tenantDb parameter — the ops connection is always the same connection
+ */
 class AuthRepository {
     /**
-     * Finds a society in the master DB by user's email or mobile.
-     * Note: In a real-world scenario with multiple tenants, you might need a
-     * 'UserTenantMapping' collection in the Master DB to look up which society a user belongs to.
-     * For this implementation, we assume the user provides society context or we query the master
-     * DB if we store emails there, OR we assume a single society per email/mobile mapping in master.
+     * Looks up which society a login identifier (email/mobile) belongs to.
+     * Returns an array of matching mappings (a person may belong to multiple societies).
      *
-     * Given the requirements, we'll simulate the lookup in the Master DB mapping table.
-     * Assuming a `UserSocietyMapping` exists, but for simplicity, we'll check if the login
-     * request contains the society identifier or if it's the Admin logging in.
-     *
-     * Let's refine the approach: we need to find the user's DB.
-     * We will use a `UserSocietyMapping` model in master DB. Let's define it inline for the repository.
+     * @param {string} identifier — email or mobile
+     * @returns {Promise<Array>} — array of { societyId, userId }
      */
-    async getDatabaseNameForUser(identifier) {
+    async getMappingsForIdentifier(identifier) {
         const masterDb = getMasterConnection();
-        // Dynamic schema definition for mapping just for this example
-        // In production, this would be a separate model file in master DB models.
-        if (!masterDb.models.UserSocietyMapping) {
-            const mappingSchema = new masterDb.base.Schema({
-                identifier: String, // email or mobile
-                databaseName: String,
-            });
-            masterDb.model("UserSocietyMapping", mappingSchema);
-        }
-        
         const Mapping = masterDb.model("UserSocietyMapping");
-        const mapping = await Mapping.findOne({ identifier });
-        
-        return mapping ? mapping.databaseName : null;
-    }
-    
-    /**
-     * Alternative: If the frontend sends the `databaseName` or `societyId` directly during login.
-     * This is common in multi-tenant SaaS (e.g. login.mysociety.com or dropdown selection).
-     */
-    async getSocietyByDatabaseName(databaseName) {
-        const masterDb = getMasterConnection();
-        const Society = masterDb.model("Society");
-        return Society.findOne({ databaseName, status: "active" });
+        return Mapping.find({ identifier: identifier.toLowerCase().trim() })
+            .lean();
     }
 
     /**
-     * Finds a user in the specific tenant DB.
+     * Finds a society in the master DB by its ObjectId.
+     * Used to verify the society exists and is active before login.
      */
-    async findUserByIdentifier(tenantDb, identifier) {
-        if (!tenantDb.models.User) {
-            tenantDb.model("User", userSchema);
-        }
-        const User = tenantDb.model("User");
+    async getSocietyById(societyId) {
+        const masterDb = getMasterConnection();
+        const Society = masterDb.model("Society");
+        return Society.findOne({ _id: societyId, status: "active" }).lean();
+    }
+
+    /**
+     * Finds a user in the shared operations DB by identifier (email OR mobile)
+     * scoped to a specific society.
+     *
+     * SECURITY: societyId MUST come from the server-resolved mapping, never from request input.
+     *
+     * @param {ObjectId|string} societyId
+     * @param {string} identifier — email or mobile
+     */
+    async findUserByIdentifier(societyId, identifier) {
+        const opsDb = getOperationsConnection();
+        const User = opsDb.model("User");
         return User.findOne({
-            $or: [{ email: identifier }, { mobile: identifier }]
+            societyId,
+            $or: [
+                { email: identifier.toLowerCase().trim() },
+                { mobile: identifier.trim() }
+            ]
         }).select("+password +refreshToken");
     }
 
-    async findUserById(tenantDb, userId) {
-        if (!tenantDb.models.User) {
-            tenantDb.model("User", userSchema);
-        }
-        const User = tenantDb.model("User");
-        return User.findById(userId);
+    /**
+     * Finds a Super Admin in the master DB by email.
+     */
+    async findSuperAdminByEmail(email) {
+        const masterDb = getMasterConnection();
+        const SuperAdmin = masterDb.model("SuperAdmin");
+        return SuperAdmin.findOne({ email: email.toLowerCase().trim() }).select("+password");
     }
 
-    async saveRefreshToken(tenantDb, userId, refreshToken) {
-        if (!tenantDb.models.User) {
-            tenantDb.model("User", userSchema);
-        }
-        const User = tenantDb.model("User");
+    /**
+     * Finds a Super Admin in the master DB by ID.
+     */
+    async findSuperAdminById(adminId) {
+        const masterDb = getMasterConnection();
+        const SuperAdmin = masterDb.model("SuperAdmin");
+        return SuperAdmin.findById(adminId);
+    }
+
+    /**
+     * Fetch the active mapping for a user within a society (roleKeys, flatId, status).
+     */
+    async getMappingForUser(societyId, userId) {
+        const masterDb = getMasterConnection();
+        const Mapping = masterDb.model("UserSocietyMapping");
+        return Mapping.findOne({ userId, societyId }).lean();
+    }
+
+    /**
+     * Finds a user by their MongoDB _id, scoped to the given society.
+     */
+    async findUserById(societyId, userId) {
+        const opsDb = getOperationsConnection();
+        const User = opsDb.model("User");
+        return User.findOne({ _id: userId, societyId });
+    }
+
+    /**
+     * Saves a new refresh token (and updates lastLogin timestamp) for a user.
+     */
+    async saveRefreshToken(userId, refreshToken) {
+        const opsDb = getOperationsConnection();
+        const User = opsDb.model("User");
         return User.findByIdAndUpdate(userId, { refreshToken, lastLogin: new Date() });
     }
-    
-    async clearRefreshToken(tenantDb, userId) {
-        if (!tenantDb.models.User) {
-            tenantDb.model("User", userSchema);
-        }
-        const User = tenantDb.model("User");
+
+    /**
+     * Clears the refresh token for a user (used on logout).
+     */
+    async clearRefreshToken(userId) {
+        const opsDb = getOperationsConnection();
+        const User = opsDb.model("User");
         return User.findByIdAndUpdate(userId, { $unset: { refreshToken: 1 } });
+    }
+
+    /**
+     * Saves a new refresh token (and updates lastLogin timestamp) for a Super Admin.
+     */
+    async saveSuperAdminRefreshToken(adminId, refreshToken) {
+        const masterDb = getMasterConnection();
+        const SuperAdmin = masterDb.model("SuperAdmin");
+        return SuperAdmin.findByIdAndUpdate(adminId, { refreshToken, lastLogin: new Date() });
+    }
+
+    /**
+     * Clears the refresh token for a Super Admin (used on logout).
+     */
+    async clearSuperAdminRefreshToken(adminId) {
+        const masterDb = getMasterConnection();
+        const SuperAdmin = masterDb.model("SuperAdmin");
+        return SuperAdmin.findByIdAndUpdate(adminId, { $unset: { refreshToken: 1 } });
     }
 }
 

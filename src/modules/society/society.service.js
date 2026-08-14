@@ -4,25 +4,14 @@ const SocietyRepository = require("./society.repository");
 const UserRepository = require("../user/user.repository");
 const AppError = require("../../common/AppError");
 const { SOCIETY_ERRORS } = require("./society.constants");
-const { getTenantConnection } = require("../../config/tenantDb");
-
 class SocietyService {
-    /**
-     * Converts a society name into a safe database name (e.g., "Green Valley" -> "society_green_valley")
-     */
-    _generateDatabaseName(societyName) {
-        const cleanName = societyName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-        return `society_${cleanName}`;
-    }
-
     async registerSociety(data) {
         const { societyName, adminName, adminEmail, adminMobile, adminPassword, address } = data;
 
-        // 1. Generate & check database name uniqueness
-        const databaseName = this._generateDatabaseName(societyName);
-        const dbExists = await SocietyRepository.checkDatabaseExists(databaseName);
-        if (dbExists) {
-            throw new AppError(SOCIETY_ERRORS.DATABASE_NAME_TAKEN, 400);
+        // 1. Check if society name is already taken
+        const societyExists = await SocietyRepository.checkSocietyExists(societyName);
+        if (societyExists) {
+            throw new AppError("A society with this name already exists.", 400);
         }
 
         // 2. Check if identifiers (email/mobile) are already mapped in Master DB
@@ -36,7 +25,6 @@ class SocietyService {
         // 3. Create Society in Master DB
         const societyData = {
             name: societyName,
-            databaseName: databaseName,
             contactEmail: adminEmail || undefined,
             contactPhone: adminMobile || undefined,
             address: address || {},
@@ -44,10 +32,7 @@ class SocietyService {
         };
         const newSociety = await SocietyRepository.createSociety(societyData);
 
-        // 4. Create Tenant DB and Admin User
-        const tenantDb = await getTenantConnection(databaseName);
-
-        // Pass plain text password — the User model's pre-save hook will hash it securely
+        // 4. Create Admin User in Operations DB
         const adminData = {
             name: adminName,
             email: adminEmail,
@@ -57,12 +42,22 @@ class SocietyService {
             isActive: true
         };
 
-        const adminUser = await UserRepository.createUser(tenantDb, adminData);
+        const adminUser = await UserRepository.createUser(newSociety._id, adminData);
 
         // 5. Create mapping in Master DB so they can login globally
         const mappings = [
-            adminEmail ? { identifier: adminEmail, databaseName: databaseName } : null,
-            adminMobile ? { identifier: adminMobile, databaseName: databaseName } : null,
+            adminEmail ? {
+                identifier: adminEmail,
+                societyId: newSociety._id,
+                userId: adminUser._id,
+                roleKeys: ["admin"],
+            } : null,
+            adminMobile ? {
+                identifier: adminMobile,
+                societyId: newSociety._id,
+                userId: adminUser._id,
+                roleKeys: ["admin"],
+            } : null,
         ].filter(Boolean);
         await SocietyRepository.createUserMappings(mappings);
 
@@ -78,6 +73,27 @@ class SocietyService {
 
     async getActiveSocieties() {
         return SocietyRepository.getActiveSocieties();
+    }
+
+    async getCurrentSociety(societyId) {
+        if (!societyId) throw new AppError("Society ID is required", 400);
+        const society = await SocietyRepository.getSocietyById(societyId);
+        if (!society) throw new AppError("Society not found", 404);
+        return society;
+    }
+
+    async updateCurrentSociety(societyId, updateData) {
+        if (!societyId) throw new AppError("Society ID is required", 400);
+        
+        // Remove fields that shouldn't be updated through this endpoint if any
+        delete updateData._id;
+        delete updateData.status;
+
+        const updatedSociety = await SocietyRepository.updateSociety(societyId, updateData);
+        if (!updatedSociety) {
+            throw new AppError("Society not found", 404);
+        }
+        return updatedSociety;
     }
 }
 

@@ -13,11 +13,6 @@ class SocietyRepository {
         return masterDb.model("UserSocietyMapping");
     }
 
-    async checkDatabaseExists(databaseName) {
-        const Society = await this._getSocietyModel();
-        return Society.findOne({ databaseName: databaseName.toLowerCase() }).lean();
-    }
-
     async checkSocietyExists(name) {
         const Society = await this._getSocietyModel();
         return Society.findOne({ name: name }).lean();
@@ -43,9 +38,19 @@ class SocietyRepository {
         const Society = await this._getSocietyModel();
         // Return only what is needed for the dropdown
         return Society.find({ status: "active" })
-            .select("_id name databaseName")
+            .select("_id name")
             .sort({ name: 1 })
             .lean();
+    }
+
+    async getSocietyById(societyId) {
+        const Society = await this._getSocietyModel();
+        return Society.findById(societyId).lean();
+    }
+
+    async updateSociety(societyId, updateData) {
+        const Society = await this._getSocietyModel();
+        return Society.findByIdAndUpdate(societyId, updateData, { new: true, runValidators: true }).lean();
     }
 }
 
