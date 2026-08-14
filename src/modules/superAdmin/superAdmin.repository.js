@@ -103,16 +103,16 @@ class SuperAdminRepository {
 
         // 4. Create UserSocietyMapping for login resolution later
         await UserSocietyMapping.create([{
-            identifier: adminData.email, // using email as primary identifier for admin
+            identifier: adminData.email,
             societyId: newSocietyId,
             userId: newAdminId,
-            role: "admin"
+            roleKeys: ["admin"],
         }]);
         await UserSocietyMapping.create([{
-            identifier: adminData.phone, // mapping phone as well
+            identifier: adminData.phone,
             societyId: newSocietyId,
             userId: newAdminId,
-            role: "admin"
+            roleKeys: ["admin"],
         }]);
 
         // 5. Generate and store Invite Token (24 hours expiry)

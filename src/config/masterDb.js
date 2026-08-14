@@ -32,6 +32,8 @@ const connectMasterDB = async () => {
         // UserSocietyMapping is also registered on master for login-identifier → societyId lookup
         masterConnection.model("UserSocietyMapping", require("../modules/userSocietyMapping/userSocietyMapping.model"));
 
+        await syncUserSocietyMappingIndexes(masterConnection);
+
         console.log(`✅ Master DB connected: ${masterConnection.name}`);
         return masterConnection;
     } catch (error) {
@@ -49,6 +51,29 @@ const getMasterConnection = () => {
         throw new Error("Master DB is not connected. Call connectMasterDB() first.");
     }
     return masterConnection;
+};
+
+/**
+ * Drops legacy identifier+databaseName indexes and ensures current schema indexes.
+ * Pre-E11000 on resident/admin mapping inserts after societyId migration.
+ */
+const syncUserSocietyMappingIndexes = async (connection) => {
+    try {
+        const collection = connection.collection("usersocietymappings");
+        const indexes = await collection.indexes();
+
+        for (const idx of indexes) {
+            if (idx.key?.databaseName !== undefined) {
+                await collection.dropIndex(idx.name);
+                console.log(`🗑️  Dropped legacy UserSocietyMapping index: ${idx.name}`);
+            }
+        }
+
+        const Mapping = connection.model("UserSocietyMapping");
+        await Mapping.syncIndexes();
+    } catch (error) {
+        console.warn(`⚠️  UserSocietyMapping index sync: ${error.message}`);
+    }
 };
 
 module.exports = { connectMasterDB, getMasterConnection };

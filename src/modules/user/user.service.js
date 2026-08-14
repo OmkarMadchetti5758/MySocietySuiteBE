@@ -1,6 +1,9 @@
 "use strict";
 
 const UserRepository = require("./user.repository");
+const UserSocietyMappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+const AuthRepository = require("../auth/auth.repository");
+const { resolveRoleKey } = require("../../common/permissionResolver");
 const AppError = require("../../common/AppError");
 const { USER_ERRORS } = require("./user.constants");
 
@@ -32,6 +35,8 @@ class UserService {
         }
 
         const user = await UserRepository.create(societyId, userData);
+
+        await UserSocietyMappingRepository.syncUserRoleKeys(societyId, user, { replacePrimary: true });
 
         const userObj = user.toObject();
         delete userObj.password;
@@ -76,6 +81,15 @@ class UserService {
         if (!updatedUser) {
             throw new AppError(USER_ERRORS.USER_NOT_FOUND, 404);
         }
+
+        if (updateData.role) {
+            await UserSocietyMappingRepository.setPrimaryRoleKey(
+                societyId,
+                userId,
+                updateData.role
+            );
+        }
+
         return updatedUser;
     }
 
@@ -85,6 +99,51 @@ class UserService {
             throw new AppError(USER_ERRORS.USER_NOT_FOUND, 404);
         }
         return true;
+    }
+
+    /**
+     * Assign an additional role to a user (dual-role support).
+     * Does not change user.role — only expands mapping.roleKeys[].
+     */
+    async addUserRole(societyId, userId, roleKey) {
+        const user = await UserRepository.findById(societyId, userId);
+        if (!user) {
+            throw new AppError(USER_ERRORS.USER_NOT_FOUND, 404);
+        }
+
+        await UserSocietyMappingRepository.addRoleKey(societyId, userId, roleKey);
+
+        const mapping = await AuthRepository.getMappingForUser(societyId, userId);
+        return {
+            userId,
+            roleKeys: mapping?.roleKeys || [],
+        };
+    }
+
+    /**
+     * Remove a secondary role from a user.
+     * Cannot remove the user's primary role (user.role).
+     */
+    async removeUserRole(societyId, userId, roleKey) {
+        const user = await UserRepository.findById(societyId, userId);
+        if (!user) {
+            throw new AppError(USER_ERRORS.USER_NOT_FOUND, 404);
+        }
+
+        const normalized = resolveRoleKey(roleKey);
+        const primary = resolveRoleKey(user.role);
+
+        if (normalized === primary) {
+            throw new AppError("Cannot remove the user's primary role. Update the user record instead.", 400);
+        }
+
+        await UserSocietyMappingRepository.removeRoleKey(societyId, userId, roleKey);
+
+        const mapping = await AuthRepository.getMappingForUser(societyId, userId);
+        return {
+            userId,
+            roleKeys: mapping?.roleKeys || [],
+        };
     }
 }
 

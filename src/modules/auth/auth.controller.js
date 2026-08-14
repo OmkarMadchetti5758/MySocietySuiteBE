@@ -82,12 +82,55 @@ class AuthController {
                 const SuperAdmin = masterDb.model("SuperAdmin");
                 user = await SuperAdmin.findById(req.user.id);
             } else {
-                // Use req.opsDb (attached by authenticate middleware)
                 const User = req.opsDb.model("User");
                 user = await User.findOne({ _id: req.user.id, societyId: req.user.societyId });
+                if (user) {
+                    const userObj = user.toObject();
+                    userObj.roleKeys = req.user.roleKeys;
+                    userObj.flatId = req.user.flatId;
+                    user = userObj;
+                }
             }
 
             return sendSuccess(res, 200, "User profile fetched", { user });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @desc    Update current user profile
+     * @route   PATCH /api/v1/auth/me
+     * @access  Private (requires authenticate middleware)
+     */
+    async updateMe(req, res, next) {
+        try {
+            const data = await AuthService.updateMe(req.user, req.body);
+            return sendSuccess(res, 200, "Profile updated successfully", data);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @desc    Refresh permissions matrix and JWT after role template changes
+     * @route   GET /api/v1/auth/permissions
+     * @access  Private (society users only)
+     */
+    async refreshPermissions(req, res, next) {
+        try {
+            if (req.user.role === "super_admin" || !req.user.societyId) {
+                const permissions = require("../../common/constants").getRolePermissions(req.user.role);
+                return sendSuccess(res, 200, "Permissions refreshed", { permissions });
+            }
+
+            const data = await AuthService.refreshPermissions(
+                req.user.id,
+                req.user.societyId,
+                req.user.role
+            );
+
+            return sendSuccess(res, 200, "Permissions refreshed", data);
         } catch (error) {
             next(error);
         }

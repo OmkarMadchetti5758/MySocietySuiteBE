@@ -46,6 +46,7 @@ const connectOperationsDB = async () => {
         opsConnection.model("FestivalContribution",  require("../modules/festival/festivalContribution.model"));
         opsConnection.model("AIAssistantQueryLog",   require("../modules/auditLog/aiAssistantQueryLog.model"));
         opsConnection.model("Notification",          require("../modules/notification/notification.model"));
+        opsConnection.model("RolePermissionAudit",   require("../modules/role/rolePermissionAudit.model"));
         // ────────────────────────────────────────────────────────────────────
 
         console.log(`✅ Operations DB connected: ${opsConnection.name}`);

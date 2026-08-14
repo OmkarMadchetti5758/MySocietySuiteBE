@@ -46,8 +46,18 @@ class SocietyService {
 
         // 5. Create mapping in Master DB so they can login globally
         const mappings = [
-            adminEmail ? { identifier: adminEmail, societyId: newSociety._id, userId: adminUser._id } : null,
-            adminMobile ? { identifier: adminMobile, societyId: newSociety._id, userId: adminUser._id } : null,
+            adminEmail ? {
+                identifier: adminEmail,
+                societyId: newSociety._id,
+                userId: adminUser._id,
+                roleKeys: ["admin"],
+            } : null,
+            adminMobile ? {
+                identifier: adminMobile,
+                societyId: newSociety._id,
+                userId: adminUser._id,
+                roleKeys: ["admin"],
+            } : null,
         ].filter(Boolean);
         await SocietyRepository.createUserMappings(mappings);
 
@@ -63,6 +73,27 @@ class SocietyService {
 
     async getActiveSocieties() {
         return SocietyRepository.getActiveSocieties();
+    }
+
+    async getCurrentSociety(societyId) {
+        if (!societyId) throw new AppError("Society ID is required", 400);
+        const society = await SocietyRepository.getSocietyById(societyId);
+        if (!society) throw new AppError("Society not found", 404);
+        return society;
+    }
+
+    async updateCurrentSociety(societyId, updateData) {
+        if (!societyId) throw new AppError("Society ID is required", 400);
+        
+        // Remove fields that shouldn't be updated through this endpoint if any
+        delete updateData._id;
+        delete updateData.status;
+
+        const updatedSociety = await SocietyRepository.updateSociety(societyId, updateData);
+        if (!updatedSociety) {
+            throw new AppError("Society not found", 404);
+        }
+        return updatedSociety;
     }
 }
 

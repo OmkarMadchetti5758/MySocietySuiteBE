@@ -10,7 +10,27 @@ const societySchema = new mongoose.Schema(
             required: [true, "Society name is required"],
             trim: true,
         },
-
+        registrationNumber: {
+            type: String,
+            unique: true,
+            sparse: true,
+            trim: true,
+        },
+        logo: {
+            type: String,
+        },
+        societyType: {
+            type: String,
+            enum: ["Residential", "Commercial", "Mixed"],
+        },
+        numberOfBlocks: {
+            type: Number,
+            default: 0,
+        },
+        blocks: [{
+            type: String,
+            trim: true,
+        }],
         address: {
             street: String,
             city: String,
@@ -40,7 +60,14 @@ const societySchema = new mongoose.Schema(
             type: String,
             required: false,
             trim: true,
-        }
+        },
+        permissionsVersion: {
+            type: Number,
+            default: 1,
+            // Incremented every time a role's permissions are changed for this society.
+            // Embedded in JWT at login; middleware compares it on each request.
+            // Mismatch signals the FE to re-fetch the permissions matrix without forcing re-login.
+        },
     },
     { timestamps: true }
 );

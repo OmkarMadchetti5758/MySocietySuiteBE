@@ -37,10 +37,14 @@ const sendErrorDev = (err, res) => {
 const sendErrorProd = (err, res) => {
     // Operational, trusted error: send message to client
     if (err.isOperational) {
-        res.status(err.statusCode).json({
+        const body = {
             status: err.status,
-            message: err.message
-        });
+            message: err.message,
+        };
+        if (err.errorCode) {
+            body.errorCode = err.errorCode;
+        }
+        res.status(err.statusCode).json(body);
     }
     // Programming or other unknown error: don't leak error details
     else {

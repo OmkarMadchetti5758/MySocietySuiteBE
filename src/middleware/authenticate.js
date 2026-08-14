@@ -3,8 +3,12 @@
 const jwt = require("jsonwebtoken");
 const env = require("../config/env");
 const { getOperationsConnection } = require("../config/operationsDb");
+const { getMasterConnection }     = require("../config/masterDb");
 const AppError = require("../common/AppError");
 const { TOKEN_TYPE } = require("../common/constants");
+const { resolveRoleKey } = require("../common/permissionResolver");
+
+const { getSocietyPermissionsVersion, bustPermissionsVersionCache } = require("../common/permissionsVersionCache");
 
 /**
  * Middleware to authenticate a user via JWT and attach context to the request.
@@ -45,16 +49,50 @@ const authenticate = async (req, res, next) => {
             return next(new AppError("Invalid token type.", 401, "INVALID_TOKEN_TYPE"));
         }
 
-        // Attach user context from JWT — societyId replaces databaseName
+        // Attach user context from JWT
         req.user = {
-            id:        decoded.id,
-            role:      decoded.role,
-            societyId: decoded.societyId, // ObjectId string
+            id:                 decoded.id,
+            role:               decoded.role,
+            societyId:          decoded.societyId,
+            permissionsVersion: decoded.permissionsVersion ?? 1,
         };
 
         // Attach the single shared operations DB connection
-        // All downstream repositories use this instead of a per-tenant connection
         req.opsDb = getOperationsConnection();
+
+        // ── RBAC Runtime Checks (society-scoped users only) ────────────────────
+        if (decoded.societyId && decoded.role !== "super_admin") {
+            // 1. Check if user's society mapping is still active
+            const masterDb = getMasterConnection();
+            const Mapping  = masterDb.model("UserSocietyMapping");
+            const mapping  = await Mapping.findOne({
+                userId:    decoded.id,
+                societyId: decoded.societyId,
+            }).lean();
+
+            if (mapping && mapping.status === "deactivated") {
+                return next(new AppError("Your account has been deactivated for this society.", 403, "ACCOUNT_DEACTIVATED"));
+            }
+
+            req.user.roleKeys = mapping?.roleKeys?.length
+                ? [...new Set(mapping.roleKeys.map(resolveRoleKey))]
+                : mapping?.role
+                    ? [resolveRoleKey(mapping.role)]
+                    : [resolveRoleKey(decoded.role)];
+            req.user.flatId = mapping?.flatId || null;
+
+            // 2. permissionsVersion staleness check
+            // If the JWT's embedded version is older than the Society's current version,
+            // signal the FE to re-fetch permissions (without forcing re-login).
+            try {
+                const currentVersion = await getSocietyPermissionsVersion(decoded.societyId);
+                if (currentVersion !== (decoded.permissionsVersion ?? 1)) {
+                    res.setHeader("X-Permissions-Stale", "true");
+                }
+            } catch (_) {
+                // Non-fatal: if the version check fails, continue the request normally
+            }
+        }
 
         next();
     } catch (error) {
@@ -63,3 +101,4 @@ const authenticate = async (req, res, next) => {
 };
 
 module.exports = authenticate;
+module.exports.bustPermissionsVersionCache = bustPermissionsVersionCache;

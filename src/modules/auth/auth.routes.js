@@ -53,5 +53,7 @@ router.use(authenticate);
 
 router.post("/logout", AuthController.logout);
 router.get("/me", AuthController.getMe);
+router.patch("/me", AuthController.updateMe);
+router.get("/permissions", AuthController.refreshPermissions);
 
 module.exports = router;

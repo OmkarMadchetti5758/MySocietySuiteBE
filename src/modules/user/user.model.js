@@ -33,17 +33,24 @@ const userSchema = new mongoose.Schema(
             trim: true,
             sparse: true,
             match: [/^\S+@\S+\.\S+$/, "Please enter a valid email address"],
+            required: [
+                function () { return !this.mobile; },
+                "Either email or mobile number is required"
+            ],
         },
         mobile: {
             type: String,
-            required: [true, "Mobile number is required"],
             trim: true,
+            required: [
+                function () { return !this.email; },
+                "Either email or mobile number is required"
+            ],
             // Uniqueness is enforced via compound index {societyId, mobile}
         },
         password: {
             type: String,
             required: [
-                function () { return this.status !== USER_STATUS.INVITED; }, 
+                function () { return this.status !== USER_STATUS.INVITED; },
                 "Password is required"
             ],
             minlength: [6, "Password must be at least 6 characters"],

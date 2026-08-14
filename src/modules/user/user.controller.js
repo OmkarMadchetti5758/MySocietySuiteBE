@@ -58,6 +58,32 @@ class UserController {
             next(error);
         }
     }
+
+    async addUserRole(req, res, next) {
+        try {
+            const result = await UserService.addUserRole(
+                req.societyId,
+                req.params.id,
+                req.body.roleKey
+            );
+            return sendSuccess(res, 200, "Role assigned successfully", result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async removeUserRole(req, res, next) {
+        try {
+            const result = await UserService.removeUserRole(
+                req.societyId,
+                req.params.id,
+                req.params.roleKey
+            );
+            return sendSuccess(res, 200, "Role removed successfully", result);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new UserController();

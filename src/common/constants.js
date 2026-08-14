@@ -43,6 +43,7 @@ const MODULES = Object.freeze({
     REPORTS_DASHBOARD:     "reports_dashboard",
     AI_ASSISTANT:          "ai_assistant",
     FESTIVAL_COLLECTION:   "festival_collection",
+    SETTINGS:              "settings",
 });
 
 // ─── Permission Levels ────────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.PLATFORM },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.PLATFORM },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.PLATFORM },
     },
 
     // ── 2. Committee / Society Admin ─────────────────────────────────────────
@@ -104,6 +106,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.SOCIETY },
     },
 
     // ── 3. Accountant ────────────────────────────────────────────────────────
@@ -121,41 +124,44 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.FINANCIAL },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.FINANCIAL },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.FINANCIAL },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
     },
 
     // ── 4. Resident (Owner) ───────────────────────────────────────────────────
     [ROLES.RESIDENT_OWNER]: {
         [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY },
-        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },   // View & pay own
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },   // Approve own
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },   // Raise & track own
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY }, // View & vote
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },   // Book own
         [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
         [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
-        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.ALL },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY }, // View permitted
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },   // Pay own
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
     },
 
     // ── 5. Resident (Tenant) ──────────────────────────────────────────────────
     // Identical to Owner except Documents Manager scope is RESTRICTED
     [ROLES.RESIDENT_TENANT]: {
         [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
         [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY },
-        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
         [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
         [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
-        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.RESTRICTED }, // ← Restricted (no ownership/legal docs)
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.RESTRICTED }, // No ownership/legal docs
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
-        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
     },
 
     // ── 6. Security Guard ─────────────────────────────────────────────────────
@@ -173,6 +179,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
     },
 
     // ── 7. Facility Manager ───────────────────────────────────────────────────
@@ -190,6 +197,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.FACILITY },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.FACILITY },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
     },
 
     // ── 8. Vendor ─────────────────────────────────────────────────────────────
@@ -207,6 +215,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
     },
 });
 
@@ -214,6 +223,7 @@ const ROLE_PERMISSIONS = Object.freeze({
 // Used in getRolePermissions() for backward compatibility
 const ROLE_ALIAS_MAP = Object.freeze({
     [ROLES.COMMITTEE_MEMBER]: ROLES.ADMIN,         // committee_member → admin permissions
+    committee_admin:          ROLES.ADMIN,           // legacy GLOBAL roleKey → admin permissions
     [ROLES.RESIDENT]:         ROLES.RESIDENT_OWNER,// resident → resident_owner permissions
     [ROLES.SECURITY]:         ROLES.SECURITY_GUARD,// security → security_guard permissions
     [ROLES.STAFF]:            ROLES.FACILITY_MANAGER, // staff → facility_manager permissions

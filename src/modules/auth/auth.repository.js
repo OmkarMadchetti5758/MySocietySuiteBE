@@ -78,6 +78,15 @@ class AuthRepository {
     }
 
     /**
+     * Fetch the active mapping for a user within a society (roleKeys, flatId, status).
+     */
+    async getMappingForUser(societyId, userId) {
+        const masterDb = getMasterConnection();
+        const Mapping = masterDb.model("UserSocietyMapping");
+        return Mapping.findOne({ userId, societyId }).lean();
+    }
+
+    /**
      * Finds a user by their MongoDB _id, scoped to the given society.
      */
     async findUserById(societyId, userId) {

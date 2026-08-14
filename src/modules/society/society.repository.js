@@ -42,6 +42,16 @@ class SocietyRepository {
             .sort({ name: 1 })
             .lean();
     }
+
+    async getSocietyById(societyId) {
+        const Society = await this._getSocietyModel();
+        return Society.findById(societyId).lean();
+    }
+
+    async updateSociety(societyId, updateData) {
+        const Society = await this._getSocietyModel();
+        return Society.findByIdAndUpdate(societyId, updateData, { new: true, runValidators: true }).lean();
+    }
 }
 
 module.exports = new SocietyRepository();
