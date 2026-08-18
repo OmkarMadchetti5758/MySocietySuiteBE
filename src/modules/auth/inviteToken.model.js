@@ -20,11 +20,28 @@ const inviteTokenSchema = new mongoose.Schema(
             required: true,
             // References a User document in the operations DB
         },
+        purpose: {
+            type: String,
+            enum: ["society_admin", "resident", "manager"],
+            default: "resident",
+            // Tells the onboarding page which flow to render
+        },
         expiresAt: {
             type: Date,
             required: true,
         },
         used: {
+            type: Boolean,
+            default: false,
+        },
+        // ── Partial-completion tracking (manager invites only) ─────────────────
+        // Allows the user to resume after OTP without re-verifying within
+        // the token's validity window.
+        otpEmailVerified: {
+            type: Boolean,
+            default: false,
+        },
+        otpPhoneVerified: {
             type: Boolean,
             default: false,
         },
