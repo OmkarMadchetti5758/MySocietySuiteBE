@@ -288,8 +288,14 @@ class AuthService {
             adminName: user.name,
             adminEmail: user.email,
             adminPhone: user.mobile,
+            societyId: society._id.toString(),
             societyName: society.name,
             userRole: user.role,
+            purpose: invite.purpose || "resident",
+            // For manager invites: tells the FE which OTP channels are already verified
+            // so it can skip re-verification when the user resumes an abandoned flow.
+            otpEmailVerified: invite.otpEmailVerified || false,
+            otpPhoneVerified: invite.otpPhoneVerified || false,
         };
     }
 
@@ -329,6 +335,33 @@ class AuthService {
         if (user.role === ROLES.ADMIN && society.status === SOCIETY_STATUS.PENDING_VERIFICATION) {
             society.status = SOCIETY_STATUS.TRIAL;
             await society.save();
+        }
+
+        // For manager invites: update ManagerAssignment status to active
+        if (invite.purpose === "manager") {
+            try {
+                const opsDb = require("../../config/operationsDb").getOperationsConnection();
+                const ManagerAssignment = opsDb.model("ManagerAssignment");
+                await ManagerAssignment.updateOne(
+                    { userId: user._id, societyId: invite.societyId, status: "invite_pending" },
+                    {
+                        $set: {
+                            status:      "active",
+                            activatedAt: new Date(),
+                        },
+                    }
+                );
+                // Add roleKey to UserSocietyMapping (may already exist, addToSet is idempotent)
+                const masterDb = getMasterConnection();
+                const UserSocietyMapping = masterDb.model("UserSocietyMapping");
+                await UserSocietyMapping.updateMany(
+                    { societyId: invite.societyId, userId: user._id },
+                    { $addToSet: { roleKeys: user.role } }
+                );
+            } catch (managerErr) {
+                // Non-fatal: log but don't block account activation
+                console.error("[activateInvite] Failed to update ManagerAssignment:", managerErr.message);
+            }
         }
 
         const authContext = await this._buildUserAuthContext(user);

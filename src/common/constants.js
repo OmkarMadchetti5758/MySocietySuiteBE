@@ -21,10 +21,12 @@ const ROLES = Object.freeze({
     // Operations
     SECURITY_GUARD:   "security_guard",
     SECURITY:         "security",         // Legacy alias → treated as security_guard
+    GUARD_MANAGER:    "guard_manager",    // Department-head: manages security operations
     FACILITY_MANAGER: "facility_manager",
 
     // External
     VENDOR:           "vendor",
+    VENDOR_MANAGER:   "vendor_manager",   // Department-head: manages vendor relationships
     STAFF:            "staff",            // Legacy generic staff
 });
 
@@ -213,6 +215,42 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+    },
+
+    // ── 9. Guard Manager (department-head; manages security ops) ──────────────
+    [ROLES.GUARD_MANAGER]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.ASSIGNED },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.ASSIGNED },  // Manage security staff
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.ASSIGNED },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+    },
+
+    // ── 10. Vendor Manager (department-head; manages vendor relationships) ────
+    [ROLES.VENDOR_MANAGER]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.ASSIGNED },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.ASSIGNED },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
@@ -456,8 +494,38 @@ const PAGINATION = Object.freeze({
     MAX_LIMIT: 100,
 });
 
+// ─── Department-Head Roles Config (for Managers tab) ──────────────────────────
+// Maps department-head roleKeys to their display metadata
+const DEPARTMENT_HEAD_ROLES = Object.freeze([
+    {
+        roleKey:    ROLES.ACCOUNTANT,
+        roleName:   "Accountant",
+        department: "Finance",
+        allowMultiple: false,
+    },
+    {
+        roleKey:    ROLES.GUARD_MANAGER,
+        roleName:   "Guard Manager",
+        department: "Security",
+        allowMultiple: false,
+    },
+    {
+        roleKey:    ROLES.FACILITY_MANAGER,
+        roleName:   "Facility Manager",
+        department: "Facility",
+        allowMultiple: false,
+    },
+    {
+        roleKey:    ROLES.VENDOR_MANAGER,
+        roleName:   "Vendor Manager",
+        department: "Procurement",
+        allowMultiple: false,
+    },
+]);
+
 module.exports = {
     ROLES,
+    DEPARTMENT_HEAD_ROLES,
     SOCIETY_STATUS,
     USER_STATUS,
     SUBSCRIPTION_STATUS,
@@ -489,4 +557,5 @@ module.exports = {
     ROLE_PERMISSIONS,
     ROLE_ALIAS_MAP,
     getRolePermissions,
+    DEPARTMENT_HEAD_ROLES,
 };

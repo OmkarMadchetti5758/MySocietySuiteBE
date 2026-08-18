@@ -29,6 +29,7 @@ const connectMasterDB = async () => {
         masterConnection.model("Role", require("../modules/role/role.model"));
         masterConnection.model("Permission", require("../modules/permission/permission.model"));
         masterConnection.model("InviteToken", require("../modules/auth/inviteToken.model"));
+        masterConnection.model("Otp",         require("../modules/otp/otp.model"));
         // UserSocietyMapping is also registered on master for login-identifier → societyId lookup
         masterConnection.model("UserSocietyMapping", require("../modules/userSocietyMapping/userSocietyMapping.model"));
 

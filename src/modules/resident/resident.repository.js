@@ -75,8 +75,7 @@ class ResidentRepository {
                     roleKeys: [role],
                     flatId: flat._id,
                 });
-            }
-            if (phone && phone !== email) {
+            } else if (phone) {
                 mappingEntries.push({
                     identifier: phone,
                     societyId,
@@ -97,6 +96,7 @@ class ResidentRepository {
                 tokenHash,
                 societyId,
                 adminId: user._id,
+                purpose: "resident",
                 expiresAt,
             });
 
