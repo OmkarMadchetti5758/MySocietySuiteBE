@@ -329,12 +329,25 @@ class AuthService {
         // Update User
         user.password = password; // Will be hashed by pre-save hook
         user.status = "active";
+        user.isActive = true;
         await user.save();
 
         // Activate society only for pending society-admin invites
         if (user.role === ROLES.ADMIN && society.status === SOCIETY_STATUS.PENDING_VERIFICATION) {
             society.status = SOCIETY_STATUS.TRIAL;
             await society.save();
+        }
+
+        if (invite.purpose === "staff") {
+            try {
+                const Staff = opsDb.model("Staff");
+                await Staff.updateOne(
+                    { userId: user._id, societyId: invite.societyId },
+                    { $set: { isActive: true, status: 'active' } }
+                );
+            } catch (staffErr) {
+                console.error("[activateInvite] Failed to update Staff isActive:", staffErr.message);
+            }
         }
 
         // For manager invites: update ManagerAssignment status to active

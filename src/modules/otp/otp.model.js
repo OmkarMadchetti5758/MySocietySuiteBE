@@ -32,7 +32,7 @@ const otpSchema = new mongoose.Schema(
         purpose: {
             type: String,
             required: true,
-            enum: ["manager_invite", "resident_invite"],
+            enum: ["manager_invite", "resident_invite", "staff_invite"],
             // Scopes OTPs so the same identifier can have OTPs for different flows
         },
         societyId: {

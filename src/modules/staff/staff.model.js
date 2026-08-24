@@ -40,6 +40,10 @@ const staffSchema = new mongoose.Schema(
             type: String,
             trim: true, // e.g. "Morning", "Evening", "Night"
         },
+        gateOrArea: {
+            type: String,
+            trim: true,
+        },
         joiningDate: {
             type: Date,
         },
@@ -50,6 +54,11 @@ const staffSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true,
+        },
+        status: {
+            type: String,
+            enum: ["active", "invited", "deactivated"],
+            default: "active",
         },
         documents: [String], // ID proof, contract etc.
     },

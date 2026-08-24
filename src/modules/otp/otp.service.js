@@ -3,12 +3,12 @@
 const AppError = require("../../common/AppError");
 const { getMasterConnection } = require("../../config/masterDb");
 
-const MAX_ATTEMPTS     = 5;
-const MAX_RESENDS      = 3;
+const MAX_ATTEMPTS = 5;
+const MAX_RESENDS = 3;
 const RESEND_COOLDOWN_SECONDS = 30;
 const RATE_WINDOW_HOURS = 1;
-const OTP_TTL_MINUTES   = 10;
-const LOCKOUT_MINUTES   = 20;
+const OTP_TTL_MINUTES = 10;
+const LOCKOUT_MINUTES = 20;
 
 class OtpService {
     _getModel() {
@@ -66,17 +66,17 @@ class OtpService {
             const { code, codeHash } = Otp.schema.statics.generateCode.call(Otp);
             const expiresAt = new Date(now.getTime() + OTP_TTL_MINUTES * 60 * 1000);
 
-            existing.codeHash     = codeHash;
-            existing.expiresAt    = expiresAt;
-            existing.attempts     = 0;
-            existing.verified     = false;
+            existing.codeHash = codeHash;
+            existing.expiresAt = expiresAt;
+            existing.attempts = 0;
+            existing.verified = false;
             existing.rateLockUntil = null;
-            existing.resendCount  = (existing.resendCount || 1) + 1;
+            existing.resendCount = (existing.resendCount || 1) + 1;
             existing.lastResendAt = now;
             await existing.save();
 
             this._logOtp(normalizedIdentifier, code, purpose);
-            return { 
+            return {
                 message: "OTP resent successfully",
                 ...(process.env.NODE_ENV === "development" ? { devOtpCode: code } : {})
             };
@@ -97,7 +97,7 @@ class OtpService {
         });
 
         this._logOtp(normalizedIdentifier, code, purpose);
-        return { 
+        return {
             message: "OTP sent successfully",
             ...(process.env.NODE_ENV === "development" ? { devOtpCode: code } : {})
         };
@@ -173,8 +173,8 @@ class OtpService {
         }
 
         // Correct code — mark as verified
-        otpDoc.verified  = true;
-        otpDoc.attempts  = 0;
+        otpDoc.verified = true;
+        otpDoc.attempts = 0;
         otpDoc.rateLockUntil = null;
         await otpDoc.save();
 
@@ -213,7 +213,7 @@ class OtpService {
 
     _logOtp(identifier, code, purpose) {
         console.log("\n=============================================");
-        console.log("=== DEV OTP ===");
+        // console.log("=== DEV OTP ===");
         console.log(`Identifier: ${identifier}`);
         console.log(`Purpose:    ${purpose}`);
         console.log(`OTP Code:   ${code}   (expires in ${OTP_TTL_MINUTES} min)`);
