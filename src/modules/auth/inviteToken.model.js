@@ -22,7 +22,7 @@ const inviteTokenSchema = new mongoose.Schema(
         },
         purpose: {
             type: String,
-            enum: ["society_admin", "resident", "manager"],
+            enum: ["society_admin", "resident", "manager", "staff"],
             default: "resident",
             // Tells the onboarding page which flow to render
         },

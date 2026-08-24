@@ -26,7 +26,8 @@ router.use("/societies/:societyId/managers", require("../../modules/managerAssig
 router.use("/blocks",    require("../../modules/block/block.routes"));
 router.use("/residents", require("../../modules/resident/resident.routes"));
 router.use("/otp",       require("../../modules/otp/otp.routes"));
-
+router.use("/staff",     require("../staff.routes"));
+router.use("/attendance",require("../attendance.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
 // router.use("/blocks", blockRoutes);

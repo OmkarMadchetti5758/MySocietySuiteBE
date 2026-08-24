@@ -28,6 +28,20 @@ const ROLES = Object.freeze({
     VENDOR:           "vendor",
     VENDOR_MANAGER:   "vendor_manager",   // Department-head: manages vendor relationships
     STAFF:            "staff",            // Legacy generic staff
+    GENERAL_STAFF:    "general_staff",    // housekeeping/gardener/electrician/plumber etc.
+});
+
+// Separate enum/lookup table for what the job actually is — display, filtering, reporting only
+const STAFF_DESIGNATIONS = Object.freeze({
+    HOUSEKEEPING:      "housekeeping",
+    GARDENER:          "gardener",
+    ELECTRICIAN:       "electrician",
+    PLUMBER:           "plumber",
+    CARPENTER:         "carpenter",
+    PEST_CONTROL:      "pest_control",
+    LIFT_TECHNICIAN:   "lift_technician",
+    SWEEPER:           "sweeper",
+    OTHER:             "other",
 });
 
 // ─── Modules (13 platform modules) ────────────────────────────────────────────
@@ -251,6 +265,24 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.ASSIGNED },
+        [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+    },
+
+    // ── 11. General Staff (housekeeping, gardener, electrician, plumber etc.) ──
+    [ROLES.GENERAL_STAFF]: {
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.REPORTS_DASHBOARD]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.AI_ASSISTANT]:        { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.SETTINGS]:            { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
@@ -558,4 +590,5 @@ module.exports = {
     ROLE_ALIAS_MAP,
     getRolePermissions,
     DEPARTMENT_HEAD_ROLES,
+    STAFF_DESIGNATIONS,
 };

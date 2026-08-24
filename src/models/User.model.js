@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { ROLES } = require("../common/constants");
 
 const userSchema = new mongoose.Schema(
     {
@@ -10,11 +11,16 @@ const userSchema = new mongoose.Schema(
         },
         email: {
             type: String,
-            required: [true, "Email is required"],
+            required: false,
             unique: true,
+            sparse: true,  // allows multiple docs with no email (null/undefined)
             lowercase: true,
             trim: true,
             match: [/^\S+@\S+\.\S+$/, "Please enter a valid email address"],
+        },
+        mobile: {
+            type: String,
+            trim: true,
         },
         password: {
             type: String,
@@ -24,8 +30,8 @@ const userSchema = new mongoose.Schema(
         },
         role: {
             type: String,
-            enum: ["admin", "resident", "security"],
-            default: "resident",
+            enum: Object.values(ROLES),
+            default: ROLES.RESIDENT,
         },
         isActive: {
             type: Boolean,

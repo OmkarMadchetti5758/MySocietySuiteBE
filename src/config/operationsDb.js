@@ -41,6 +41,7 @@ const connectOperationsDB = async () => {
         opsConnection.model("AmenityBooking",        require("../modules/booking/amenityBooking.model"));
         opsConnection.model("Vendor",                require("../modules/vendor/vendor.model"));
         opsConnection.model("Staff",                 require("../modules/staff/staff.model"));
+        opsConnection.model("Attendance",            require("../modules/attendance/attendance.model"));
         opsConnection.model("Document",              require("../modules/document/document.model"));
         opsConnection.model("FestivalCollection",    require("../modules/festival/festivalCollection.model"));
         opsConnection.model("FestivalContribution",  require("../modules/festival/festivalContribution.model"));
