@@ -414,6 +414,7 @@ const BOOKING_STATUS = Object.freeze({
     CONFIRMED: "confirmed",
     CANCELLED: "cancelled",
     COMPLETED: "completed",
+    REJECTED: "rejected",
 });
 
 // ─── Notice Type ───────────────────────────────────────────────────────────────

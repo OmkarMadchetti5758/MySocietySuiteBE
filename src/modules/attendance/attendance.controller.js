@@ -1,10 +1,10 @@
 "use strict";
 
 const mongoose = require("mongoose");
-const { getOperationsConnection } = require("../config/operationsDb");
-const AppError = require("../common/AppError");
-const { sendSuccess } = require("../utils/response.utils");
-const { ROLES } = require("../common/constants");
+const { getOperationsConnection } = require("../../config/operationsDb");
+const AppError = require("../../common/AppError");
+const { sendSuccess } = require("../../utils/response.utils");
+const { ROLES } = require("../../common/constants");
 
 // @desc    Mark attendance for a staff member
 // @route   POST /api/attendance

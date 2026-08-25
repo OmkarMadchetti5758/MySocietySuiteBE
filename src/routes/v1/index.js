@@ -26,13 +26,13 @@ router.use("/societies/:societyId/managers", require("../../modules/managerAssig
 router.use("/blocks",    require("../../modules/block/block.routes"));
 router.use("/residents", require("../../modules/resident/resident.routes"));
 router.use("/otp",       require("../../modules/otp/otp.routes"));
-router.use("/staff",     require("../staff.routes"));
-router.use("/attendance",require("../attendance.routes"));
+router.use("/staff",     require("../../modules/staff/staff.routes"));
+router.use("/attendance",require("../../modules/attendance/attendance.routes"));
 router.use("/notices",   require("../../modules/notice/notice.routes"));
 router.use("/polls",     require("../../modules/poll/poll.routes"));
+router.use("/amenities", require("../../modules/amenity/amenity.routes"));
+router.use("/amenity-bookings", require("../../modules/booking/amenityBooking.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
-// router.use("/blocks", blockRoutes);
-// ...
 
 module.exports = router;

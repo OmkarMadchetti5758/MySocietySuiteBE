@@ -26,26 +26,39 @@ const amenitySchema = new mongoose.Schema(
             type: Number,
             min: 1,
         },
-        isBookable: {
-            type: Boolean,
-            default: true,
+        status: {
+            type: String,
+            enum: ["ACTIVE", "INACTIVE"],
+            default: "ACTIVE",
         },
-        availableSlots: [
-            {
-                day: { type: String }, // e.g. "Monday" or "all"
-                startTime: { type: String }, // e.g. "06:00"
-                endTime: { type: String },   // e.g. "22:00"
-            }
-        ],
-        chargePerSlot: {
+        requiresApproval: {
+            type: Boolean,
+            default: false,
+        },
+        advanceBookingLimit: {
+            type: Number, // in days
+            default: 30,
+            min: 0,
+        },
+        maxBookingDuration: {
+            type: Number, // in minutes
+            default: 180, // e.g. 3 hours
+            min: 1,
+        },
+        cancellationWindow: {
+            type: Number, // in hours before start time
+            default: 24,
+            min: 0,
+        },
+        bookingFee: {
             type: Number,
             default: 0,
         },
-        isActive: {
-            type: Boolean,
-            default: true,
-        },
         images: [String],
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
     },
     { timestamps: true }
 );

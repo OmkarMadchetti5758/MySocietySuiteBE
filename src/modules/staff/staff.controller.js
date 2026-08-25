@@ -1,10 +1,10 @@
 "use strict";
 
-const { getMasterConnection } = require("../config/masterDb");
-const { getOperationsConnection } = require("../config/operationsDb");
-const { ROLES, MODULES, PERMISSION_LEVELS } = require("../common/constants");
-const AppError = require("../common/AppError");
-const { sendSuccess } = require("../utils/response.utils");
+const { getMasterConnection } = require("../../config/masterDb");
+const { getOperationsConnection } = require("../../config/operationsDb");
+const { ROLES, MODULES, PERMISSION_LEVELS } = require("../../common/constants");
+const AppError = require("../../common/AppError");
+const { sendSuccess } = require("../../utils/response.utils");
 
 // @desc    Invite a new staff member (generates an invite token link, same as resident flow)
 // @route   POST /api/staff

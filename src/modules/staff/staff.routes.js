@@ -1,11 +1,11 @@
 "use strict";
 
 const express = require("express");
-const { addStaff, getAllStaff, getShiftAndGateView } = require("../controllers/staff.controller");
-const authenticate = require("../middleware/authenticate");
-const injectSocietyId = require("../middleware/injectSocietyId");
-const checkPermission = require("../middleware/checkPermission");
-const { MODULES, PERMISSION_LEVELS } = require("../common/constants");
+const { addStaff, getAllStaff, getShiftAndGateView } = require("./staff.controller");
+const authenticate = require("../../middleware/authenticate");
+const injectSocietyId = require("../../middleware/injectSocietyId");
+const checkPermission = require("../../middleware/checkPermission");
+const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
 
 const router = express.Router();
 
