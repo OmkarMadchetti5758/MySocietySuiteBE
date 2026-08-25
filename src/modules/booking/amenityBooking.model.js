@@ -35,10 +35,10 @@ const amenityBookingSchema = new mongoose.Schema(
             type: Date,
             required: [true, "Booking date is required"],
         },
-        slot: {
-            type: String,
-            required: [true, "Time slot is required"],
-            trim: true, // e.g. "10:00-11:00"
+        slotId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "AmenitySlot",
+            required: [true, "Time slot ID is required"],
         },
         status: {
             type: String,
@@ -53,18 +53,42 @@ const amenityBookingSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        rejectionReason: {
+            type: String,
+            trim: true,
+        },
+        cancellationReason: {
+            type: String,
+            trim: true,
+        },
+        cancelledAt: {
+            type: Date,
+        },
         approvedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
+        },
+        approvedAt: {
+            type: Date,
+        },
+        rejectedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+        rejectedAt: {
+            type: Date,
         },
     },
     { timestamps: true }
 );
 
-// DB-level double-booking prevention
+// DB-level double-booking prevention using partial unique index
 amenityBookingSchema.index(
-    { societyId: 1, amenityId: 1, date: 1, slot: 1 },
-    { unique: true }
+    { societyId: 1, amenityId: 1, date: 1, slotId: 1 },
+    { 
+        unique: true, 
+        partialFilterExpression: { status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.CONFIRMED] } } 
+    }
 );
 amenityBookingSchema.index({ societyId: 1, bookedBy: 1 });
 

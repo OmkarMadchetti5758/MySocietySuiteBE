@@ -1,5 +1,5 @@
 const router = require("express").Router();
-const { healthCheck } = require("../controllers/health.controller");
+const { healthCheck } = require("./health.controller");
 
 router.get("/", healthCheck);
 

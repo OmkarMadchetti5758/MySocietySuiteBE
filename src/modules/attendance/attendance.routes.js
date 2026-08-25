@@ -1,11 +1,11 @@
 "use strict";
 
 const express = require("express");
-const { markAttendance, getAttendance, getMonthlyReport, getSummary } = require("../controllers/attendance.controller");
-const authenticate = require("../middleware/authenticate");
-const injectSocietyId = require("../middleware/injectSocietyId");
-const checkPermission = require("../middleware/checkPermission");
-const { MODULES, PERMISSION_LEVELS } = require("../common/constants");
+const { markAttendance, getAttendance, getMonthlyReport, getSummary } = require("./attendance.controller");
+const authenticate = require("../../middleware/authenticate");
+const injectSocietyId = require("../../middleware/injectSocietyId");
+const checkPermission = require("../../middleware/checkPermission");
+const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
 
 const router = express.Router();
 

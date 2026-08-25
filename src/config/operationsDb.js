@@ -40,6 +40,7 @@ const connectOperationsDB = async () => {
         opsConnection.model("Poll",                  require("../modules/poll/poll.model"));
         opsConnection.model("PollVote",              require("../modules/poll/pollVote.model"));
         opsConnection.model("Amenity",               require("../modules/amenity/amenity.model"));
+        opsConnection.model("AmenitySlot",           require("../modules/amenity/amenitySlot.model"));
         opsConnection.model("AmenityBooking",        require("../modules/booking/amenityBooking.model"));
         opsConnection.model("Vendor",                require("../modules/vendor/vendor.model"));
         opsConnection.model("Staff",                 require("../modules/staff/staff.model"));
