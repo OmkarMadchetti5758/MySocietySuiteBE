@@ -377,6 +377,20 @@ class AuthService {
             }
         }
 
+        // For vendor invites: update Vendor status to active
+        if (invite.purpose === "vendor") {
+            try {
+                const opsDb = require("../../config/operationsDb").getOperationsConnection();
+                const Vendor = opsDb.model("Vendor");
+                await Vendor.updateOne(
+                    { userId: user._id, societyId: invite.societyId, status: "INVITED" },
+                    { $set: { status: "ACTIVE" } }
+                );
+            } catch (vendorErr) {
+                console.error("[activateInvite] Failed to update Vendor status:", vendorErr.message);
+            }
+        }
+
         const authContext = await this._buildUserAuthContext(user);
         const payload = this._buildTokenPayload(user, authContext);
 
