@@ -18,9 +18,9 @@ const vendorSchema = new mongoose.Schema(
             required: [true, "Vendor name is required"],
             trim: true,
         },
-        serviceType: {
+        serviceCategory: {
             type: String,
-            required: [true, "Service type is required"],
+            required: [true, "Service category is required"],
             trim: true, // e.g. "Plumbing", "Electrical", "Cleaning"
         },
         contactPerson: {
@@ -45,25 +45,36 @@ const vendorSchema = new mongoose.Schema(
             trim: true,
             uppercase: true,
         },
-        rating: {
-            type: Number,
-            min: 0,
-            max: 5,
+        status: {
+            type: String,
+            enum: ["INVITED", "ACTIVE", "INACTIVE"],
+            default: "INVITED",
         },
-        isActive: {
-            type: Boolean,
-            default: true,
+        contractStartDate: {
+            type: Date,
+        },
+        contractEndDate: {
+            type: Date,
         },
         documents: [String], // URLs/paths to agreement docs
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User", // If the vendor has a platform login
         },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
     },
     { timestamps: true }
 );
 
-vendorSchema.index({ societyId: 1 });
-vendorSchema.index({ societyId: 1, serviceType: 1 });
+vendorSchema.index({ societyId: 1, status: 1 });
+vendorSchema.index({ societyId: 1, serviceCategory: 1 });
+vendorSchema.index({ societyId: 1, contractEndDate: 1 });
 
 module.exports = vendorSchema;

@@ -5,6 +5,7 @@ const env = require("./config/env");
 const { connectMasterDB } = require("./config/masterDb");
 const { connectOperationsDB } = require("./config/operationsDb");
 const { logger } = require("./middleware/logger");
+const { startSlaScheduler, stopSlaScheduler } = require("./services/slaScheduler");
 
 const startServer = async () => {
     try {
@@ -14,7 +15,10 @@ const startServer = async () => {
         // 2. Connect to shared Operations Database (all society operational data)
         await connectOperationsDB();
 
-        // 3. Start Express Server
+        // 3. Start SLA escalation scheduler
+        startSlaScheduler();
+
+        // 4. Start Express Server
         const server = app.listen(env.PORT, () => {
             logger.info(`🚀 Server running on http://localhost:${env.PORT}`);
             logger.info(`Environment: ${env.NODE_ENV}`);
@@ -31,6 +35,7 @@ const startServer = async () => {
 
         process.on("SIGTERM", () => {
             logger.info("👋 SIGTERM RECEIVED. Shutting down gracefully");
+            stopSlaScheduler();
             server.close(() => {
                 logger.info("💥 Process terminated!");
             });

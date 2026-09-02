@@ -32,6 +32,8 @@ router.use("/notices",   require("../../modules/notice/notice.routes"));
 router.use("/polls",     require("../../modules/poll/poll.routes"));
 router.use("/amenities", require("../../modules/amenity/amenity.routes"));
 router.use("/amenity-bookings", require("../../modules/booking/amenityBooking.routes"));
+router.use("/vendors", require("../../modules/vendor/vendor.routes"));
+router.use("/complaints", require("../../modules/complaint/complaint.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
 

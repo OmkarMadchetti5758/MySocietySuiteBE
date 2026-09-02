@@ -36,6 +36,8 @@ const connectOperationsDB = async () => {
         opsConnection.model("MaintenanceBill",       require("../modules/maintenance/maintenanceBill.model"));
         opsConnection.model("PaymentTransaction",    require("../modules/payment/paymentTransaction.model"));
         opsConnection.model("Complaint",             require("../modules/complaint/complaint.model"));
+        opsConnection.model("ComplaintHistory",      require("../modules/complaint/complaintHistory.model"));
+        opsConnection.model("Counter",               require("../modules/complaint/counter.model"));
         opsConnection.model("Notice",                require("../modules/notice/notice.model"));
         opsConnection.model("Poll",                  require("../modules/poll/poll.model"));
         opsConnection.model("PollVote",              require("../modules/poll/pollVote.model"));
@@ -43,6 +45,7 @@ const connectOperationsDB = async () => {
         opsConnection.model("AmenitySlot",           require("../modules/amenity/amenitySlot.model"));
         opsConnection.model("AmenityBooking",        require("../modules/booking/amenityBooking.model"));
         opsConnection.model("Vendor",                require("../modules/vendor/vendor.model"));
+        opsConnection.model("VendorAssignmentHistory", require("../modules/vendor/vendorAssignmentHistory.model"));
         opsConnection.model("Staff",                 require("../modules/staff/staff.model"));
         opsConnection.model("Attendance",            require("../modules/attendance/attendance.model"));
         opsConnection.model("Document",              require("../modules/document/document.model"));
