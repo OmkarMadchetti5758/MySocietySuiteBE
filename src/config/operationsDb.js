@@ -51,6 +51,7 @@ const connectOperationsDB = async () => {
         opsConnection.model("Document",              require("../modules/document/document.model"));
         opsConnection.model("FestivalCollection",    require("../modules/festival/festivalCollection.model"));
         opsConnection.model("FestivalContribution",  require("../modules/festival/festivalContribution.model"));
+        opsConnection.model("Festival",              require("../modules/festival/festival.model"));
         opsConnection.model("AIAssistantQueryLog",   require("../modules/auditLog/aiAssistantQueryLog.model"));
         opsConnection.model("Notification",          require("../modules/notification/notification.model"));
         opsConnection.model("RolePermissionAudit",   require("../modules/role/rolePermissionAudit.model"));
