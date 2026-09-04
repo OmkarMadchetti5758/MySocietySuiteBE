@@ -38,6 +38,7 @@ const checkPermission = (moduleName, requiredLevel = PERMISSION_LEVELS.VIEW) => 
             const modulePerm = permissions[moduleName];
 
             if (!modulePerm || modulePerm.level < requiredLevel) {
+                console.error(`[RBAC DENIED] User role=${req.user?.role}, roleKeys=${JSON.stringify(req.user?.roleKeys)}, societyId=${req.user?.societyId}, module=${moduleName}, reqLevel=${requiredLevel}, actualLevel=${modulePerm?.level}`);
                 return next(new AppError(`Access denied for module: ${moduleName}. Insufficient permissions.`, 403));
             }
 
