@@ -30,10 +30,37 @@ const flatSchema = new mongoose.Schema(
         },
         type: {
             type: String,
-            enum: Object.values(FLAT_TYPE),
         },
         area: {
             type: Number, // in sq ft
+        },
+        ownershipType: {
+            type: String,
+            trim: true,
+        },
+        occupancyStatus: {
+            type: String,
+            enum: ["Vacant", "Owner Occupied", "Tenant Occupied"],
+            default: "Vacant",
+        },
+        primaryOwner: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+        activeTenant: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+        numberOfResidents: {
+            type: Number,
+            default: 0,
+        },
+        parkingSlots: {
+            type: Number,
+            default: 0,
+        },
+        possessionDate: {
+            type: Date,
         },
         status: {
             type: String,
