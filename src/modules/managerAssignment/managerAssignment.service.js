@@ -6,6 +6,7 @@ const AppError                    = require("../../common/AppError");
 const { DEPARTMENT_HEAD_ROLES }   = require("../../common/constants");
 const { getOperationsConnection } = require("../../config/operationsDb");
 const { getMasterConnection }     = require("../../config/masterDb");
+const emailService                = require("../../services/email.service");
 
 /**
  * ManagerAssignmentService
@@ -249,16 +250,25 @@ class ManagerAssignmentService {
             societyId, newUser._id
         );
 
-        // 7. Log invite link (dev) — replace with email/SMS in prod
+        // 7. Email invite link (console copy kept in development)
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink  = `${frontendUrl}/activate-account?token=${plainToken}`;
 
-        console.log("\n=============================================");
-        console.log("=== DEV MANAGER INVITE LINK ===");
-        console.log(`Manager: ${newUser.name} (${email || phone})`);
-        console.log(`Role:    ${data.roleName} — ${data.department}`);
-        console.log(`Link:    ${inviteLink}`);
-        console.log("=============================================\n");
+        await emailService.sendInviteEmail({
+            to: email,
+            recipientName: newUser.name,
+            roleLabel: data.roleName || "Manager",
+            inviteLink,
+        });
+
+        if (process.env.NODE_ENV === "development") {
+            console.log("\n=============================================");
+            console.log("=== DEV MANAGER INVITE LINK ===");
+            console.log(`Manager: ${newUser.name} (${email || phone})`);
+            console.log(`Role:    ${data.roleName} — ${data.department}`);
+            console.log(`Link:    ${inviteLink}`);
+            console.log("=============================================\n");
+        }
 
         this._logAudit("INVITE_NEW_MANAGER", societyId, adminId, {
             userId: newUser._id,
@@ -371,12 +381,21 @@ class ManagerAssignmentService {
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink  = `${frontendUrl}/activate-account?token=${plainToken}`;
 
-        console.log("\n=============================================");
-        console.log("=== DEV MANAGER INVITE RESEND ===");
-        console.log(`Manager: ${assignment.managerName} (${identifier})`);
-        console.log(`Role:    ${assignment.roleName}`);
-        console.log(`Link:    ${inviteLink}`);
-        console.log("=============================================\n");
+        await emailService.sendInviteEmail({
+            to: assignment.managerEmail,
+            recipientName: assignment.managerName,
+            roleLabel: assignment.roleName || "Manager",
+            inviteLink,
+        });
+
+        if (process.env.NODE_ENV === "development") {
+            console.log("\n=============================================");
+            console.log("=== DEV MANAGER INVITE RESEND ===");
+            console.log(`Manager: ${assignment.managerName} (${identifier})`);
+            console.log(`Role:    ${assignment.roleName}`);
+            console.log(`Link:    ${inviteLink}`);
+            console.log("=============================================\n");
+        }
 
         this._logAudit("RESEND_MANAGER_INVITE", societyId, adminId, {
             userId: assignment.userId,

@@ -323,9 +323,24 @@ class ParkingController {
         try {
             const { violations, meta } = await ParkingService.listViolations({
                 societyId: req.societyId,
+                requestingUserId: req.user.id,
+                requestingUserRole: req.user.role,
                 query: req.query,
             });
             return sendPaginated(res, 200, "Parking violations retrieved.", { violations }, meta);
+        } catch (err) { next(err); }
+    }
+
+    async resolveViolation(req, res, next) {
+        try {
+            const violation = await ParkingService.resolveViolation({
+                violationId: req.params.id,
+                societyId: req.societyId,
+                resolvedByUserId: req.user.id,
+                resolutionNotes: req.body.resolutionNotes,
+                actionTaken: req.body.actionTaken,
+            });
+            return sendSuccess(res, 200, "Parking violation resolved.", { violation });
         } catch (err) { next(err); }
     }
 

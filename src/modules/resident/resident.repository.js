@@ -13,7 +13,7 @@ class ResidentRepository {
         const displayFlatNumber = wingCode ? `${wingCode}-${flatNumber}` : flatNumber;
 
         let flat = await Flat.findOne({ societyId, flatNumber: displayFlatNumber });
-        if (flat) return flat;
+        if (flat) return { flat, created: false };
 
         let blockDoc = await Block.findOne({ societyId });
         if (!blockDoc) {
@@ -27,7 +27,7 @@ class ResidentRepository {
             status: FLAT_STATUS.OCCUPIED,
         });
 
-        return flat;
+        return { flat, created: true };
     }
 
     async createResidentWithInvite(societyId, data) {
@@ -44,7 +44,11 @@ class ResidentRepository {
         const email = data.email.toLowerCase().trim();
         const phone = data.phone.trim();
 
-        const flat = await this.findOrCreateFlat(societyId, data.flatNumber, data.wingCode);
+        const { flat, created: createdFlat } = await this.findOrCreateFlat(
+            societyId,
+            data.flatNumber,
+            data.wingCode
+        );
 
         let user;
         let resident;
@@ -100,13 +104,46 @@ class ResidentRepository {
                 expiresAt,
             });
 
-            return { user, flat, plainToken };
+            return { user, flat, plainToken, createdFlat };
         } catch (error) {
             if (user?._id) {
-                await Resident.deleteOne({ userId: user._id, societyId }).catch(() => {});
-                await User.deleteOne({ _id: user._id }).catch(() => {});
+                await this.rollbackResidentInvite(societyId, {
+                    userId: user._id,
+                    flatId: flat?._id,
+                    createdFlat,
+                });
+            } else if (createdFlat && flat?._id) {
+                const opsDb = getOperationsConnection();
+                await opsDb.model("Flat").deleteOne({ _id: flat._id }).catch(() => {});
             }
             throw error;
+        }
+    }
+
+    /**
+     * Undo a failed invite so the API error does not leave a partial resident
+     * (user, mapping, token, and a newly created empty flat).
+     */
+    async rollbackResidentInvite(societyId, { userId, flatId, createdFlat }) {
+        const masterDb = getMasterConnection();
+        const opsDb = getOperationsConnection();
+
+        const User = opsDb.model("User");
+        const Resident = opsDb.model("Resident");
+        const Flat = opsDb.model("Flat");
+        const InviteToken = masterDb.model("InviteToken");
+        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
+
+        await Resident.deleteOne({ userId, societyId }).catch(() => {});
+        await User.deleteOne({ _id: userId }).catch(() => {});
+        await UserSocietyMapping.deleteMany({ userId, societyId }).catch(() => {});
+        await InviteToken.deleteMany({ adminId: userId, purpose: "resident" }).catch(() => {});
+
+        if (createdFlat && flatId) {
+            const remaining = await Resident.countDocuments({ flatId }).catch(() => 1);
+            if (remaining === 0) {
+                await Flat.deleteOne({ _id: flatId }).catch(() => {});
+            }
         }
     }
 

@@ -8,6 +8,7 @@ const { resolveEffectivePermissionsForRoles, normalizeRoleKeys } = require("../.
 const { getSocietyPermissionsVersion } = require("../../common/permissionsVersionCache");
 const { ROLES, SOCIETY_STATUS, getRolePermissions } = require("../../common/constants");
 const { getMasterConnection } = require("../../config/masterDb");
+const emailService = require("../../services/email.service");
 
 /**
  * AuthService
@@ -454,12 +455,22 @@ class AuthService {
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
-        console.log("\n=============================================");
-        console.log("=== DEV INVITE LINK (RESEND) ===");
-        console.log(`Society: ${society.name}`);
-        console.log(`Admin: ${user.name} (${user.email})`);
-        console.log(`Link: ${inviteLink}`);
-        console.log("=============================================\n");
+        await emailService.sendInviteEmail({
+            to: user.email,
+            recipientName: user.name,
+            roleLabel: "Society Admin",
+            societyName: society.name,
+            inviteLink,
+        });
+
+        if (process.env.NODE_ENV === "development") {
+            console.log("\n=============================================");
+            console.log("=== DEV INVITE LINK (RESEND) ===");
+            console.log(`Society: ${society.name}`);
+            console.log(`Admin: ${user.name} (${user.email})`);
+            console.log(`Link: ${inviteLink}`);
+            console.log("=============================================\n");
+        }
 
         return {
             message: "Invite resent",

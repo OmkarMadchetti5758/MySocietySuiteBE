@@ -974,14 +974,18 @@ const ParkingService = {
         return violation;
     },
 
-    async listViolations({ societyId, query }) {
+    async listViolations({ societyId, requestingUserId, requestingUserRole, query }) {
         const db = getOperationsConnection();
         const ParkingViolation = db.model("ParkingViolation");
         const { page, limit, skip } = getPaginationOptions(query);
 
         const filter = { societyId };
-        if (query.status)       filter.status       = query.status;
-        if (query.violationType) filter.violationType = query.violationType;
+        if (isResidentRole(requestingUserRole)) {
+            filter.reportedBy = requestingUserId;
+        } else {
+            if (query.status)       filter.status       = query.status;
+            if (query.violationType) filter.violationType = query.violationType;
+        }
 
         const [violations, total] = await Promise.all([
             ParkingViolation.find(filter)
@@ -1000,6 +1004,30 @@ const ParkingService = {
     },
 
     // ── Parking History (all assignment events) ────────────────────────────────
+
+    async resolveViolation({ violationId, societyId, resolvedByUserId, resolutionNotes, actionTaken }) {
+        const db = getOperationsConnection();
+        const ParkingViolation = db.model("ParkingViolation");
+
+        const violation = await ParkingViolation.findOne({ _id: violationId, societyId });
+        if (!violation) {
+            const AppError = require("../../common/AppError");
+            throw new AppError("Parking violation not found.", 404, "VIOLATION_NOT_FOUND");
+        }
+
+        if (violation.status === "RESOLVED") {
+            const AppError = require("../../common/AppError");
+            throw new AppError("Violation is already resolved.", 400, "VIOLATION_ALREADY_RESOLVED");
+        }
+
+        violation.status = "RESOLVED";
+        violation.resolvedBy = resolvedByUserId;
+        violation.resolvedAt = new Date();
+        if (resolutionNotes) violation.resolutionNote = resolutionNotes;
+        
+        await violation.save();
+        return violation;
+    },
 
     async getHistory({ societyId, requestingUserId, requestingUserRole, query }) {
         const db = getOperationsConnection();

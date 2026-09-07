@@ -6,6 +6,7 @@ const authenticate = require("../../middleware/authenticate");
 const checkPermission = require("../../middleware/checkPermission");
 const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
 const injectSocietyId = require("../../middleware/injectSocietyId");
+const upload = require("../../middleware/upload.middleware");
 
 const router = express.Router({ mergeParams: true });
 
@@ -29,12 +30,14 @@ router.get(
 router.post(
     "/",
     checkPermission(MODULES.NOTICE_BOARD_POLLS, PERMISSION_LEVELS.FULL),
+    upload.single("attachment"),
     NoticeController.createNotice
 );
 
 router.put(
     "/:id",
     checkPermission(MODULES.NOTICE_BOARD_POLLS, PERMISSION_LEVELS.FULL),
+    upload.single("attachment"),
     NoticeController.updateNotice
 );
 

@@ -5,6 +5,7 @@ const { getOperationsConnection } = require("../../config/operationsDb");
 const { ROLES, MODULES, PERMISSION_LEVELS } = require("../../common/constants");
 const AppError = require("../../common/AppError");
 const { sendSuccess } = require("../../utils/response.utils");
+const emailService = require("../../services/email.service");
 
 // @desc    Invite a new staff member (generates an invite token link, same as resident flow)
 // @route   POST /api/staff
@@ -101,12 +102,21 @@ exports.addStaff = async (req, res, next) => {
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
-        console.log("\n=============================================");
-        console.log("=== DEV STAFF INVITE LINK ===");
-        console.log(`Staff: ${user.name} (${mobile})`);
-        console.log(`Designation: ${designation} | Shift: ${shiftTiming}`);
-        console.log(`Link: ${inviteLink}`);
-        console.log("=============================================\n");
+        await emailService.sendInviteEmail({
+            to: email,
+            recipientName: user.name,
+            roleLabel: designation || "Staff",
+            inviteLink,
+        });
+
+        if (process.env.NODE_ENV === "development") {
+            console.log("\n=============================================");
+            console.log("=== DEV STAFF INVITE LINK ===");
+            console.log(`Staff: ${user.name} (${mobile})`);
+            console.log(`Designation: ${designation} | Shift: ${shiftTiming}`);
+            console.log(`Link: ${inviteLink}`);
+            console.log("=============================================\n");
+        }
 
         const userObj = { ...user.toObject() };
         delete userObj.password;

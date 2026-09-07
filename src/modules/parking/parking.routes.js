@@ -287,4 +287,13 @@ router.get(
     controller.listViolations
 );
 
+/**
+ * PATCH /parking/violations/:id/resolve — Admin/Manager: resolve a violation
+ */
+router.patch(
+    "/violations/:id/resolve",
+    checkPermission(MODULES.PARKING_MANAGEMENT, PERMISSION_LEVELS.FULL),
+    controller.resolveViolation
+);
+
 module.exports = router;
