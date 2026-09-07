@@ -7,6 +7,8 @@ const createResidentValidation = [
     body("name").notEmpty().withMessage("Name is required").trim(),
     body("email").isEmail().withMessage("Valid email is required").normalizeEmail(),
     body("phone").notEmpty().withMessage("Phone number is required").trim(),
+    body("flatId").optional().isMongoId().withMessage("Invalid flat"),
+    body("blockId").optional().isMongoId().withMessage("Invalid wing"),
     body("flatNumber").notEmpty().withMessage("Flat number is required").trim(),
     body("wingCode").optional().trim(),
     body("residentType")
