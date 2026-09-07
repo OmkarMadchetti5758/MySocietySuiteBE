@@ -9,6 +9,11 @@ class NoticeController {
             if (!req.body.targetBlockId) {
                 req.body.targetBlockId = null;
             }
+            if (req.file) {
+                req.body.attachmentUrl = `/uploads/${req.file.filename}`;
+            } else if (typeof req.body.attachmentUrl === "string" && req.body.attachmentUrl.startsWith("blob:")) {
+                req.body.attachmentUrl = null;
+            }
             const notice = await NoticeService.createNotice(req.societyId, req.user.id, req.body);
             return sendSuccess(res, 201, "Notice created successfully", notice);
         } catch (error) {
@@ -47,6 +52,11 @@ class NoticeController {
         try {
             if (!req.body.targetBlockId) {
                 req.body.targetBlockId = null;
+            }
+            if (req.file) {
+                req.body.attachmentUrl = `/uploads/${req.file.filename}`;
+            } else if (typeof req.body.attachmentUrl === "string" && req.body.attachmentUrl.startsWith("blob:")) {
+                delete req.body.attachmentUrl;
             }
             const notice = await NoticeService.updateNotice(req.societyId, req.params.id, req.body);
             if (!notice) return sendError(res, 404, "Notice not found");

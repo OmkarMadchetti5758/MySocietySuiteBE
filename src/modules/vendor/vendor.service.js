@@ -4,6 +4,7 @@ const { getOperationsConnection } = require("../../config/operationsDb");
 const { getMasterConnection } = require("../../config/masterDb");
 const AppError = require("../../common/AppError");
 const { COMPLAINT_STATUS } = require("../../common/constants");
+const emailService = require("../../services/email.service");
 
 // Valid status transitions for vendor task updates
 const ALLOWED_VENDOR_TRANSITIONS = {
@@ -157,11 +158,20 @@ class VendorService {
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink  = `${frontendUrl}/activate-account?token=${plainToken}`;
 
-        console.log("\n=============================================");
-        console.log("=== DEV VENDOR INVITE LINK ===");
-        console.log(`Vendor: ${name} (${email || phone})`);
-        console.log(`Link:    ${inviteLink}`);
-        console.log("=============================================\n");
+        await emailService.sendInviteEmail({
+            to: email,
+            recipientName: name,
+            roleLabel: "Vendor",
+            inviteLink,
+        });
+
+        if (process.env.NODE_ENV === "development") {
+            console.log("\n=============================================");
+            console.log("=== DEV VENDOR INVITE LINK ===");
+            console.log(`Vendor: ${name} (${email || phone})`);
+            console.log(`Link:    ${inviteLink}`);
+            console.log("=============================================\n");
+        }
 
         return {
             vendor: newVendor,

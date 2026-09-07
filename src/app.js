@@ -32,9 +32,16 @@ app.use("/api", (req, res, next) => {
     next();
 });
 
-// Serve static files
+// Serve static files (allow FE on another origin, e.g. Vite :5173, to load images)
 const path = require("path");
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use(
+    "/uploads",
+    express.static(path.join(__dirname, "../uploads"), {
+        setHeaders(res) {
+            res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        },
+    })
+);
 
 // API Versioning - mount v1 routes
 app.use("/api/v1", v1Routes);

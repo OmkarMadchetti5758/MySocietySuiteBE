@@ -4,6 +4,7 @@ const ResidentRepository = require("./resident.repository");
 const SocietyRepository = require("../society/society.repository");
 const AppError = require("../../common/AppError");
 const { RESIDENT_ERRORS } = require("./resident.constants");
+const emailService = require("../../services/email.service");
 
 class ResidentService {
     async getResidents(societyId, page, limit, search) {
@@ -52,12 +53,35 @@ class ResidentService {
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink = `${frontendUrl}/activate-account?token=${result.plainToken}`;
 
-        console.log("\n=============================================");
-        console.log("=== DEV RESIDENT INVITE LINK ===");
-        console.log(`Resident: ${result.user.name} (${result.user.email})`);
-        console.log(`Flat: ${result.flat.flatNumber}`);
-        console.log(`Link: ${inviteLink}`);
-        console.log("=============================================\n");
+        const mail = await emailService.sendInviteEmail({
+            to: result.user.email,
+            recipientName: result.user.name,
+            roleLabel: "Resident",
+            inviteLink,
+        });
+
+        // SMTP failed after persist: remove the invite so the error matches the DB.
+        if (!mail.sent && !mail.skipped) {
+            await ResidentRepository.rollbackResidentInvite(societyId, {
+                userId: result.user._id,
+                flatId: result.flat._id,
+                createdFlat: result.createdFlat,
+            });
+            throw new AppError(
+                mail.error || "Failed to send invitation email",
+                502,
+                "EMAIL_SEND_FAILED"
+            );
+        }
+
+        if (process.env.NODE_ENV === "development") {
+            console.log("\n=============================================");
+            console.log("=== DEV RESIDENT INVITE LINK ===");
+            console.log(`Resident: ${result.user.name} (${result.user.email})`);
+            console.log(`Flat: ${result.flat.flatNumber}`);
+            console.log(`Link: ${inviteLink}`);
+            console.log("=============================================\n");
+        }
 
         const userObj = { ...result.user.toObject() };
         delete userObj.password;

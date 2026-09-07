@@ -26,9 +26,7 @@ router.post("/send", async (req, res, next) => {
             return sendError(res, 400, "identifier, purpose, and societyId are required");
         }
         const result = await OtpService.sendOtp(identifier, purpose, societyId);
-        return sendSuccess(res, 200, result.message, {
-            ...(result.devOtpCode ? { devOtpCode: result.devOtpCode } : {})
-        });
+        return sendSuccess(res, 200, result.message);
     } catch (err) {
         next(err);
     }

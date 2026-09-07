@@ -82,8 +82,8 @@ const otpSchema = new mongoose.Schema(
 // TTL: auto-remove docs 1 hour after expiry to give leeway for debugging
 otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 3600 });
 
-// Fast lookup by (identifier, purpose, societyId) — the primary query pattern
-otpSchema.index({ identifier: 1, purpose: 1, societyId: 1 });
+// One active OTP doc per identifier + purpose + society (prevents duplicate sends)
+otpSchema.index({ identifier: 1, purpose: 1, societyId: 1 }, { unique: true });
 
 // ── Static Helpers ─────────────────────────────────────────────────────────────
 otpSchema.statics.generateCode = function () {

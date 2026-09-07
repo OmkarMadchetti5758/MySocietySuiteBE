@@ -155,7 +155,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },   // Raise & track own
         [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY }, // View & vote
         [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },   // Book own
-        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
         [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY }, // View permitted
@@ -175,7 +175,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
         [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
-        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.OWN },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.OWN },
         [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.VIEW,   scope: PERMISSION_SCOPE.RESTRICTED }, // No ownership/legal docs
@@ -194,7 +194,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.NOTICE_BOARD_POLLS]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.AMENITY_BOOKING]:     { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
-        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.PARKING_MANAGEMENT]:  { level: PERMISSION_LEVELS.MANAGE,    scope: PERMISSION_SCOPE.SOCIETY }, // Guards can report violations & manage visitor parking
         [MODULES.VENDOR_MANAGEMENT]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.STAFF_MANAGEMENT]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.DOCUMENTS_MANAGER]:   { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
@@ -462,6 +462,10 @@ const VEHICLE_TYPE = Object.freeze({
     TRUCK: "truck",
     AUTO: "auto",
     OTHER: "other",
+    FOUR_WHEELER: "FOUR_WHEELER",
+    TWO_WHEELER: "TWO_WHEELER",
+    EV_CHARGING: "EV_CHARGING",
+    EV: "EV",
 });
 
 // ─── Parking Type ─────────────────────────────────────────────────────────────
@@ -469,14 +473,72 @@ const PARKING_TYPE = Object.freeze({
     OPEN: "open",
     COVERED: "covered",
     BASEMENT: "basement",
+    // Extended types
+    REGULAR:     "regular",
+    EV:          "ev",
+    VISITOR:     "visitor",
+    HANDICAPPED: "handicapped",
+    FOUR_WHEELER: "FOUR_WHEELER",
+    TWO_WHEELER:  "TWO_WHEELER",
+    EV_CHARGING:  "EV_CHARGING",
+    DISABLED:     "DISABLED",
 });
 
 // ─── Parking Status ────────────────────────────────────────────────────────────
 const PARKING_STATUS = Object.freeze({
-    AVAILABLE: "available",
-    OCCUPIED: "occupied",
-    RESERVED: "reserved",
+    AVAILABLE:   "available",
+    OCCUPIED:    "occupied",    // legacy alias
+    ALLOCATED:   "allocated",   // preferred term
+    RESERVED:    "reserved",
     MAINTENANCE: "maintenance",
+    INACTIVE:    "inactive",
+});
+
+// ─── Parking Assignment Status ─────────────────────────────────────────────────
+const PARKING_ASSIGNMENT_STATUS = Object.freeze({
+    ACTIVE:      "active",
+    RELEASED:    "released",
+    TRANSFERRED: "transferred",
+});
+
+// ─── Parking Assignment Type ───────────────────────────────────────────────────
+const PARKING_ASSIGNMENT_TYPE = Object.freeze({
+    PERMANENT: "permanent",
+    TEMPORARY: "temporary",
+    VISITOR:   "visitor",
+});
+
+// ─── Visitor Parking Session Status ───────────────────────────────────────────
+const VISITOR_PARKING_STATUS = Object.freeze({
+    ACTIVE:    "active",
+    COMPLETED: "completed",
+    CANCELLED: "cancelled",
+    EXPIRED:   "expired",
+});
+
+// ─── Parking Request Status ────────────────────────────────────────────────────
+const PARKING_REQUEST_STATUS = Object.freeze({
+    PENDING:   "pending",
+    APPROVED:  "approved",
+    REJECTED:  "rejected",
+    CANCELLED: "cancelled",
+});
+
+// ─── Parking Violation Type ────────────────────────────────────────────────────
+const PARKING_VIOLATION_TYPE = Object.freeze({
+    UNAUTHORIZED_PARKING:      "unauthorized_parking",
+    WRONG_SLOT:                "wrong_slot",
+    BLOCKING_ENTRY:            "blocking_entry",
+    PARKING_IN_VISITOR_SLOT:   "parking_in_visitor_slot",
+    PARKING_IN_RESERVED_SLOT:  "parking_in_reserved_slot",
+    OTHER:                     "other",
+});
+
+// ─── Parking Violation Status ──────────────────────────────────────────────────
+const PARKING_VIOLATION_STATUS = Object.freeze({
+    OPEN:     "open",
+    RESOLVED: "resolved",
+    DISMISSED:"dismissed",
 });
 
 // ─── Attendance Status ─────────────────────────────────────────────────────────
@@ -598,6 +660,12 @@ module.exports = {
     VEHICLE_TYPE,
     PARKING_TYPE,
     PARKING_STATUS,
+    PARKING_ASSIGNMENT_STATUS,
+    PARKING_ASSIGNMENT_TYPE,
+    VISITOR_PARKING_STATUS,
+    PARKING_REQUEST_STATUS,
+    PARKING_VIOLATION_TYPE,
+    PARKING_VIOLATION_STATUS,
     ATTENDANCE_STATUS,
     STAFF_TYPE,
     DOCUMENT_TYPE,
@@ -611,6 +679,5 @@ module.exports = {
     ROLE_PERMISSIONS,
     ROLE_ALIAS_MAP,
     getRolePermissions,
-    DEPARTMENT_HEAD_ROLES,
     STAFF_DESIGNATIONS,
 };

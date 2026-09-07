@@ -134,7 +134,6 @@ class AmenityBookingService {
         const userRoles = user.roleKeys || [user.role];
 
         const isAdmin = userRoles.some(r => adminRoles.includes(r));
-        // Residents only see their own bookings
         if (!isAdmin) {
             filter.bookedBy = user.id;
         }
@@ -181,7 +180,6 @@ class AmenityBookingService {
             throw new AppError("Cannot cancel a completed booking", 400, "INVALID_BOOKING_STATUS");
         }
 
-        // Resident cancellation window check (admins bypass)
         if (!isAdmin) {
             const amenity = await this.Amenity.findById(booking.amenityId);
             const slot = await this.AmenitySlot.findById(booking.slotId);

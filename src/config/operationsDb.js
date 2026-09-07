@@ -32,6 +32,10 @@ const connectOperationsDB = async () => {
         opsConnection.model("Resident",              require("../modules/resident/resident.model"));
         opsConnection.model("Vehicle",               require("../modules/vehicle/vehicle.model"));
         opsConnection.model("ParkingSlot",           require("../modules/parking/parkingSlot.model"));
+        opsConnection.model("ParkingAssignment",     require("../modules/parking/parkingAssignment.model"));
+        opsConnection.model("VisitorParking",        require("../modules/parking/visitorParking.model"));
+        opsConnection.model("ParkingRequest",        require("../modules/parking/parkingRequest.model"));
+        opsConnection.model("ParkingViolation",      require("../modules/parking/parkingViolation.model"));
         opsConnection.model("VisitorEntry",          require("../modules/visitor/visitorEntry.model"));
         opsConnection.model("MaintenanceBill",       require("../modules/maintenance/maintenanceBill.model"));
         opsConnection.model("PaymentTransaction",    require("../modules/payment/paymentTransaction.model"));

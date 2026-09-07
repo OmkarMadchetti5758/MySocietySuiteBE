@@ -47,11 +47,19 @@ module.exports = {
     SMTP_HOST: process.env.SMTP_HOST || "smtp.gmail.com",
     SMTP_PORT: parseInt(process.env.SMTP_PORT, 10) || 587,
     SMTP_SECURE: process.env.SMTP_SECURE === "true",
-    SMTP_USER: process.env.SMTP_USER || "",
-    SMTP_PASS: process.env.SMTP_PASS || "",
+    SMTP_USER: (process.env.SMTP_USER || "").trim(),
+    SMTP_PASS: (process.env.SMTP_PASS || "").trim().replace(/^['"]|['"]$/g, "").replace(/\s+/g, ""),
 
     // OTP
     OTP_EXPIRES_IN_MINUTES: parseInt(process.env.OTP_EXPIRES_IN_MINUTES, 10) || 10,
+
+    // SMS — SMSGatewayCenter (https://unify.smsgateway.center/SMSApi/send)
+    SMS_USERID:              process.env.SMS_USERID      || "",
+    SMS_PASSWORD:            process.env.SMS_PASSWORD    || "",
+    SMS_SENDERID:            process.env.SMS_SENDERID    || "",
+    SMS_DLT_ENTITY_ID:       process.env.SMS_DLT_ENTITY_ID       || "",
+    SMS_DLT_TEMPLATE_ID:     process.env.SMS_DLT_TEMPLATE_ID     || "",
+    SMS_DLT_CANCEL_TEMPLATE_ID: process.env.SMS_DLT_CANCEL_TEMPLATE_ID || "",
 
     // Rate Limiting
     RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,

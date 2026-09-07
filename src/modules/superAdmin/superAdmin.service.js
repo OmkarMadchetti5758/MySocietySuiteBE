@@ -1,6 +1,7 @@
 "use strict";
 
 const SuperAdminRepository = require("./superAdmin.repository");
+const emailService = require("../../services/email.service");
 
 class SuperAdminService {
     async getDashboardStats() {
@@ -28,13 +29,22 @@ class SuperAdminService {
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink = `${frontendUrl}/activate-account?token=${result.plainToken}`;
 
-        // Log to console for development
-        console.log("\n=============================================");
-        console.log("=== DEV INVITE LINK ===");
-        console.log(`Society: ${result.society.name}`);
-        console.log(`Admin: ${result.admin.name} (${result.admin.email})`);
-        console.log(`Link: ${inviteLink}`);
-        console.log("=============================================\n");
+        await emailService.sendInviteEmail({
+            to: result.admin.email,
+            recipientName: result.admin.name,
+            roleLabel: "Society Admin",
+            societyName: result.society.name,
+            inviteLink,
+        });
+
+        if (process.env.NODE_ENV === "development") {
+            console.log("\n=============================================");
+            console.log("=== DEV INVITE LINK ===");
+            console.log(`Society: ${result.society.name}`);
+            console.log(`Admin: ${result.admin.name} (${result.admin.email})`);
+            console.log(`Link: ${inviteLink}`);
+            console.log("=============================================\n");
+        }
 
         return {
             society: result.society,

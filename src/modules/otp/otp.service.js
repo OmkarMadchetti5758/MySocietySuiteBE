@@ -3,12 +3,12 @@
 const AppError = require("../../common/AppError");
 const { getMasterConnection } = require("../../config/masterDb");
 
-const MAX_ATTEMPTS = 5;
-const MAX_RESENDS = 3;
+const MAX_ATTEMPTS            = 5;
+const MAX_RESENDS             = 3;
 const RESEND_COOLDOWN_SECONDS = 30;
-const RATE_WINDOW_HOURS = 1;
-const OTP_TTL_MINUTES = 10;
-const LOCKOUT_MINUTES = 20;
+const RATE_WINDOW_HOURS       = 1;
+const OTP_TTL_MINUTES         = 10;
+const LOCKOUT_MINUTES         = 20;
 
 class OtpService {
     _getModel() {
@@ -20,11 +20,13 @@ class OtpService {
      * Generate and store an OTP for a given identifier + purpose.
      * Enforces rate limiting (max 3 resends/hour, 30s cooldown between resends).
      *
+     * Delivery:
+     *   - Phone identifiers → SMS via SmsService (real gateway in prod, console in dev)
+     *   - Email identifiers → EmailService (SMTP)
+     *
      * @param {string} identifier - email or phone
-     * @param {string} purpose    - "manager_invite"
+     * @param {string} purpose    - e.g. "manager_invite"
      * @param {string} societyId
-     * @returns {{ otp: string }} — In production this would be sent via email/SMS.
-     *                              In dev, we log it to the console.
      */
     async sendOtp(identifier, purpose, societyId) {
         const Otp = this._getModel();
@@ -39,17 +41,12 @@ class OtpService {
         }).select("+codeHash");
 
         if (existing) {
-            // Cooldown check: must wait 30s between resends
+            // Duplicate / Strict Mode remount: do not send another email
             const secondsSinceLastResend = existing.lastResendAt
                 ? (now - existing.lastResendAt) / 1000
                 : Infinity;
             if (secondsSinceLastResend < RESEND_COOLDOWN_SECONDS) {
-                const waitSeconds = Math.ceil(RESEND_COOLDOWN_SECONDS - secondsSinceLastResend);
-                throw new AppError(
-                    `Please wait ${waitSeconds}s before requesting another OTP.`,
-                    429,
-                    "OTP_COOLDOWN"
-                );
+                return { message: "OTP sent successfully" };
             }
 
             // Rate limit: max 3 resends per hour
@@ -66,41 +63,46 @@ class OtpService {
             const { code, codeHash } = Otp.schema.statics.generateCode.call(Otp);
             const expiresAt = new Date(now.getTime() + OTP_TTL_MINUTES * 60 * 1000);
 
-            existing.codeHash = codeHash;
-            existing.expiresAt = expiresAt;
-            existing.attempts = 0;
-            existing.verified = false;
+            existing.codeHash     = codeHash;
+            existing.expiresAt    = expiresAt;
+            existing.attempts     = 0;
+            existing.verified     = false;
             existing.rateLockUntil = null;
-            existing.resendCount = (existing.resendCount || 1) + 1;
+            existing.resendCount  = (existing.resendCount || 1) + 1;
             existing.lastResendAt = now;
             await existing.save();
 
-            this._logOtp(normalizedIdentifier, code, purpose);
-            return {
-                message: "OTP resent successfully",
-                ...(process.env.NODE_ENV === "development" ? { devOtpCode: code } : {})
-            };
+            // Deliver — may throw if SMS gateway is unreachable in production
+            await this._deliverOtp(normalizedIdentifier, code, purpose);
+
+            return { message: "OTP resent successfully" };
         }
 
         // First-time: create new OTP doc
         const { code, codeHash } = Otp.schema.statics.generateCode.call(Otp);
         const expiresAt = new Date(now.getTime() + OTP_TTL_MINUTES * 60 * 1000);
 
-        await Otp.create({
-            identifier: normalizedIdentifier,
-            purpose,
-            societyId,
-            codeHash,
-            expiresAt,
-            resendCount: 1,
-            lastResendAt: now,
-        });
+        try {
+            await Otp.create({
+                identifier: normalizedIdentifier,
+                purpose,
+                societyId,
+                codeHash,
+                expiresAt,
+                resendCount: 1,
+                lastResendAt: now,
+            });
+        } catch (err) {
+            // Lost a create race (duplicate request) — the other request already delivered
+            if (err && err.code === 11000) {
+                return { message: "OTP sent successfully" };
+            }
+            throw err;
+        }
 
-        this._logOtp(normalizedIdentifier, code, purpose);
-        return {
-            message: "OTP sent successfully",
-            ...(process.env.NODE_ENV === "development" ? { devOtpCode: code } : {})
-        };
+        await this._deliverOtp(normalizedIdentifier, code, purpose);
+
+        return { message: "OTP sent successfully" };
     }
 
     /**
@@ -173,8 +175,8 @@ class OtpService {
         }
 
         // Correct code — mark as verified
-        otpDoc.verified = true;
-        otpDoc.attempts = 0;
+        otpDoc.verified    = true;
+        otpDoc.attempts    = 0;
         otpDoc.rateLockUntil = null;
         await otpDoc.save();
 
@@ -192,7 +194,7 @@ class OtpService {
             purpose,
             societyId,
             verified: true,
-            expiresAt: { $gt: new Date() }, // Check it's not expired
+            expiresAt: { $gt: new Date() },
         }).lean();
         return !!doc;
     }
@@ -211,13 +213,35 @@ class OtpService {
 
     // ── Private Helpers ────────────────────────────────────────────────────────
 
-    _logOtp(identifier, code, purpose) {
-        console.log("\n=============================================");
-        // console.log("=== DEV OTP ===");
-        console.log(`Identifier: ${identifier}`);
-        console.log(`Purpose:    ${purpose}`);
-        console.log(`OTP Code:   ${code}   (expires in ${OTP_TTL_MINUTES} min)`);
-        console.log("=============================================\n");
+    /**
+     * Detect whether an identifier looks like a phone number.
+     * A phone identifier consists mostly of digits (10–12 significant digits).
+     */
+    _isPhone(identifier) {
+        const digits = identifier.replace(/\D/g, "");
+        return digits.length >= 10 && digits.length <= 12;
+    }
+
+    /**
+     * Route OTP delivery to the appropriate channel.
+     *
+     * • Phone → SmsService.sendOtpSms()
+     *           (SmsService handles dev vs. production internally)
+     * • Email → EmailService.sendOtpEmail() via SMTP
+     *
+     * @param {string} identifier - Normalised identifier (phone or email)
+     * @param {string} code       - Plain OTP code
+     * @param {string} purpose    - OTP purpose label (for log readability)
+     */
+    async _deliverOtp(identifier, code, purpose) {
+        if (this._isPhone(identifier)) {
+            // Lazy-require to avoid circular deps at module load time
+            const smsService = require("../../services/sms.service");
+            await smsService.sendOtpSms(identifier, code);
+        } else {
+            const emailService = require("../../services/email.service");
+            await emailService.sendOtpEmail(identifier, code, purpose);
+        }
     }
 }
 

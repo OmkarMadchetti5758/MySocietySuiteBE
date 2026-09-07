@@ -46,13 +46,11 @@ const blockSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Society",
             required: [true, "societyId is required"],
-            unique: true, // One record per society
+            unique: true, // One record per society (creates the unique index)
         },
         wings: [wingSchema],
     },
     { timestamps: true }
 );
-
-blockSchema.index({ societyId: 1 }, { unique: true });
 
 module.exports = blockSchema;
