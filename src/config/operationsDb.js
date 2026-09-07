@@ -62,6 +62,8 @@ const connectOperationsDB = async () => {
         opsConnection.model("ManagerAssignment",     require("../modules/managerAssignment/managerAssignment.model"));
         // ────────────────────────────────────────────────────────────────────
 
+        await syncFlatIndexes(opsConnection);
+
         console.log(`✅ Operations DB connected: ${opsConnection.name}`);
         return opsConnection;
     } catch (error) {
@@ -83,6 +85,33 @@ const getOperationsConnection = () => {
         );
     }
     return opsConnection;
+};
+
+/**
+ * Drop society-wide unique flatNumber index so the same number can exist in different wings.
+ */
+const syncFlatIndexes = async (connection) => {
+    try {
+        const collection = connection.collection("flats");
+        const indexes = await collection.indexes();
+        const legacy = indexes.find(
+            (idx) =>
+                idx.unique &&
+                idx.key?.societyId === 1 &&
+                idx.key?.flatNumber === 1 &&
+                idx.key?.blockId === undefined
+        );
+        if (legacy) {
+            await collection.dropIndex(legacy.name);
+            console.log(`🗑️  Dropped legacy Flat index: ${legacy.name}`);
+        }
+
+        await connection.model("Flat").syncIndexes();
+    } catch (error) {
+        if (error.code !== 26 && error.codeName !== "NamespaceNotFound") {
+            console.warn(`⚠️  Flat index sync: ${error.message}`);
+        }
+    }
 };
 
 module.exports = { connectOperationsDB, getOperationsConnection };

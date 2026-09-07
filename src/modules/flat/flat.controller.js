@@ -44,11 +44,21 @@ class FlatController {
                 status
             } = req.body;
 
+            const trimmedFlatNumber = String(flatNumber || "").trim();
+            const existing = await Flat.findOne({
+                societyId: req.user.societyId,
+                blockId,
+                flatNumber: trimmedFlatNumber,
+            });
+            if (existing) {
+                return sendError(res, 400, "A flat with this number already exists in this wing.");
+            }
+
             const newFlat = new Flat({
                 societyId: req.user.societyId,
                 blockId,
                 floor,
-                flatNumber,
+                flatNumber: trimmedFlatNumber,
                 type,
                 area,
                 ownershipType,
@@ -66,7 +76,7 @@ class FlatController {
             return sendSuccess(res, 201, "Flat created successfully", { flat: newFlat });
         } catch (error) {
             if (error.code === 11000) {
-                error.message = "Flat with this number already exists.";
+                error.message = "A flat with this number already exists in this wing.";
                 error.statusCode = 400;
             }
             next(error);
@@ -123,7 +133,7 @@ class FlatController {
             return sendSuccess(res, 200, "Flat updated successfully", { flat: updatedFlat });
         } catch (error) {
             if (error.code === 11000) {
-                error.message = "Flat with this number already exists.";
+                error.message = "A flat with this number already exists in this wing.";
                 error.statusCode = 400;
             }
             next(error);
@@ -183,7 +193,9 @@ class FlatController {
                     email,
                     phone,
                     residentType,
+                    flatId: flat._id,
                     flatNumber: flat.flatNumber,
+                    blockId: flat.blockId,
                 });
                 resultUser = result.user;
                 devInviteLink = result.devInviteLink;

@@ -2,32 +2,50 @@
 
 const { getMasterConnection } = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
-const { ROLES, RESIDENT_TYPE, FLAT_STATUS, USER_STATUS } = require("../../common/constants");
+const AppError = require("../../common/AppError");
+const { ROLES, RESIDENT_TYPE, USER_STATUS } = require("../../common/constants");
+const { RESIDENT_ERRORS } = require("./resident.constants");
 
 class ResidentRepository {
-    async findOrCreateFlat(societyId, flatNumber, wingCode) {
+    async findExistingFlat(societyId, { flatId, flatNumber, blockId, wingCode }) {
         const opsDb = getOperationsConnection();
         const Flat = opsDb.model("Flat");
         const Block = opsDb.model("Block");
 
-        const displayFlatNumber = wingCode ? `${wingCode}-${flatNumber}` : flatNumber;
-
-        let flat = await Flat.findOne({ societyId, flatNumber: displayFlatNumber });
-        if (flat) return { flat, created: false };
-
-        let blockDoc = await Block.findOne({ societyId });
-        if (!blockDoc) {
-            blockDoc = await Block.create({ societyId, wings: [] });
+        if (flatId) {
+            const flat = await Flat.findOne({ _id: flatId, societyId });
+            if (!flat) {
+                throw new AppError(RESIDENT_ERRORS.FLAT_NOT_FOUND, 404);
+            }
+            return { flat, created: false };
         }
 
-        flat = await Flat.create({
-            societyId,
-            blockId: blockDoc._id,
-            flatNumber: displayFlatNumber,
-            status: FLAT_STATUS.OCCUPIED,
-        });
+        const trimmedFlatNumber = String(flatNumber || "").trim();
+        if (!trimmedFlatNumber) {
+            throw new AppError(RESIDENT_ERRORS.FLAT_REQUIRED, 400);
+        }
 
-        return { flat, created: true };
+        let wingId = blockId;
+        if (!wingId && wingCode) {
+            const blockDoc = await Block.findOne({ societyId }).lean();
+            const wing = blockDoc?.wings?.find((w) => w.code === wingCode);
+            wingId = wing?._id;
+        }
+
+        if (!wingId) {
+            throw new AppError(RESIDENT_ERRORS.WING_REQUIRED, 400);
+        }
+
+        const flat = await Flat.findOne({
+            societyId,
+            blockId: wingId,
+            flatNumber: trimmedFlatNumber,
+        });
+        if (!flat) {
+            throw new AppError(RESIDENT_ERRORS.FLAT_NOT_FOUND, 404);
+        }
+
+        return { flat, created: false };
     }
 
     async createResidentWithInvite(societyId, data) {
@@ -44,11 +62,12 @@ class ResidentRepository {
         const email = data.email.toLowerCase().trim();
         const phone = data.phone.trim();
 
-        const { flat, created: createdFlat } = await this.findOrCreateFlat(
-            societyId,
-            data.flatNumber,
-            data.wingCode
-        );
+        const { flat, created: createdFlat } = await this.findExistingFlat(societyId, {
+            flatId: data.flatId,
+            flatNumber: data.flatNumber,
+            blockId: data.blockId,
+            wingCode: data.wingCode,
+        });
 
         let user;
         let resident;
@@ -165,6 +184,7 @@ class ResidentRepository {
         const User = opsDb.model("User");
         const Resident = opsDb.model("Resident");
         const Flat = opsDb.model("Flat");
+        const Block = opsDb.model("Block");
 
         const residentRoles = [ROLES.RESIDENT_OWNER, ROLES.RESIDENT_TENANT, ROLES.RESIDENT];
         const userFilter = { societyId, role: { $in: residentRoles } };
@@ -189,14 +209,21 @@ class ResidentRepository {
         const residents = await Resident.find({ societyId, userId: { $in: userIds } }).lean();
 
         const flatIds = residents.map((r) => r.flatId);
-        const flats = await Flat.find({ _id: { $in: flatIds } }).lean();
+        const [flats, blockDoc] = await Promise.all([
+            Flat.find({ _id: { $in: flatIds } }).lean(),
+            Block.findOne({ societyId }).lean(),
+        ]);
         const flatMap = Object.fromEntries(flats.map((f) => [f._id.toString(), f]));
+        const wingMap = Object.fromEntries(
+            (blockDoc?.wings || []).map((w) => [w._id.toString(), w])
+        );
 
         const residentMap = Object.fromEntries(residents.map((r) => [r.userId.toString(), r]));
 
         const rows = users.map((user) => {
             const resident = residentMap[user._id.toString()];
             const flat = resident ? flatMap[resident.flatId?.toString()] : null;
+            const wing = flat?.blockId ? wingMap[flat.blockId.toString()] : null;
             return {
                 _id: user._id,
                 name: user.name,
@@ -205,6 +232,8 @@ class ResidentRepository {
                 role: user.role,
                 status: user.status,
                 isActive: user.isActive,
+                wingName: wing?.name || null,
+                wingCode: wing?.code || null,
                 flatNumber: flat?.flatNumber || null,
                 residentType: resident?.residentType || null,
                 createdAt: user.createdAt,
