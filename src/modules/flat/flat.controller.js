@@ -11,11 +11,37 @@ class FlatController {
             const { blockId } = req.query;
             const operationsDb = getOperationsConnection();
             const Flat = operationsDb.model("Flat");
+            const Resident = operationsDb.model("Resident");
 
             const filter = { societyId: req.user.societyId };
             if (blockId) filter.blockId = blockId;
 
-            const flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 });
+            let flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 });
+
+            const activeResidents = await Resident.find({
+                societyId: req.user.societyId,
+                isActive: true,
+            }).select("flatId").lean();
+
+            const occupiedFlatIds = new Set(
+                activeResidents.map((r) => String(r.flatId)).filter(Boolean)
+            );
+
+            const mismatched = flats.filter(
+                (flat) =>
+                    occupiedFlatIds.has(String(flat._id)) &&
+                    (flat.occupancyStatus === "Vacant" || flat.status === FLAT_STATUS.VACANT)
+            );
+
+            if (mismatched.length > 0) {
+                const ResidentRepository = require("../resident/resident.repository");
+                await Promise.all(
+                    mismatched.map((flat) =>
+                        ResidentRepository.syncFlatOccupancy(req.user.societyId, flat._id)
+                    )
+                );
+                flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 });
+            }
 
             return sendSuccess(res, 200, "Flats retrieved successfully", { flats });
         } catch (error) {
@@ -201,25 +227,14 @@ class FlatController {
                 devInviteLink = result.devInviteLink;
             }
 
-            // 3. Update the flat document
-            const updates = {
-                status: FLAT_STATUS.OCCUPIED,
-                occupancyStatus: isOwner ? "Owner Occupied" : "Tenant Occupied",
-                ownerName: isOwner ? (resultUser.name || name) : flat.ownerName,
-                ownerContact: isOwner ? (resultUser.mobile || phone) : flat.ownerContact,
-                numberOfResidents: (flat.numberOfResidents || 0) + 1,
-            };
-
-            if (isOwner) {
-                updates.primaryOwner = resultUser._id;
-            } else {
-                updates.activeTenant = resultUser._id;
-            }
-
-            const updatedFlat = await Flat.findOneAndUpdate(
-                { _id: flat._id },
-                { $set: updates },
-                { new: true, runValidators: true }
+            const ResidentRepository = require("../resident/resident.repository");
+            const updatedFlat = await ResidentRepository.syncFlatOccupancy(
+                req.user.societyId,
+                flat._id,
+                {
+                    ownerName: isOwner ? (resultUser.name || name) : undefined,
+                    ownerContact: isOwner ? (resultUser.mobile || phone) : undefined,
+                }
             );
 
             return sendSuccess(res, 200, "Resident allocated successfully", {

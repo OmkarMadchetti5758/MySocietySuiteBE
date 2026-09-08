@@ -3,10 +3,69 @@
 const { getMasterConnection } = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
 const AppError = require("../../common/AppError");
-const { ROLES, RESIDENT_TYPE, USER_STATUS } = require("../../common/constants");
+const { ROLES, RESIDENT_TYPE, USER_STATUS, FLAT_STATUS } = require("../../common/constants");
 const { RESIDENT_ERRORS } = require("./resident.constants");
 
 class ResidentRepository {
+    /**
+     * Keep Flat occupancy fields in sync with active Resident records.
+     * Invite, allocate, and rollback all use this so Society & Flats never
+     * stays "Vacant" after a resident is assigned.
+     */
+    async syncFlatOccupancy(societyId, flatId, extras = {}) {
+        if (!flatId) return null;
+
+        const opsDb = getOperationsConnection();
+        const Flat = opsDb.model("Flat");
+        const Resident = opsDb.model("Resident");
+        const User = opsDb.model("User");
+
+        const residents = await Resident.find({
+            societyId,
+            flatId,
+            isActive: true,
+        }).lean();
+
+        const owner = residents.find((r) => r.residentType === RESIDENT_TYPE.OWNER);
+        const tenant = residents.find((r) => r.residentType === RESIDENT_TYPE.TENANT);
+
+        const updates = {
+            numberOfResidents: residents.length,
+            primaryOwner: owner?.userId || null,
+            activeTenant: tenant?.userId || null,
+        };
+
+        if (residents.length === 0) {
+            updates.status = FLAT_STATUS.VACANT;
+            updates.occupancyStatus = "Vacant";
+            if (extras.clearOwnerOnVacant) {
+                updates.ownerName = "";
+                updates.ownerContact = "";
+            }
+        } else {
+            updates.status = FLAT_STATUS.OCCUPIED;
+            updates.occupancyStatus = tenant && !owner ? "Tenant Occupied" : "Owner Occupied";
+
+            const displayUserId = owner?.userId || tenant?.userId || residents[0].userId;
+            const displayUser = displayUserId
+                ? await User.findById(displayUserId).select("name mobile").lean()
+                : null;
+
+            if (extras.ownerName || displayUser?.name) {
+                updates.ownerName = extras.ownerName || displayUser.name;
+            }
+            if (extras.ownerContact || displayUser?.mobile) {
+                updates.ownerContact = extras.ownerContact || displayUser.mobile;
+            }
+        }
+
+        return Flat.findOneAndUpdate(
+            { _id: flatId, societyId },
+            { $set: updates },
+            { new: true, runValidators: true }
+        );
+    }
+
     async findExistingFlat(societyId, { flatId, flatNumber, blockId, wingCode }) {
         const opsDb = getOperationsConnection();
         const Flat = opsDb.model("Flat");
@@ -87,6 +146,12 @@ class ResidentRepository {
                 userId: user._id,
                 residentType,
                 isActive: true,
+                moveInDate: new Date(),
+            });
+
+            await this.syncFlatOccupancy(societyId, flat._id, {
+                ownerName: residentType === RESIDENT_TYPE.OWNER ? data.name : undefined,
+                ownerContact: residentType === RESIDENT_TYPE.OWNER ? phone : undefined,
             });
 
             const mappingEntries = [];
@@ -123,7 +188,8 @@ class ResidentRepository {
                 expiresAt,
             });
 
-            return { user, flat, plainToken, createdFlat };
+            const updatedFlat = await opsDb.model("Flat").findById(flat._id);
+            return { user, flat: updatedFlat || flat, plainToken, createdFlat };
         } catch (error) {
             if (user?._id) {
                 await this.rollbackResidentInvite(societyId, {
@@ -158,10 +224,14 @@ class ResidentRepository {
         await UserSocietyMapping.deleteMany({ userId, societyId }).catch(() => {});
         await InviteToken.deleteMany({ adminId: userId, purpose: "resident" }).catch(() => {});
 
-        if (createdFlat && flatId) {
-            const remaining = await Resident.countDocuments({ flatId }).catch(() => 1);
-            if (remaining === 0) {
-                await Flat.deleteOne({ _id: flatId }).catch(() => {});
+        if (flatId) {
+            if (createdFlat) {
+                const remaining = await Resident.countDocuments({ flatId }).catch(() => 1);
+                if (remaining === 0) {
+                    await Flat.deleteOne({ _id: flatId }).catch(() => {});
+                }
+            } else {
+                await this.syncFlatOccupancy(societyId, flatId, { clearOwnerOnVacant: true }).catch(() => {});
             }
         }
     }
