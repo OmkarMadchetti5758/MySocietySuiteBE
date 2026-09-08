@@ -65,4 +65,12 @@ module.exports = {
     RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
     RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
     AUTH_RATE_LIMIT_MAX: parseInt(process.env.AUTH_RATE_LIMIT_MAX, 10) || 10,
+
+    // DigitalOcean Spaces (S3-compatible)
+    DO_SPACES_ENDPOINT: (process.env.DO_SPACES_ENDPOINT || "").replace(/\/+$/, ""),
+    DO_SPACE_REGION: process.env.DO_SPACE_REGION || "",
+    DO_SPACE_BUCKET: process.env.DO_SPACE_BUCKET || "",
+    DO_SPACES_KEY: process.env.DO_SPACES_KEY || "",
+    DO_SPACES_SECRET: process.env.DO_SPACES_SECRET || "",
+    DO_SPACES_CDN: (process.env.DO_SPACES_CDN || "").replace(/\/+$/, ""),
 };

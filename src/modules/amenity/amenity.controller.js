@@ -1,14 +1,16 @@
 "use strict";
 
 const AmenityService = require("./amenity.service");
-const { sendSuccess, sendError } = require("../../utils/response.utils");
+const { sendSuccess } = require("../../utils/response.utils");
+const { uploadMulterFiles, deleteStoredFiles, STORAGE_FOLDERS } = require("../../services/storage.service");
 
 class AmenityController {
 
     async createAmenity(req, res, next) {
         try {
             if (req.files && req.files.length > 0) {
-                req.body.images = req.files.map((file) => `/uploads/${file.filename}`);
+                const uploaded = await uploadMulterFiles(req.files, STORAGE_FOLDERS.AMENITIES, req.societyId);
+                req.body.images = uploaded.map((file) => file.url);
             }
             const amenity = await AmenityService.createAmenity(req.societyId, req.user.id, req.body);
             return sendSuccess(res, 201, "Amenity created successfully", amenity);
@@ -49,13 +51,20 @@ class AmenityController {
             }
             
             if (req.files && req.files.length > 0) {
-                const newImages = req.files.map((file) => `/uploads/${file.filename}`);
+                const uploaded = await uploadMulterFiles(req.files, STORAGE_FOLDERS.AMENITIES, req.societyId);
+                const newImages = uploaded.map((file) => file.url);
                 req.body.images = [...currentImages, ...newImages];
-            } else if (currentImages.length > 0) {
+            } else if (req.body.existingImages !== undefined || currentImages.length > 0) {
                 req.body.images = currentImages;
             }
 
+            const previous = await AmenityService.getAmenityById(req.societyId, req.params.id);
             const amenity = await AmenityService.updateAmenity(req.societyId, req.params.id, req.body);
+            if (Array.isArray(req.body.images) && Array.isArray(previous.images)) {
+                const kept = new Set(req.body.images);
+                const removed = previous.images.filter((url) => !kept.has(url));
+                await deleteStoredFiles(removed);
+            }
             return sendSuccess(res, 200, "Amenity updated successfully", amenity);
         } catch (error) {
             next(error);

@@ -5,6 +5,7 @@ const VendorService    = require("../vendor/vendor.service");
 const { sendSuccess }  = require("../../utils/response.utils");
 const { MODULES, PERMISSION_LEVELS, ROLES, COMPLAINT_STATUS } = require("../../common/constants");
 const AppError         = require("../../common/AppError");
+const { uploadMulterFiles, STORAGE_FOLDERS } = require("../../services/storage.service");
 
 class ComplaintController {
 
@@ -21,10 +22,11 @@ class ComplaintController {
         try {
             const { category, description, priority, attachments } = req.body;
 
-            // If files were uploaded via multer, convert to URL paths
-            const fileAttachments = req.files
-                ? req.files.map(f => `/uploads/${f.filename}`)
-                : (attachments || []);
+            let fileAttachments = attachments || [];
+            if (req.files && req.files.length > 0) {
+                const uploaded = await uploadMulterFiles(req.files, STORAGE_FOLDERS.HELPDESK, req.societyId);
+                fileAttachments = uploaded.map((file) => file.url);
+            }
 
             const complaint = await ComplaintService.createComplaint({
                 societyId:   req.societyId,

@@ -2,6 +2,7 @@
 
 const SocietyService = require("./society.service");
 const { sendSuccess } = require("../../utils/response.utils");
+const { uploadMulterFile, STORAGE_FOLDERS } = require("../../services/storage.service");
 
 class SocietyController {
     async registerSociety(req, res, next) {
@@ -35,9 +36,9 @@ class SocietyController {
         try {
             const updateData = { ...req.body };
             
-            // Handle logo upload
             if (req.file) {
-                updateData.logo = `/uploads/${req.file.filename}`;
+                const uploaded = await uploadMulterFile(req.file, STORAGE_FOLDERS.SOCIETY, req.societyId);
+                updateData.logo = uploaded.url;
             }
 
             // Parse blocks if sent as string (multipart/form-data can send arrays as strings)
