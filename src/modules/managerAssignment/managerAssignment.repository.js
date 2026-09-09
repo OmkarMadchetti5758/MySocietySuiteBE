@@ -142,27 +142,15 @@ class ManagerAssignmentRepository {
         const masterDb = this._masterDb();
         const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
-        const entries = [];
-        if (email) {
-            entries.push({
-                identifier: email.toLowerCase().trim(),
-                societyId,
-                userId,
-                roleKeys: [roleKey],
-                flatId: null,
-            });
-        } else if (phone) {
-            entries.push({
-                identifier: phone.trim(),
-                societyId,
-                userId,
-                roleKeys: [roleKey],
-                flatId: null,
-            });
-        }
-        if (entries.length > 0) {
-            await UserSocietyMapping.insertMany(entries, { ordered: false });
-        }
+        const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+        await MappingRepository.createMappings({
+            societyId,
+            userId,
+            email,
+            mobile: phone,
+            roleKeys: [roleKey],
+            flatId: null,
+        });
     }
 
     // ── Resident lookup (for Path A search) ───────────────────────────────────

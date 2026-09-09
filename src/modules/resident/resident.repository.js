@@ -114,7 +114,6 @@ class ResidentRepository {
         const User = opsDb.model("User");
         const Resident = opsDb.model("Resident");
         const InviteToken = masterDb.model("InviteToken");
-        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
         const role = data.role || ROLES.RESIDENT_OWNER;
         const residentType = data.residentType || RESIDENT_TYPE.OWNER;
@@ -154,27 +153,15 @@ class ResidentRepository {
                 ownerContact: residentType === RESIDENT_TYPE.OWNER ? phone : undefined,
             });
 
-            const mappingEntries = [];
-            if (email) {
-                mappingEntries.push({
-                    identifier: email,
-                    societyId,
-                    userId: user._id,
-                    roleKeys: [role],
-                    flatId: flat._id,
-                });
-            } else if (phone) {
-                mappingEntries.push({
-                    identifier: phone,
-                    societyId,
-                    userId: user._id,
-                    roleKeys: [role],
-                    flatId: flat._id,
-                });
-            }
-            if (mappingEntries.length > 0) {
-                await UserSocietyMapping.insertMany(mappingEntries);
-            }
+            const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+            await MappingRepository.createMappings({
+                societyId,
+                userId: user._id,
+                email,
+                mobile: phone,
+                roleKeys: [role],
+                flatId: flat._id,
+            });
 
             const { plainToken, tokenHash } = InviteToken.generateToken();
             const expiresAt = new Date();

@@ -2,7 +2,7 @@
 
 const { getMasterConnection } = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
-const userSchema = require("../user/user.model");
+const { identifierLookupValues, phoneRegexForLookup, isEmail } = require("../../common/loginIdentifier");
 
 /**
  * AuthRepository
@@ -24,8 +24,31 @@ class AuthRepository {
     async getMappingsForIdentifier(identifier) {
         const masterDb = getMasterConnection();
         const Mapping = masterDb.model("UserSocietyMapping");
-        return Mapping.find({ identifier: identifier.toLowerCase().trim() })
-            .lean();
+        const variants = identifierLookupValues(identifier);
+        if (variants.length === 0) return [];
+        return Mapping.find({ identifier: { $in: variants } }).lean();
+    }
+
+    /**
+     * Fallback when a mapping row is missing for an identifier that exists on User.
+     * Used to repair legacy records that only stored email OR phone.
+     */
+    async findUsersByLoginIdentifier(identifier) {
+        const opsDb = getOperationsConnection();
+        const User = opsDb.model("User");
+        const variants = identifierLookupValues(identifier);
+        if (variants.length === 0) return [];
+
+        const or = [];
+        if (isEmail(identifier)) {
+            or.push({ email: variants[0] });
+        } else {
+            or.push({ mobile: { $in: variants } });
+            const phoneRe = phoneRegexForLookup(identifier);
+            if (phoneRe) or.push({ mobile: phoneRe });
+        }
+
+        return User.find({ $or: or }).select("_id societyId email mobile role").lean();
     }
 
     /**
@@ -50,12 +73,19 @@ class AuthRepository {
     async findUserByIdentifier(societyId, identifier) {
         const opsDb = getOperationsConnection();
         const User = opsDb.model("User");
+        const variants = identifierLookupValues(identifier);
+        if (variants.length === 0) return null;
+
+        const or = [
+            { email: { $in: variants } },
+            { mobile: { $in: variants } },
+        ];
+        const phoneRe = !isEmail(identifier) ? phoneRegexForLookup(identifier) : null;
+        if (phoneRe) or.push({ mobile: phoneRe });
+
         return User.findOne({
             societyId,
-            $or: [
-                { email: identifier.toLowerCase().trim() },
-                { mobile: identifier.trim() }
-            ]
+            $or: or,
         }).select("+password +refreshToken");
     }
 
