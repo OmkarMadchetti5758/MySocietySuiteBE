@@ -2,10 +2,12 @@
 
 const { getMasterConnection } = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
-const { ROLES, MODULES, PERMISSION_LEVELS } = require("../../common/constants");
+const { ROLES } = require("../../common/constants");
 const AppError = require("../../common/AppError");
 const { sendSuccess } = require("../../utils/response.utils");
 const emailService = require("../../services/email.service");
+const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+const { canonicalPhone, canonicalIdentifier } = require("../../common/loginIdentifier");
 
 // @desc    Invite a new staff member (generates an invite token link, same as resident flow)
 // @route   POST /api/staff
@@ -26,11 +28,19 @@ exports.addStaff = async (req, res, next) => {
         const InviteToken = masterDb.model("InviteToken");
 
         const societyId = req.societyId;
+        const mobileCanonical = canonicalPhone(mobile);
+        const emailCanonical = canonicalIdentifier(email);
 
-        // Check for duplicate mobile in this society
-        const existingUser = await User.findOne({ societyId, mobile: mobile.trim() });
+        if (!mobileCanonical) {
+            return next(new AppError("A valid phone number is required", 400));
+        }
+
+        const duplicateOr = [{ mobile: mobileCanonical }, { mobile: mobile.trim() }];
+        if (emailCanonical) duplicateOr.push({ email: emailCanonical });
+
+        const existingUser = await User.findOne({ societyId, $or: duplicateOr });
         if (existingUser) {
-            return next(new AppError("A user with this mobile number already exists in this society", 409));
+            return next(new AppError("A user with this mobile number or email already exists in this society", 409));
         }
 
         let user;
@@ -38,26 +48,24 @@ exports.addStaff = async (req, res, next) => {
         let plainToken;
 
         try {
-            // Create user with INVITED status — no password needed yet
             const userData = {
                 societyId,
                 name: name.trim(),
-                mobile: mobile.trim(),
+                mobile: mobileCanonical,
                 role: ROLES.GENERAL_STAFF,
                 status: "invited",
                 isActive: false,
             };
-            if (email) userData.email = email.toLowerCase().trim();
+            if (emailCanonical) userData.email = emailCanonical;
 
             user = await User.create(userData);
 
-            // Create the Staff profile linked to the user
             staff = await Staff.create({
                 societyId,
                 userId: user._id,
                 name: user.name,
-                role: designation,                // maps to STAFF_TYPE enum in ops staff model
-                phone: mobile.trim(),
+                role: designation,
+                phone: mobileCanonical,
                 address: address || undefined,
                 shift: shiftTiming,
                 gateOrArea: gateOrArea || undefined,
@@ -65,12 +73,11 @@ exports.addStaff = async (req, res, next) => {
                 status: "invited",
             });
 
-            const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
             await MappingRepository.createMappings({
                 societyId,
                 userId: user._id,
-                email: email || null,
-                mobile: mobile.trim(),
+                email: emailCanonical,
+                mobile: mobileCanonical,
                 roleKeys: [ROLES.GENERAL_STAFF],
             });
 
@@ -91,7 +98,8 @@ exports.addStaff = async (req, res, next) => {
         } catch (err) {
             // Rollback on failure
             if (user?._id) {
-                const Staff = opsDb.model("Staff");
+                const Mapping = masterDb.model("UserSocietyMapping");
+                await Mapping.deleteMany({ userId: user._id, societyId }).catch(() => {});
                 await Staff.deleteOne({ userId: user._id, societyId }).catch(() => {});
                 await User.deleteOne({ _id: user._id }).catch(() => {});
             }
@@ -111,7 +119,7 @@ exports.addStaff = async (req, res, next) => {
         if (process.env.NODE_ENV === "development") {
             console.log("\n=============================================");
             console.log("=== DEV STAFF INVITE LINK ===");
-            console.log(`Staff: ${user.name} (${mobile})`);
+            console.log(`Staff: ${user.name} (${mobileCanonical}${emailCanonical ? ` / ${emailCanonical}` : ""})`);
             console.log(`Designation: ${designation} | Shift: ${shiftTiming}`);
             console.log(`Link: ${inviteLink}`);
             console.log("=============================================\n");

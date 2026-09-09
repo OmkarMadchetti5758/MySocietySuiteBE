@@ -2,6 +2,8 @@
 
 const { getMasterConnection } = require("../../config/masterDb");
 const { resolveRoleKey } = require("../../common/permissionResolver");
+const { canonicalIdentifier } = require("../../common/loginIdentifier");
+const AppError = require("../../common/AppError");
 
 /**
  * UserSocietyMappingRepository
@@ -15,9 +17,7 @@ class UserSocietyMappingRepository {
     }
 
     normalizeIdentifier(value) {
-        if (!value || typeof value !== "string") return null;
-        const trimmed = value.trim();
-        return trimmed ? trimmed.toLowerCase() : null;
+        return canonicalIdentifier(value);
     }
 
     /**
@@ -59,8 +59,24 @@ class UserSocietyMappingRepository {
         try {
             return await Mapping.insertMany(entries, { ordered: false });
         } catch (err) {
-            if (err.code !== 11000) throw err;
-            return Mapping.find({ societyId, userId, identifier: { $in: identifiers } }).lean();
+            const isDup = err.code === 11000 || err.writeErrors?.some((e) => e.code === 11000);
+            if (!isDup) throw err;
+
+            const existing = await Mapping.find({
+                societyId,
+                userId,
+                identifier: { $in: identifiers },
+            }).lean();
+            const have = new Set(existing.map((row) => row.identifier));
+            if (identifiers.every((id) => have.has(id))) {
+                return existing;
+            }
+
+            throw new AppError(
+                "This email or phone number is already registered in this society.",
+                409,
+                "IDENTIFIER_TAKEN"
+            );
         }
     }
 
