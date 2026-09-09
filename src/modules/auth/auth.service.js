@@ -9,6 +9,7 @@ const { getSocietyPermissionsVersion } = require("../../common/permissionsVersio
 const { ROLES, SOCIETY_STATUS, getRolePermissions } = require("../../common/constants");
 const { getMasterConnection } = require("../../config/masterDb");
 const emailService = require("../../services/email.service");
+const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
 
 /**
  * AuthService
@@ -65,6 +66,22 @@ class AuthService {
     }
 
     /**
+     * Legacy users may have only email OR phone in UserSocietyMapping.
+     * If login identifier matches a User record, create the missing mapping row(s).
+     */
+    async _repairMissingIdentifierMapping(identifier) {
+        const users = await AuthRepository.findUsersByLoginIdentifier(identifier);
+        if (!users.length) return [];
+
+        for (const user of users) {
+            await MappingRepository.ensureIdentifierMappings(user.societyId, user);
+        }
+
+        const mappings = await AuthRepository.getMappingsForIdentifier(identifier);
+        return mappings;
+    }
+
+    /**
      * @param {string} identifier   — email or mobile
      * @param {string} password
      * @param {string} [societyIdHeader] — ObjectId string from x-tenant-id header (optional override for multi-society users)
@@ -81,14 +98,18 @@ class AuthService {
             }
             societyId = society._id;
         } else {
-            // Auto-resolve from UserSocietyMapping
-            const mappings = await AuthRepository.getMappingsForIdentifier(identifier);
+            // Auto-resolve from UserSocietyMapping (email AND/OR phone each have a row)
+            let mappings = await AuthRepository.getMappingsForIdentifier(identifier);
+            if (!mappings || mappings.length === 0) {
+                mappings = await this._repairMissingIdentifierMapping(identifier);
+            }
+
             if (!mappings || mappings.length === 0) {
                 throw new AppError(AUTH_ERRORS.SOCIETY_NOT_FOUND, 404);
             }
 
-            if (mappings.length > 1) {
-                // User belongs to multiple societies — client MUST specify which one
+            const uniqueSocietyIds = [...new Set(mappings.map((m) => String(m.societyId)))];
+            if (uniqueSocietyIds.length > 1) {
                 throw new AppError(
                     "This account is associated with multiple societies. " +
                     "Please specify your society by sending the 'x-tenant-id' header.",
@@ -116,6 +137,9 @@ class AuthService {
         if (!isMatch) {
             throw new AppError(AUTH_ERRORS.INVALID_CREDENTIALS, 401);
         }
+
+        // Keep email + mobile both login-able going forward
+        await MappingRepository.ensureIdentifierMappings(user.societyId, user);
 
         // 5. Generate tokens with roleKeys + permissionsVersion
         const authContext = await this._buildUserAuthContext(user);

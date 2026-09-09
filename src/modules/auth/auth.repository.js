@@ -24,8 +24,27 @@ class AuthRepository {
     async getMappingsForIdentifier(identifier) {
         const masterDb = getMasterConnection();
         const Mapping = masterDb.model("UserSocietyMapping");
-        return Mapping.find({ identifier: identifier.toLowerCase().trim() })
-            .lean();
+        const normalized = identifier.toLowerCase().trim();
+        return Mapping.find({ identifier: normalized }).lean();
+    }
+
+    /**
+     * Fallback when a mapping row is missing for an identifier that exists on User.
+     * Used to repair legacy records that only stored email OR phone.
+     */
+    async findUsersByLoginIdentifier(identifier) {
+        const opsDb = getOperationsConnection();
+        const User = opsDb.model("User");
+        const normalized = identifier.toLowerCase().trim();
+        const raw = identifier.trim();
+
+        return User.find({
+            $or: [
+                { email: normalized },
+                { mobile: raw },
+                { mobile: normalized },
+            ],
+        }).select("_id societyId email mobile role").lean();
     }
 
     /**

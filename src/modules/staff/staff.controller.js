@@ -24,7 +24,6 @@ exports.addStaff = async (req, res, next) => {
         const User = opsDb.model("User");
         const Staff = opsDb.model("Staff");
         const InviteToken = masterDb.model("InviteToken");
-        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
         const societyId = req.societyId;
 
@@ -66,12 +65,12 @@ exports.addStaff = async (req, res, next) => {
                 status: "invited",
             });
 
-            // Create UserSocietyMapping for login resolution
-            const identifier = email ? email.toLowerCase().trim() : mobile.trim();
-            await UserSocietyMapping.create({
-                identifier,
+            const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+            await MappingRepository.createMappings({
                 societyId,
                 userId: user._id,
+                email: email || null,
+                mobile: mobile.trim(),
                 roleKeys: [ROLES.GENERAL_STAFF],
             });
 

@@ -90,6 +90,10 @@ class UserService {
             );
         }
 
+        if (updateData.email || updateData.mobile || updateData.role) {
+            await UserSocietyMappingRepository.ensureIdentifierMappings(societyId, updatedUser);
+        }
+
         return updatedUser;
     }
 

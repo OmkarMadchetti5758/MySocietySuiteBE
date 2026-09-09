@@ -70,7 +70,6 @@ class SuperAdminRepository {
         const Society = masterDb.model("Society");
         const User = opsDb.model("User");
         const InviteToken = masterDb.model("InviteToken");
-        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
         // 1. Create Society (PENDING_VERIFICATION)
         const society = await Society.create([{
@@ -101,19 +100,14 @@ class SuperAdminRepository {
         // 3. Update Society with adminId
         await Society.findByIdAndUpdate(newSocietyId, { adminId: newAdminId });
 
-        // 4. Create UserSocietyMapping for login resolution later
-        await UserSocietyMapping.create([{
-            identifier: adminData.email,
+        const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+        await MappingRepository.createMappings({
             societyId: newSocietyId,
             userId: newAdminId,
+            email: adminData.email,
+            mobile: adminData.phone,
             roleKeys: ["admin"],
-        }]);
-        await UserSocietyMapping.create([{
-            identifier: adminData.phone,
-            societyId: newSocietyId,
-            userId: newAdminId,
-            roleKeys: ["admin"],
-        }]);
+        });
 
         // 5. Generate and store Invite Token (24 hours expiry)
         const { plainToken, tokenHash } = InviteToken.generateToken();
