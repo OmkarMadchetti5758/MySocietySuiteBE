@@ -11,25 +11,7 @@ const { getMasterConnection } = require("../../config/masterDb");
 const emailService = require("../../services/email.service");
 const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
 
-/**
- * AuthService
- *
- * After migration to the shared-collection model:
- *   - Login no longer needs `databaseName` — it uses `societyId` instead
- *   - All tokens carry `societyId` in the payload (not `databaseName`)
- *   - No getTenantConnection() calls anywhere in this service
- *
- * Login flow:
- *   1. Look up identifier in UserSocietyMapping (master DB) → get societyId(s)
- *   2. If the client provides an explicit societyId (e.g. multi-society user), use that
- *   3. Verify the resolved society is active
- *   4. Find the user in ops DB scoped by societyId + identifier
- *   5. Verify password → generate tokens
- */
 class AuthService {
-    /**
-     * Build roleKeys, permissions, and society metadata for a society-scoped user.
-     */
     async _buildUserAuthContext(user) {
         const masterDb = getMasterConnection();
         const Society = masterDb.model("Society");
@@ -65,10 +47,6 @@ class AuthService {
         };
     }
 
-    /**
-     * Legacy users may have only email OR phone in UserSocietyMapping.
-     * If login identifier matches a User record, create the missing mapping row(s).
-     */
     async _repairMissingIdentifierMapping(identifier) {
         const users = await AuthRepository.findUsersByLoginIdentifier(identifier);
         if (!users.length) return [];
@@ -237,10 +215,6 @@ class AuthService {
         };
     }
 
-    /**
-     * Refresh the permissions matrix and issue new tokens with an updated permissionsVersion.
-     * Called by the FE when X-Permissions-Stale is returned.
-     */
     async refreshPermissions(userId, societyId, role) {
         const user = await AuthRepository.findUserById(societyId, userId);
         if (!user || !user.isActive) {
