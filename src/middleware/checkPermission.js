@@ -35,16 +35,25 @@ const checkPermission = (moduleName, requiredLevel = PERMISSION_LEVELS.VIEW) => 
                 return next(new AppError(`Access denied. Invalid or unknown role: ${req.user.role}`, 403));
             }
 
-            const modulePerm = permissions[moduleName];
+            const modules = Array.isArray(moduleName) ? moduleName : [moduleName];
+            let allowedPerm = null;
 
-            if (!modulePerm || modulePerm.level < requiredLevel) {
-                console.error(`[RBAC DENIED] User role=${req.user?.role}, roleKeys=${JSON.stringify(req.user?.roleKeys)}, societyId=${req.user?.societyId}, module=${moduleName}, reqLevel=${requiredLevel}, actualLevel=${modulePerm?.level}`);
-                return next(new AppError(`Access denied for module: ${moduleName}. Insufficient permissions.`, 403));
+            for (const mod of modules) {
+                const modulePerm = permissions[mod];
+                if (modulePerm && modulePerm.level >= requiredLevel) {
+                    allowedPerm = modulePerm;
+                    break;
+                }
+            }
+
+            if (!allowedPerm) {
+                console.error(`[RBAC DENIED] User role=${req.user?.role}, roleKeys=${JSON.stringify(req.user?.roleKeys)}, societyId=${req.user?.societyId}, modules=${modules.join(",")}, reqLevel=${requiredLevel}`);
+                return next(new AppError(`Access denied for module: ${modules.join(" or ")}. Insufficient permissions.`, 403));
             }
 
             req.permission = {
-                level: modulePerm.level,
-                scope: modulePerm.scope,
+                level: allowedPerm.level,
+                scope: allowedPerm.scope,
             };
 
             next();

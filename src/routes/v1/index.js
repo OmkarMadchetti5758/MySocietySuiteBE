@@ -37,6 +37,10 @@ router.use("/complaints", require("../../modules/complaint/complaint.routes"));
 router.use("/festivals", require("../../modules/festival/festival.routes"));
 router.use("/flats", require("../../modules/flat/flat.routes"));
 router.use("/parking", require("../../modules/parking/parking.routes"));
+router.use("/guard", require("../../modules/guard/guard.routes"));
+router.use("/visitor", require("../../modules/visitor/visitor.routes"));
+router.use("/vehicle", require("../../modules/vehicle/vehicle.routes"));
+router.use("/sos", require("../../modules/sos/sos.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
 

@@ -21,9 +21,11 @@ const authLimiter = rateLimit({
     }
 });
 
+const conditionalAuthLimiter = process.env.NODE_ENV === "production" ? authLimiter : (req, res, next) => next();
+
 router.post(
     "/login",
-    authLimiter,
+    conditionalAuthLimiter,
     tenantResolver,
     loginValidation,
     validate,
@@ -31,8 +33,21 @@ router.post(
 );
 
 router.post(
+    "/guard/send-otp",
+    conditionalAuthLimiter,
+    AuthController.guardSendOtp
+);
+
+router.post(
+    "/guard/verify-otp",
+    conditionalAuthLimiter,
+    tenantResolver,
+    AuthController.guardVerifyOtp
+);
+
+router.post(
     "/super-admin/login",
-    authLimiter,
+    conditionalAuthLimiter,
     AuthController.superAdminLogin
 );
 

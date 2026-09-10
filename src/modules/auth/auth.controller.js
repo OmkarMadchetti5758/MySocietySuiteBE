@@ -1,7 +1,7 @@
 "use strict";
 
 const AuthService = require("./auth.service");
-const { sendSuccess } = require("../../utils/response.utils");
+const { sendSuccess, sendError } = require("../../utils/response.utils");
 
 class AuthController {
     /**
@@ -18,6 +18,37 @@ class AuthController {
             const data = await AuthService.login(identifier, password, societyIdHeader);
 
             return sendSuccess(res, 200, "Login successful", data);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @desc    Send OTP for Guard Login
+     * @route   POST /api/v1/auth/guard/send-otp
+     */
+    async guardSendOtp(req, res, next) {
+        try {
+            const { mobile } = req.body;
+            if (!mobile) return sendError(res, 400, "Mobile number is required");
+            const data = await AuthService.guardSendOtp(mobile);
+            return sendSuccess(res, 200, "OTP sent successfully", data);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * @desc    Verify OTP for Guard Login
+     * @route   POST /api/v1/auth/guard/verify-otp
+     */
+    async guardVerifyOtp(req, res, next) {
+        try {
+            const { mobile, otp } = req.body;
+            if (!mobile || !otp) return sendError(res, 400, "Mobile and OTP are required");
+            const societyIdHeader = req.tenantInfo?.societyId;
+            const data = await AuthService.guardVerifyOtp(mobile, otp, societyIdHeader);
+            return sendSuccess(res, 200, "Guard login successful", data);
         } catch (error) {
             next(error);
         }

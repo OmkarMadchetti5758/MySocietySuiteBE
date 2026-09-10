@@ -200,7 +200,7 @@ class SmsService {
 
         // ── Development: log only, no real HTTP call ─────────────────────────
         if (NODE_ENV !== "production") {
-            console.log(`[SmsService] DEV MODE — SMS not sent to gateway (${mobile})`);
+            console.log(`[SmsService] DEV MODE — SMS not sent to gateway (${mobile}). OTP is: ${otp}`);
             return { sent: false, mobile, devMode: true };
         }
 

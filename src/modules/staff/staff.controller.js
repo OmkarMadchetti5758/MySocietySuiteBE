@@ -39,12 +39,14 @@ exports.addStaff = async (req, res, next) => {
         let plainToken;
 
         try {
+            const actualRole = designation;
+
             // Create user with INVITED status — no password needed yet
             const userData = {
                 societyId,
                 name: name.trim(),
                 mobile: mobile.trim(),
-                role: ROLES.GENERAL_STAFF,
+                role: actualRole,
                 status: "invited",
                 isActive: false,
             };
@@ -72,7 +74,7 @@ exports.addStaff = async (req, res, next) => {
                 identifier,
                 societyId,
                 userId: user._id,
-                roleKeys: [ROLES.GENERAL_STAFF],
+                roleKeys: [actualRole],
             });
 
             // Generate invite token (same mechanism as resident)

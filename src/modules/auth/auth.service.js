@@ -131,6 +131,99 @@ class AuthService {
         userObj.societyName = authContext.societyName;
         userObj.roleKeys = authContext.roleKeys;
         userObj.flatId = authContext.flatId;
+
+        // Fetch precise designation for general staff
+        if (user.role === "general_staff") {
+            const opsDb = require("../../config/operationsDb").getOperationsConnection();
+            const Staff = opsDb.model("Staff");
+            const staffProfile = await Staff.findOne({ userId: user._id, societyId });
+            if (staffProfile) {
+                userObj.displayRole = staffProfile.role;
+            }
+        }
+
+        userObj.password = undefined;
+        userObj.refreshToken = undefined;
+
+        return {
+            user: userObj,
+            accessToken,
+            refreshToken,
+            permissions: authContext.permissions,
+            permissionsVersion: authContext.permissionsVersion,
+            roleKeys: authContext.roleKeys,
+        };
+    }
+
+    /**
+     * Send OTP for Guard Login
+     */
+    async guardSendOtp(mobile) {
+        const mappings = await AuthRepository.getMappingsForIdentifier(mobile);
+        if (!mappings || mappings.length === 0) {
+            throw new AppError("No account found with this mobile number.", 404);
+        }
+
+        const isGuard = mappings.some(m => 
+            (m.roleKeys && m.roleKeys.includes(ROLES.SECURITY_GUARD)) || 
+            (m.role === ROLES.SECURITY_GUARD)
+        );
+
+        if (!isGuard) {
+             throw new AppError("Access denied. Not a security guard.", 403);
+        }
+
+        const societyId = mappings[0].societyId;
+        const OtpService = require("../otp/otp.service");
+        return await OtpService.sendOtp(mobile, "guard_login", societyId);
+    }
+
+    /**
+     * Verify OTP for Guard Login
+     */
+    async guardVerifyOtp(mobile, otp, societyIdHeader) {
+        let societyId = societyIdHeader;
+        if (!societyId) {
+            const mappings = await AuthRepository.getMappingsForIdentifier(mobile);
+            if (!mappings || mappings.length === 0) throw new AppError("Account not found", 404);
+            societyId = mappings[0].societyId;
+        }
+
+        const OtpService = require("../otp/otp.service");
+        await OtpService.verifyOtp(mobile, otp, "guard_login", societyId);
+
+        const user = await AuthRepository.findUserByIdentifier(societyId, mobile);
+        if (!user) throw new AppError(AUTH_ERRORS.USER_NOT_FOUND, 404);
+
+        if (!user.isActive) {
+            // Auto-activate the guard upon first successful OTP login
+            user.isActive = true;
+            user.status = "active";
+            await user.save();
+            
+            // Activate their Staff profile
+            const opsDb = require("../../config/operationsDb").getOperationsConnection();
+            const Staff = opsDb.model("Staff");
+            await Staff.updateOne({ userId: user._id }, { isActive: true, status: "active" });
+            
+            // Activate UserSocietyMapping
+            const masterDb = require("../../config/masterDb").getMasterConnection();
+            const UserSocietyMapping = masterDb.model("UserSocietyMapping");
+            await UserSocietyMapping.updateOne({ userId: user._id, societyId }, { status: "active" });
+        }
+
+        const authContext = await this._buildUserAuthContext(user);
+        const payload = this._buildTokenPayload(user, authContext);
+
+        const accessToken  = generateAccessToken(payload);
+        const refreshToken = generateRefreshToken(payload);
+
+        await AuthRepository.saveRefreshToken(user._id, refreshToken);
+
+        const userObj = user.toObject ? user.toObject() : { ...user };
+        userObj.societyName = authContext.societyName;
+        userObj.roleKeys = authContext.roleKeys;
+        userObj.flatId = authContext.flatId;
         userObj.password = undefined;
         userObj.refreshToken = undefined;
 

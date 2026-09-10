@@ -15,9 +15,26 @@ class FlatController {
             const filter = { societyId: req.user.societyId };
             if (blockId) filter.blockId = blockId;
 
-            const flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 });
+            const Block = operationsDb.model("Block");
 
-            return sendSuccess(res, 200, "Flats retrieved successfully", { flats });
+            const [flats, blockDoc] = await Promise.all([
+                Flat.find(filter).sort({ floor: 1, flatNumber: 1 }).lean(),
+                Block.findOne({ societyId: req.user.societyId }).lean(),
+            ]);
+
+            const wingMap = new Map();
+            if (blockDoc?.wings) {
+                for (const wing of blockDoc.wings) {
+                    wingMap.set(String(wing._id), { _id: wing._id, name: wing.name, code: wing.code });
+                }
+            }
+
+            const populatedFlats = flats.map(flat => ({
+                ...flat,
+                blockId: wingMap.get(String(flat.blockId)) || flat.blockId,
+            }));
+
+            return sendSuccess(res, 200, "Flats retrieved successfully", { flats: populatedFlats });
         } catch (error) {
             next(error);
         }

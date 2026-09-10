@@ -27,7 +27,7 @@ const PERMISSION_CATALOG = [
         moduleName:       "Society & Flat Setup",
         sortOrder:        1,
         validAccessLevels: ["none", "view", "full"],
-        hardBlockedFor:  ["security_guard", "vendor"],
+        hardBlockedFor:  ["vendor"],
         description:     "Configure society structure, blocks, and flat assignments.",
     },
     {
@@ -222,7 +222,7 @@ const GLOBAL_ROLES = [
         isSystemRole: true,
         isEditable:   true,
         permissions: {
-            societyFlatSetup:             { access: "none",  enabled: false },
+            societyFlatSetup:             { access: "view",  enabled: true  },
             billingAccounts:              { access: "none",  enabled: false },
             visitorManagement:            { access: "full",  enabled: true  }, // Entry logging only (guard interface)
             complaintsHelpdesk:           { access: "none",  enabled: false },

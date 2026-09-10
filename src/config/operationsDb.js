@@ -60,6 +60,9 @@ const connectOperationsDB = async () => {
         opsConnection.model("Notification",          require("../modules/notification/notification.model"));
         opsConnection.model("RolePermissionAudit",   require("../modules/role/rolePermissionAudit.model"));
         opsConnection.model("ManagerAssignment",     require("../modules/managerAssignment/managerAssignment.model"));
+        opsConnection.model("Gate",                  require("../modules/gate/gate.model"));
+        opsConnection.model("GuardGateAssignment",   require("../modules/guard/guardGateAssignment.model"));
+        opsConnection.model("QRDigitalPass",         require("../modules/visitor/qrDigitalPass.model"));
         // ────────────────────────────────────────────────────────────────────
 
         console.log(`✅ Operations DB connected: ${opsConnection.name}`);

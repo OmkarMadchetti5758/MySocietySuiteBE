@@ -29,6 +29,17 @@ const ROLES = Object.freeze({
     VENDOR_MANAGER:   "vendor_manager",   // Department-head: manages vendor relationships
     STAFF:            "staff",            // Legacy generic staff
     GENERAL_STAFF:    "general_staff",    // housekeeping/gardener/electrician/plumber etc.
+
+    // Staff Designations (Added as valid User roles)
+    HOUSEKEEPING:      "housekeeping",
+    GARDENER:          "gardener",
+    ELECTRICIAN:       "electrician",
+    PLUMBER:           "plumber",
+    CARPENTER:         "carpenter",
+    PEST_CONTROL:      "pest_control",
+    LIFT_TECHNICIAN:   "lift_technician",
+    SWEEPER:           "sweeper",
+    OTHER_STAFF:       "other",
 });
 
 // Separate enum/lookup table for what the job actually is — display, filtering, reporting only
@@ -188,7 +199,7 @@ const ROLE_PERMISSIONS = Object.freeze({
 
     // ── 6. Security Guard ─────────────────────────────────────────────────────
     [ROLES.SECURITY_GUARD]: {
-        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
+        [MODULES.SOCIETY_FLAT_SETUP]:  { level: PERMISSION_LEVELS.VIEW,      scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.BILLING_ACCOUNTS]:    { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.VISITOR_MANAGEMENT]:  { level: PERMISSION_LEVELS.FULL,      scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
@@ -377,6 +388,36 @@ const VISITOR_STATUS = Object.freeze({
     CHECKED_OUT: "checked_out",
 });
 
+// ─── Visitor Category ──────────────────────────────────────────────────────────
+const VISITOR_CATEGORY = Object.freeze({
+    GUEST: "guest",
+    DELIVERY: "delivery",
+    CAB: "cab",
+    SERVICE: "service",
+    OTHER: "other",
+});
+
+// ─── QR Pass Type ──────────────────────────────────────────────────────────────
+const QR_PASS_TYPE = Object.freeze({
+    ONE_TIME: "one_time",
+    RECURRING: "recurring",
+});
+
+// ─── QR Pass Status ────────────────────────────────────────────────────────────
+const QR_PASS_STATUS = Object.freeze({
+    ACTIVE: "active",
+    EXPIRED: "expired",
+    USED: "used",
+    REVOKED: "revoked",
+});
+
+// ─── SOS Status ────────────────────────────────────────────────────────────────
+const SOS_STATUS = Object.freeze({
+    ACTIVE: "active",
+    ACKNOWLEDGED: "acknowledged",
+    RESOLVED: "resolved",
+});
+
 // ─── Complaint Status ──────────────────────────────────────────────────────────
 const COMPLAINT_STATUS = Object.freeze({
     OPEN: "open",
@@ -557,6 +598,10 @@ const STAFF_TYPE = Object.freeze({
     ELECTRICIAN: "electrician",
     GARDENER: "gardener",
     LIFT_OPERATOR: "lift_operator",
+    LIFT_TECHNICIAN: "lift_technician",
+    CARPENTER: "carpenter",
+    PEST_CONTROL: "pest_control",
+    SWEEPER: "sweeper",
     WATCHMAN: "watchman",
     OTHER: "other",
 });
@@ -648,6 +693,10 @@ module.exports = {
     FLAT_TYPE,
     RESIDENT_TYPE,
     VISITOR_STATUS,
+    VISITOR_CATEGORY,
+    QR_PASS_TYPE,
+    QR_PASS_STATUS,
+    SOS_STATUS,
     COMPLAINT_STATUS,
     COMPLAINT_PRIORITY,
     MAINTENANCE_STATUS,

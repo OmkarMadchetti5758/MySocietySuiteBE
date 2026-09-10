@@ -18,7 +18,7 @@ router.use(authenticate, injectSocietyId);
  */
 router.get(
     "/",
-    checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.VIEW),
+    checkPermission([MODULES.SOCIETY_FLAT_SETUP, MODULES.VISITOR_MANAGEMENT], PERMISSION_LEVELS.VIEW),
     FlatController.getFlats.bind(FlatController)
 );
 
@@ -40,7 +40,7 @@ router.post(
  */
 router.get(
     "/:flatId",
-    checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.VIEW),
+    checkPermission([MODULES.SOCIETY_FLAT_SETUP, MODULES.VISITOR_MANAGEMENT], PERMISSION_LEVELS.VIEW),
     FlatController.getFlatById.bind(FlatController)
 );
 
