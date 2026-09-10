@@ -16,18 +16,7 @@ class OtpService {
         return masterDb.model("Otp");
     }
 
-    /**
-     * Generate and store an OTP for a given identifier + purpose.
-     * Enforces rate limiting (max 3 resends/hour, 30s cooldown between resends).
-     *
-     * Delivery:
-     *   - Phone identifiers → SMS via SmsService (real gateway in prod, console in dev)
-     *   - Email identifiers → EmailService (SMTP)
-     *
-     * @param {string} identifier - email or phone
-     * @param {string} purpose    - e.g. "manager_invite"
-     * @param {string} societyId
-     */
+    
     async sendOtp(identifier, purpose, societyId) {
         const Otp = this._getModel();
         const normalizedIdentifier = identifier.toLowerCase().trim();
@@ -105,16 +94,6 @@ class OtpService {
         return { message: "OTP sent successfully" };
     }
 
-    /**
-     * Verify an OTP code for an identifier + purpose.
-     * Increments attempts on failure, locks after MAX_ATTEMPTS.
-     *
-     * @param {string} identifier
-     * @param {string} code       - plain 6-digit code from user
-     * @param {string} purpose
-     * @param {string} societyId
-     * @returns {{ verified: true }}
-     */
     async verifyOtp(identifier, code, purpose, societyId) {
         const Otp = this._getModel();
         const normalizedIdentifier = identifier.toLowerCase().trim();
@@ -222,17 +201,6 @@ class OtpService {
         return digits.length >= 10 && digits.length <= 12;
     }
 
-    /**
-     * Route OTP delivery to the appropriate channel.
-     *
-     * • Phone → SmsService.sendOtpSms()
-     *           (SmsService handles dev vs. production internally)
-     * • Email → EmailService.sendOtpEmail() via SMTP
-     *
-     * @param {string} identifier - Normalised identifier (phone or email)
-     * @param {string} code       - Plain OTP code
-     * @param {string} purpose    - OTP purpose label (for log readability)
-     */
     async _deliverOtp(identifier, code, purpose) {
         if (this._isPhone(identifier)) {
             // Lazy-require to avoid circular deps at module load time

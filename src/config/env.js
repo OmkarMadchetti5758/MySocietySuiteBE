@@ -2,10 +2,6 @@
 
 require("dotenv").config();
 
-/**
- * Validates that required environment variables are present.
- * Throws an error at startup if any are missing.
- */
 const required = [
     "MONGODB_URI",
     "MASTER_DB_NAME",
@@ -54,11 +50,11 @@ module.exports = {
     OTP_EXPIRES_IN_MINUTES: parseInt(process.env.OTP_EXPIRES_IN_MINUTES, 10) || 10,
 
     // SMS — SMSGatewayCenter (https://unify.smsgateway.center/SMSApi/send)
-    SMS_USERID:              process.env.SMS_USERID      || "",
-    SMS_PASSWORD:            process.env.SMS_PASSWORD    || "",
-    SMS_SENDERID:            process.env.SMS_SENDERID    || "",
-    SMS_DLT_ENTITY_ID:       process.env.SMS_DLT_ENTITY_ID       || "",
-    SMS_DLT_TEMPLATE_ID:     process.env.SMS_DLT_TEMPLATE_ID     || "",
+    SMS_USERID: process.env.SMS_USERID || "",
+    SMS_PASSWORD: process.env.SMS_PASSWORD || "",
+    SMS_SENDERID: process.env.SMS_SENDERID || "",
+    SMS_DLT_ENTITY_ID: process.env.SMS_DLT_ENTITY_ID || "",
+    SMS_DLT_TEMPLATE_ID: process.env.SMS_DLT_TEMPLATE_ID || "",
     SMS_DLT_CANCEL_TEMPLATE_ID: process.env.SMS_DLT_CANCEL_TEMPLATE_ID || "",
 
     // Rate Limiting

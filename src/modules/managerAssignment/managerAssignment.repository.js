@@ -7,17 +7,6 @@ class ManagerAssignmentRepository {
     _opsDb()    { return getOperationsConnection(); }
     _masterDb() { return getMasterConnection(); }
 
-    // ── Read ───────────────────────────────────────────────────────────────────
-
-    /**
-     * Get all assignments for a society, with optional filters.
-     * Returns all department-head assignments regardless of status,
-     * so the caller can merge "Unassigned" placeholders.
-     *
-     * @param {string} societyId
-     * @param {{ department?: string, status?: string, search?: string }} filters
-     * @returns {Array}
-     */
     async listAssignments(societyId, { department, status, search } = {}) {
         const opsDb = this._opsDb();
         const ManagerAssignment = opsDb.model("ManagerAssignment");
@@ -75,13 +64,6 @@ class ManagerAssignmentRepository {
         }).lean();
     }
 
-    // ── Write ──────────────────────────────────────────────────────────────────
-
-    /**
-     * Create a new manager assignment record.
-     * @param {Object} data - fields matching managerAssignmentSchema
-     * @returns {Object} created document
-     */
     async createAssignment(data) {
         const opsDb = this._opsDb();
         const ManagerAssignment = opsDb.model("ManagerAssignment");
@@ -89,9 +71,6 @@ class ManagerAssignmentRepository {
         return doc.toObject();
     }
 
-    /**
-     * Update an assignment by ID.
-     */
     async updateAssignment(societyId, assignmentId, updates) {
         const opsDb = this._opsDb();
         const ManagerAssignment = opsDb.model("ManagerAssignment");
@@ -102,16 +81,6 @@ class ManagerAssignmentRepository {
         ).lean();
     }
 
-    // ── UserSocietyMapping helpers ─────────────────────────────────────────────
-
-    /**
-     * Add a roleKey to the UserSocietyMapping entries for a user's identifiers.
-     * Used when promoting a resident (Path A) or activating a new manager (Path B).
-     *
-     * @param {string} societyId
-     * @param {string} userId
-     * @param {string} roleKey
-     */
     async addRoleKeyToMapping(societyId, userId, roleKey) {
         const masterDb = this._masterDb();
         const UserSocietyMapping = masterDb.model("UserSocietyMapping");
@@ -153,17 +122,6 @@ class ManagerAssignmentRepository {
         });
     }
 
-    // ── Resident lookup (for Path A search) ───────────────────────────────────
-
-    /**
-     * Search residents in a society by name, email, or phone for the Path A selector.
-     * Excludes already-deactivated / moved-out residents.
-     *
-     * @param {string} societyId
-     * @param {string} query
-     * @param {number} limit
-     * @returns {Array}
-     */
     async searchResidents(societyId, query, limit = 20) {
         const opsDb = this._opsDb();
         const User     = opsDb.model("User");
@@ -223,10 +181,6 @@ class ManagerAssignmentRepository {
         );
     }
 
-    /**
-     * Create a new invite token for a manager (7-day expiry).
-     * @returns {{ plainToken: string }}
-     */
     async createManagerInviteToken(societyId, userId) {
         const masterDb = this._masterDb();
         const InviteToken = masterDb.model("InviteToken");

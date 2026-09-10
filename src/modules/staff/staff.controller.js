@@ -8,10 +8,6 @@ const { sendSuccess } = require("../../utils/response.utils");
 const emailService = require("../../services/email.service");
 const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
 const { canonicalPhone, canonicalIdentifier } = require("../../common/loginIdentifier");
-
-// @desc    Invite a new staff member (generates an invite token link, same as resident flow)
-// @route   POST /api/staff
-// @access  Private (Admin / Facility Manager — STAFF_MANAGEMENT FULL)
 exports.addStaff = async (req, res, next) => {
     try {
         const { name, mobile, email, designation, shiftTiming, gateOrArea, address } = req.body;
@@ -137,10 +133,6 @@ exports.addStaff = async (req, res, next) => {
         next(error);
     }
 };
-
-// @desc    Get all staff for this society
-// @route   GET /api/staff
-// @access  Private
 exports.getAllStaff = async (req, res, next) => {
     try {
         const opsDb = getOperationsConnection();
@@ -173,10 +165,6 @@ exports.getAllStaff = async (req, res, next) => {
         next(error);
     }
 };
-
-// @desc    Get shift and gate view
-// @route   GET /api/staff/shift-view
-// @access  Private
 exports.getShiftAndGateView = async (req, res, next) => {
     try {
         const opsDb = getOperationsConnection();

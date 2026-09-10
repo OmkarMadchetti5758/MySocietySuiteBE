@@ -57,11 +57,11 @@ class AuthService {
 
     _buildTokenPayload(user, authContext) {
         return {
-            id:                 user._id,
-            role:               user.role,
-            societyId:          user.societyId,
+            id: user._id,
+            role: user.role,
+            societyId: user.societyId,
             permissionsVersion: authContext.permissionsVersion,
-            roleKeys:           authContext.roleKeys,
+            roleKeys: authContext.roleKeys,
         };
     }
 
@@ -81,11 +81,6 @@ class AuthService {
         return mappings;
     }
 
-    /**
-     * @param {string} identifier   — email or mobile
-     * @param {string} password
-     * @param {string} [societyIdHeader] — ObjectId string from x-tenant-id header (optional override for multi-society users)
-     */
     async login(identifier, password, societyIdHeader) {
         // 1. Resolve societyId
         let societyId;
@@ -145,7 +140,7 @@ class AuthService {
         const authContext = await this._buildUserAuthContext(user);
         const payload = this._buildTokenPayload(user, authContext);
 
-        const accessToken  = generateAccessToken(payload);
+        const accessToken = generateAccessToken(payload);
         const refreshToken = generateRefreshToken(payload);
 
         // 6. Save refresh token
@@ -168,10 +163,6 @@ class AuthService {
         };
     }
 
-    /**
-     * @param {string} email
-     * @param {string} password
-     */
     async superAdminLogin(email, password) {
         // 1. Find Super Admin in master DB
         const admin = await AuthRepository.findSuperAdminByEmail(email);
@@ -191,18 +182,18 @@ class AuthService {
 
         // 3. Generate tokens (NO societyId in payload)
         const payload = {
-            id:   admin._id,
+            id: admin._id,
             role: admin.role, // "super_admin"
         };
 
-        const accessToken  = generateAccessToken(payload);
+        const accessToken = generateAccessToken(payload);
         const refreshToken = generateRefreshToken(payload);
 
         // 4. Save refresh token
         await AuthRepository.saveSuperAdminRefreshToken(admin._id, refreshToken);
 
         // Strip sensitive fields
-        admin.password     = undefined;
+        admin.password = undefined;
         admin.refreshToken = undefined;
 
         // 5. Return permissions matrix for the frontend
@@ -232,7 +223,7 @@ class AuthService {
         const authContext = await this._buildUserAuthContext(user);
         const payload = this._buildTokenPayload(user, authContext);
 
-        const accessToken     = generateAccessToken(payload);
+        const accessToken = generateAccessToken(payload);
         const newRefreshToken = generateRefreshToken(payload);
 
         await AuthRepository.saveRefreshToken(user._id, newRefreshToken);
@@ -259,7 +250,7 @@ class AuthService {
         const authContext = await this._buildUserAuthContext(user);
         const payload = this._buildTokenPayload(user, authContext);
 
-        const accessToken  = generateAccessToken(payload);
+        const accessToken = generateAccessToken(payload);
         const refreshToken = generateRefreshToken(payload);
 
         await AuthRepository.saveRefreshToken(user._id, refreshToken);
@@ -330,7 +321,7 @@ class AuthService {
 
         const opsDb = require("../../config/operationsDb").getOperationsConnection();
         const masterDb = getMasterConnection();
-        
+
         const InviteToken = masterDb.model("InviteToken");
         const User = opsDb.model("User");
         const Society = masterDb.model("Society");
@@ -344,7 +335,7 @@ class AuthService {
 
         const society = await Society.findById(invite.societyId);
         const user = await User.findById(invite.adminId);
-        
+
         if (!society || !user) throw new AppError("Invalid invite data", 400);
 
         // Mark as used
@@ -384,7 +375,7 @@ class AuthService {
                     { userId: user._id, societyId: invite.societyId, status: "invite_pending" },
                     {
                         $set: {
-                            status:      "active",
+                            status: "active",
                             activatedAt: new Date(),
                         },
                     }
@@ -502,24 +493,21 @@ class AuthService {
         };
     }
 
-    /**
-     * @desc    Update current user profile
-     */
     async updateMe(userContext, updateData) {
         const allowedUpdates = {};
         if (updateData.name) allowedUpdates.name = updateData.name;
         if (updateData.mobile) allowedUpdates.mobile = updateData.mobile;
-        
+
         if (userContext.role === "super_admin") {
             const masterDb = getMasterConnection();
             const SuperAdmin = masterDb.model("SuperAdmin");
-            
+
             const updated = await SuperAdmin.findByIdAndUpdate(
                 userContext.id,
                 allowedUpdates,
                 { new: true, runValidators: true }
             );
-            
+
             if (!updated) throw new AppError("User not found", 404);
             const userObj = updated.toObject();
             delete userObj.password;
@@ -527,15 +515,15 @@ class AuthService {
         } else {
             const opsDb = require("../../config/operationsDb").getOperationsConnection();
             const User = opsDb.model("User");
-            
+
             const updated = await User.findOneAndUpdate(
                 { _id: userContext.id, societyId: userContext.societyId },
                 allowedUpdates,
                 { new: true, runValidators: true }
             );
-            
+
             if (!updated) throw new AppError("User not found", 404);
-            
+
             const userObj = updated.toObject();
             userObj.roleKeys = userContext.roleKeys;
             userObj.flatId = userContext.flatId;

@@ -4,11 +4,6 @@ const AppError = require("../common/AppError");
 const { hasBillingPermission } = require("../services/billingAuthorization.service");
 const { logBillingAction } = require("../services/billingAudit.service");
 
-/**
- * Middleware factory to enforce BRD Section 4.1 Granular Billing Permissions.
- *
- * @param {string} permissionKey - e.g. BILLING.CHARGE_HEAD.CREATE
- */
 const requireBillingPermission = (permissionKey) => {
     return async (req, res, next) => {
         try {

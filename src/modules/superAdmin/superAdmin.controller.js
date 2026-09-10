@@ -4,11 +4,7 @@ const SuperAdminService = require("./superAdmin.service");
 const { sendSuccess } = require("../../utils/response.utils");
 
 class SuperAdminController {
-    /**
-     * @desc    Get dashboard metrics for super admin
-     * @route   GET /api/v1/super-admin/stats
-     * @access  Private (Super Admin)
-     */
+    
     async getStats(req, res, next) {
         try {
             const stats = await SuperAdminService.getDashboardStats();
@@ -18,11 +14,6 @@ class SuperAdminController {
         }
     }
 
-    /**
-     * @desc    Get paginated societies list
-     * @route   GET /api/v1/super-admin/societies
-     * @access  Private (Super Admin)
-     */
     async getSocieties(req, res, next) {
         try {
             const { page, limit, search } = req.query;
@@ -33,11 +24,6 @@ class SuperAdminController {
         }
     }
 
-    /**
-     * @desc    Create a new super admin
-     * @route   POST /api/v1/super-admin/admins
-     * @access  Private (Super Admin)
-     */
     async createSuperAdmin(req, res, next) {
         try {
             const { name, email, password } = req.body;
@@ -53,11 +39,6 @@ class SuperAdminController {
         }
     }
 
-    /**
-     * @desc    Create a new society and invite admin
-     * @route   POST /api/v1/super-admin/societies
-     * @access  Private (Super Admin)
-     */
     async createSociety(req, res, next) {
         try {
             const data = await SuperAdminService.createSociety(req.body);

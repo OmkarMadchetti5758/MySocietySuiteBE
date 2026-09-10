@@ -7,9 +7,6 @@ const { ROLES } = require("../common/constants");
 // Default approval threshold for Accountant financial actions (Credit Note, Discount, Vendor Payment)
 const DEFAULT_ACCOUNTANT_APPROVAL_THRESHOLD = 5000;
 
-/**
- * Resolves user's normalized role keys.
- */
 function getUserRoleKeys(user) {
     if (!user) return [];
     if (Array.isArray(user.roleKeys) && user.roleKeys.length > 0) {
@@ -21,18 +18,9 @@ function getUserRoleKeys(user) {
     return [];
 }
 
-/**
- * Checks if a user has a specific granular billing permission based on the BRD Access Matrix.
- *
- * @param {Object} user - Authenticated user context from req.user
- * @param {string} permissionKey - e.g. BILLING.CHARGE_HEAD.CREATE
- * @returns {boolean}
- */
 function hasBillingPermission(user, permissionKey) {
     if (!user) return false;
 
-    // Super Admin platform restriction check (Section 9 of BRD):
-    // Super admin does not perform operational billing by default.
     const roleKeys = getUserRoleKeys(user);
     if (roleKeys.includes(ROLES.SUPER_ADMIN)) {
         return false;
@@ -55,11 +43,6 @@ function hasBillingPermission(user, permissionKey) {
 
     return false;
 }
-
-/**
- * Resource-level authorization & IDOR prevention.
- * Ensures residents can ONLY access their own invoice, payment, ledger data.
- */
 function canAccessBillingResource(user, resource, action) {
     if (!user) return false;
 
@@ -93,12 +76,6 @@ function canAccessBillingResource(user, resource, action) {
     return true;
 }
 
-/**
- * Approval Threshold Check for Accountant operations.
- *
- * Accountant actions (Credit Note, Discount, Vendor Payment) above configured threshold
- * require Committee Admin approval (status = PENDING_APPROVAL).
- */
 function requiresCommitteeApproval({ user, action, amount = 0, thresholdOverride = null }) {
     const roleKeys = getUserRoleKeys(user);
     const isAccountant = roleKeys.includes(ROLES.ACCOUNTANT);
@@ -120,9 +97,6 @@ function requiresCommitteeApproval({ user, action, amount = 0, thresholdOverride
     return amount > effectiveThreshold;
 }
 
-/**
- * Prevents self-approval: Creator cannot approve their own restricted transaction.
- */
 function checkSelfApproval(user, resource) {
     if (!user || !resource) return false;
 

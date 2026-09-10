@@ -36,10 +36,6 @@ const runEscalation = async () => {
     }
 };
 
-/**
- * Start the SLA escalation scheduler.
- * Safe to call multiple times — will not start a second interval.
- */
 const startSlaScheduler = () => {
     if (intervalHandle) return; // Already running
 
@@ -53,9 +49,6 @@ const startSlaScheduler = () => {
     console.log(`[SLA Scheduler] 🕐 Started. Escalation check every ${intervalMs / 1000 / 60} minute(s).`);
 };
 
-/**
- * Stop the scheduler (for graceful shutdown / tests).
- */
 const stopSlaScheduler = () => {
     if (intervalHandle) {
         clearInterval(intervalHandle);

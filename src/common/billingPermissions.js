@@ -2,9 +2,6 @@
 
 const { ROLES } = require("./constants");
 
-/**
- * Granular Billing Permissions according to BRD Section 4.1 Access Matrix
- */
 const BILLING_PERMISSIONS = Object.freeze({
     // Charge Heads
     CHARGE_HEAD_VIEW: "BILLING.CHARGE_HEAD.VIEW",
@@ -67,9 +64,6 @@ const BILLING_PERMISSIONS = Object.freeze({
     OWN_LEDGER_VIEW: "BILLING.OWN_LEDGER.VIEW",
 });
 
-/**
- * BRD Access Matrix source of truth for Role → Permission mappings.
- */
 const BILLING_ROLE_MATRIX = Object.freeze({
     // 1. Committee Admin (admin / committee_admin / committee_member)
     [ROLES.ADMIN]: [
@@ -136,8 +130,6 @@ const BILLING_ROLE_MATRIX = Object.freeze({
         BILLING_PERMISSIONS.BUDGET_VIEW,
     ],
 
-    // 4. Super Admin — Platform role with read-only visibility where auditable,
-    // operational billing is separated per section 9.
     [ROLES.SUPER_ADMIN]: [],
 });
 
