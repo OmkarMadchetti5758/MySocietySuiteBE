@@ -1,15 +1,5 @@
 "use strict";
 
-/**
- * EmailService
- *
- * Sends transactional email (OTP codes and invite links) via SMTP.
- * Credentials come from env (SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS).
- *
- * If SMTP_USER / SMTP_PASS are missing, the message is logged to the console
- * instead of throwing — so local setups without mail still work.
- */
-
 const nodemailer = require("nodemailer");
 const AppError = require("../common/AppError");
 const env = require("../config/env");
@@ -137,16 +127,6 @@ class EmailService {
         return this._send({ to, subject, text, html });
     }
 
-    /**
-     * Send an account activation / invite link.
-     *
-     * @param {object} opts
-     * @param {string} opts.to
-     * @param {string} [opts.recipientName]
-     * @param {string} [opts.roleLabel]     e.g. "Society Manager", "Resident"
-     * @param {string} [opts.societyName]
-     * @param {string} opts.inviteLink
-     */
     async sendInviteEmail({ to, recipientName, roleLabel, societyName, inviteLink }) {
         if (!looksLikeEmail(to)) {
             return { sent: false, skipped: true };

@@ -1,10 +1,5 @@
 "use strict";
 
-/**
- * Canonical login identifiers.
- * Emails are lowercased. Phones are stored/looked up as digits (last 10 when longer).
- * Staff UI often sends "+91 98765 43210"; login is usually "9876543210".
- */
 function isEmail(value) {
     return typeof value === "string" && value.includes("@");
 }
@@ -27,9 +22,6 @@ function canonicalIdentifier(value) {
     return canonicalPhone(trimmed);
 }
 
-/**
- * All forms that might exist in UserSocietyMapping or User.mobile for this login input.
- */
 function identifierLookupValues(value) {
     if (!value || typeof value !== "string") return [];
     const trimmed = value.trim().toLowerCase();

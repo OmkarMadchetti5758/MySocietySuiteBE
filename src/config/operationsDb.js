@@ -24,7 +24,6 @@ const connectOperationsDB = async () => {
             dbName: env.OPERATIONS_DB_NAME,
         }).asPromise();
 
-        // ── Register all operational collection models ──────────────────────
         // Each model uses the societyId-scoped schemas defined in their module.
         opsConnection.model("User",                  require("../modules/user/user.model"));
         opsConnection.model("Block",                 require("../modules/block/block.model"));
@@ -60,7 +59,9 @@ const connectOperationsDB = async () => {
         opsConnection.model("Notification",          require("../modules/notification/notification.model"));
         opsConnection.model("RolePermissionAudit",   require("../modules/role/rolePermissionAudit.model"));
         opsConnection.model("ManagerAssignment",     require("../modules/managerAssignment/managerAssignment.model"));
-        // ────────────────────────────────────────────────────────────────────
+        const billingModels = require("../modules/billing/billing.model");
+        opsConnection.model("ChargeHead",           billingModels.chargeHeadSchema);
+        opsConnection.model("BillingConfiguration", billingModels.billingConfigurationSchema);
 
         await syncFlatIndexes(opsConnection);
 
@@ -72,12 +73,6 @@ const connectOperationsDB = async () => {
     }
 };
 
-/**
- * Returns the active operations DB connection.
- * Must be called after connectOperationsDB() has resolved.
- *
- * Use this in repositories instead of the old getTenantConnection().
- */
 const getOperationsConnection = () => {
     if (!opsConnection) {
         throw new Error(

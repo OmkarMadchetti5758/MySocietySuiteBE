@@ -4,29 +4,10 @@ const { getMasterConnection }     = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
 const { bustPermissionsVersionCache } = require("../../common/permissionsVersionCache");
 
-/**
- * RoleRepository
- *
- * All DB access for the Roles & Permissions module.
- *
- * GLOBAL fallback pattern:
- *   When a society-specific role doc doesn't exist, we transparently serve the
- *   GLOBAL doc instead. This is the "read-through" that prevents 404s on first
- *   load and avoids eager-cloning GLOBAL docs into every new society.
- *
- * Copy-on-write:
- *   The first time a society admin saves a change, we create the society-specific
- *   override doc. Subsequent saves update that doc. The repo handles this via upsert.
- */
 class RoleRepository {
     _masterDb() { return getMasterConnection(); }
     _opsDb()    { return getOperationsConnection(); }
 
-    // ── Permission Catalog ─────────────────────────────────────────────────────
-
-    /**
-     * Fetch all non-deprecated permission catalog entries, sorted by sortOrder.
-     */
     async getPermissionCatalog() {
         const Permission = this._masterDb().model("Permission");
         return Permission.find({ isDeprecated: { $ne: true } })
@@ -34,17 +15,6 @@ class RoleRepository {
             .lean();
     }
 
-    // ── Roles ──────────────────────────────────────────────────────────────────
-
-    /**
-     * Fetch all society-level roles (excludes super_admin).
-     *
-     * For each roleKey, returns the society-specific doc if it exists,
-     * otherwise falls back to the GLOBAL doc.
-     *
-     * @param {string} societyId - ObjectId string
-     * @returns {Array} merged role docs
-     */
     async getRolesForSociety(societyId) {
         const Role = this._masterDb().model("Role");
 
@@ -74,13 +44,6 @@ class RoleRepository {
         return Array.from(map.values());
     }
 
-    /**
-     * Fetch a single role for a society, falling back to GLOBAL if no override exists.
-     *
-     * @param {string} societyId
-     * @param {string} roleKey
-     * @returns {Object|null} role doc (lean) or null if not found even in GLOBAL
-     */
     async getRoleByKey(societyId, roleKey) {
         const Role = this._masterDb().model("Role");
 
@@ -95,27 +58,11 @@ class RoleRepository {
         return null;
     }
 
-    /**
-     * Fetch the GLOBAL template for a role (used for self-elevation ceiling check).
-     */
     async getGlobalRole(roleKey) {
         const Role = this._masterDb().model("Role");
         return Role.findOne({ societyId: "GLOBAL", roleKey }).lean();
     }
 
-    /**
-     * Apply a partial permissions diff to a role (copy-on-write).
-     *
-     * If no society-specific doc exists, creates one by copying the GLOBAL template
-     * then applying the diff.
-     *
-     * @param {string} societyId
-     * @param {string} roleKey
-     * @param {Object} permDiff - map of { moduleKey: { enabled, access } }
-     * @param {Object} actorId  - userId of the admin making the change
-     * @param {string} actorName
-     * @returns {Object} updated role doc
-     */
     async upsertRolePermissions(societyId, roleKey, permDiff, actorId, actorName) {
         const Role = this._masterDb().model("Role");
 
@@ -177,14 +124,6 @@ class RoleRepository {
         return doc.toObject();
     }
 
-    /**
-     * Delete the society-specific override doc, reverting to GLOBAL.
-     *
-     * @param {string} societyId
-     * @param {string} roleKey
-     * @param {Object} actorId
-     * @param {string} actorName
-     */
     async deleteSocietyOverride(societyId, roleKey, actorId, actorName) {
         const Role = this._masterDb().model("Role");
 

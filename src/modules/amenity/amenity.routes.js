@@ -13,7 +13,6 @@ const router = express.Router({ mergeParams: true });
 router.use(authenticate);
 router.use(injectSocietyId);
 
-// ─── Amenities ────────────────────────────────────────────────────────────────
 
 // Any authenticated user with at least VIEW can list amenities
 router.get(
@@ -50,7 +49,6 @@ router.patch(
     AmenityController.updateAmenity
 );
 
-// ─── Slots ────────────────────────────────────────────────────────────────────
 
 router.get(
     "/:id/slots",

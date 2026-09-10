@@ -2,14 +2,6 @@
 
 const { PAGINATION } = require("../common/constants");
 
-/**
- * Calculate pagination metadata.
- *
- * @param {number} totalDocuments - Total items matching the query.
- * @param {number} page - Current page number.
- * @param {number} limit - Items per page.
- * @returns {Object} Pagination metadata object.
- */
 const buildPaginationMeta = (totalDocuments, page, limit) => {
     const totalPages = Math.ceil(totalDocuments / limit);
 
@@ -24,9 +16,6 @@ const buildPaginationMeta = (totalDocuments, page, limit) => {
     };
 };
 
-/**
- * Extract safely parsed pagination options from request query.
- */
 const getPaginationOptions = (query) => {
     const page = parseInt(query.page, 10) || PAGINATION.DEFAULT_PAGE;
     let limit = parseInt(query.limit, 10) || PAGINATION.DEFAULT_LIMIT;

@@ -8,29 +8,8 @@ const { getOperationsConnection } = require("../../config/operationsDb");
 const { getMasterConnection }     = require("../../config/masterDb");
 const emailService                = require("../../services/email.service");
 
-/**
- * ManagerAssignmentService
- *
- * Business logic for the "Managers" tab in Settings.
- *
- * Key rules enforced here:
- *  - Single-holder: only one active/pending manager per role (v1 default)
- *  - Resident validation: active, not moved-out, not blocked
- *  - Email/phone uniqueness before creating a new user
- *  - Audit console logs (dev) replace email/SMS
- */
 class ManagerAssignmentService {
 
-    // ── Read ───────────────────────────────────────────────────────────────────
-
-    /**
-     * List all department-head roles with their current assignment.
-     * Merges DEPARTMENT_HEAD_ROLES config with actual assignment docs.
-     * Roles with no assignment show an "Unassigned" placeholder.
-     *
-     * @param {string} societyId
-     * @param {{ department?: string, status?: string, search?: string }} filters
-     */
     async listManagers(societyId, filters = {}) {
         // Fetch all assignments (active + pending + inactive + expired)
         const assignments = await ManagerAssignmentRepository.listAssignments(societyId, filters);
@@ -67,15 +46,6 @@ class ManagerAssignmentService {
         return ManagerAssignmentRepository.searchResidents(societyId, query);
     }
 
-    // ── Path A — Assign Existing Resident ─────────────────────────────────────
-
-    /**
-     * Assign an existing resident as a department-head manager.
-     *
-     * @param {string} societyId
-     * @param {{ userId, roleKey, roleName, department, joiningDate }} data
-     * @param {string} adminId  - ID of the Society Admin performing the action
-     */
     async assignExistingResident(societyId, data, adminId) {
         const opsDb = getOperationsConnection();
         const User  = opsDb.model("User");
@@ -147,15 +117,6 @@ class ManagerAssignmentService {
         return { assignment };
     }
 
-    // ── Path B — Invite New Manager ────────────────────────────────────────────
-
-    /**
-     * Invite a brand-new user as a department-head manager.
-     *
-     * @param {string} societyId
-     * @param {{ name, email, phone, roleKey, roleName, department, joiningDate }} data
-     * @param {string} adminId
-     */
     async inviteNewManager(societyId, data, adminId) {
         const opsDb    = getOperationsConnection();
         const masterDb = getMasterConnection();
@@ -286,17 +247,6 @@ class ManagerAssignmentService {
         };
     }
 
-    // ── Deactivate ─────────────────────────────────────────────────────────────
-
-    /**
-     * Deactivate a manager assignment.
-     * Removes the roleKey from UserSocietyMapping so their permissions
-     * reset on next login. Bumps permissionsVersion.
-     *
-     * @param {string} societyId
-     * @param {string} assignmentId
-     * @param {string} adminId
-     */
     async deactivateManager(societyId, assignmentId, adminId) {
         const assignment = await ManagerAssignmentRepository.getById(societyId, assignmentId);
         if (!assignment) {
@@ -330,16 +280,6 @@ class ManagerAssignmentService {
         return { assignment: updated };
     }
 
-    // ── Resend Invite ──────────────────────────────────────────────────────────
-
-    /**
-     * Resend the onboarding invite for a pending/expired manager invite.
-     * Invalidates old token, creates a new 7-day one.
-     *
-     * @param {string} societyId
-     * @param {string} assignmentId
-     * @param {string} adminId
-     */
     async resendManagerInvite(societyId, assignmentId, adminId) {
         const assignment = await ManagerAssignmentRepository.getById(societyId, assignmentId);
         if (!assignment) {

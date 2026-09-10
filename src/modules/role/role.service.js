@@ -3,27 +3,8 @@
 const RoleRepository = require("./role.repository");
 const AppError       = require("../../common/AppError");
 
-/**
- * RoleService
- *
- * Business logic for the RBAC Roles module.
- *
- * Key responsibilities:
- *  - Self-elevation prevention: committee_admin cannot edit its own role
- *  - Hard-block enforcement: modules in hardBlockedFor are silently rejected in patches
- *  - Orphaned-key cleanup: permissions referencing deprecated modules are stripped on read
- *  - Merge catalog metadata into role docs before sending to FE
- *  - Bump permissionsVersion + write audit after every successful write
- */
 class RoleService {
 
-    /**
-     * List all society-level roles with their merged permissions.
-     * Excludes super_admin (platform-level, not society-editable).
-     *
-     * @param {string} societyId
-     * @returns {Array} role objects with catalog-enriched permission maps
-     */
     async listRoles(societyId) {
         const [roles, catalog] = await Promise.all([
             RoleRepository.getRolesForSociety(societyId),
@@ -35,13 +16,6 @@ class RoleService {
         return roles.map(role => this._enrichRole(role, catalogMap, societyId));
     }
 
-    /**
-     * Fetch a single role with full permission map, catalog metadata, and last audit entry.
-     *
-     * @param {string} societyId
-     * @param {string} roleKey
-     * @returns {Object} enriched role
-     */
     async getRole(societyId, roleKey) {
         if (roleKey === "super_admin") {
             throw new AppError("Super Admin role is not society-editable.", 403);
@@ -72,21 +46,6 @@ class RoleService {
         };
     }
 
-    /**
-     * Apply a partial permissions diff to a role.
-     *
-     * Checks performed (in order):
-     *  1. Super Admin role is never editable
-     *  2. committee_admin role is hard-blocked from edits (isEditable: false)
-     *  3. Modules in hardBlockedFor for this roleKey are silently ignored
-     *  4. For committee_admin (if we ever allow it), ceiling check vs GLOBAL
-     *
-     * @param {string} societyId
-     * @param {string} roleKey
-     * @param {Object} permDiff     - { moduleKey: { enabled, access } }
-     * @param {Object} actor        - { id, name } — the Committee Admin making the change
-     * @returns {Object} updated enriched role
-     */
     async patchRole(societyId, roleKey, permDiff, actor) {
         // 1. Super Admin guard
         if (roleKey === "super_admin") {
@@ -153,14 +112,6 @@ class RoleService {
         return this._enrichRole(updated, catalogMap, societyId);
     }
 
-    /**
-     * Reset a role to the GLOBAL template by deleting the society-specific override.
-     *
-     * @param {string} societyId
-     * @param {string} roleKey
-     * @param {Object} actor - { id, name }
-     * @returns {Object} the GLOBAL role doc (now in effect)
-     */
     async resetRole(societyId, roleKey, actor) {
         if (roleKey === "super_admin") {
             throw new AppError("Super Admin role cannot be modified.", 403);
@@ -193,21 +144,6 @@ class RoleService {
         return this.getRole(societyId, roleKey);
     }
 
-    // ── Private helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Merge catalog metadata into a role doc's permissions map.
-     *
-     * For each module in the catalog:
-     *  - Modules in hardBlockedFor for this role are OMITTED entirely (not shown as toggles)
-     *  - Modules not in the role's permissions map default to { enabled: false, access: "none" }
-     *  - Orphaned keys in the role's permissions (not in catalog) are stripped
-     *
-     * @param {Object} role       - raw role doc
-     * @param {Map}    catalogMap - moduleKey → catalog entry
-     * @param {string} societyId
-     * @returns {Object} enriched role
-     */
     _enrichRole(role, catalogMap, societyId) {
         const roleKey      = role.roleKey;
         const rawPerms     = role.permissions || {};

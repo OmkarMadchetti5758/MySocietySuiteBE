@@ -7,13 +7,6 @@ const {
     resolveRoleKey,
 } = require("../common/permissionResolver");
 
-/**
- * Factory middleware for Role-Based Access Control (RBAC).
- *
- * @param {string} moduleName - The module from MODULES (e.g., MODULES.BILLING_ACCOUNTS)
- * @param {number} requiredLevel - The required permission level (e.g., PERMISSION_LEVELS.VIEW)
- * @returns {Function} Express middleware
- */
 const checkPermission = (moduleName, requiredLevel = PERMISSION_LEVELS.VIEW) => {
     return async (req, res, next) => {
         try {
