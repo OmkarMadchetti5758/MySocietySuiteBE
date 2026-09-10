@@ -60,6 +60,9 @@ const connectOperationsDB = async () => {
         opsConnection.model("Notification",          require("../modules/notification/notification.model"));
         opsConnection.model("RolePermissionAudit",   require("../modules/role/rolePermissionAudit.model"));
         opsConnection.model("ManagerAssignment",     require("../modules/managerAssignment/managerAssignment.model"));
+        const billingModels = require("../modules/billing/billing.model");
+        opsConnection.model("ChargeHead",           billingModels.chargeHeadSchema);
+        opsConnection.model("BillingConfiguration", billingModels.billingConfigurationSchema);
         // ────────────────────────────────────────────────────────────────────
 
         await syncFlatIndexes(opsConnection);
