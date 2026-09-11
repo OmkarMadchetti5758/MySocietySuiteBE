@@ -11,22 +11,23 @@ const requireBillingPermission = (permissionKey) => {
                 return next(new AppError("Unauthenticated. Token missing or invalid.", 401));
             }
 
-            const isPermitted = hasBillingPermission(req.user, permissionKey);
+            const keys = Array.isArray(permissionKey) ? permissionKey : [permissionKey];
+            const isPermitted = keys.some(pk => hasBillingPermission(req.user, pk));
 
             if (!isPermitted) {
                 // Log denied attempt for sensitive operations
                 await logBillingAction({
                     req,
-                    action: permissionKey,
-                    resource: permissionKey.split(".")[1] || "BILLING",
+                    action: keys[0],
+                    resource: keys[0].split(".")[1] || "BILLING",
                     status: "DENIED",
-                    details: { reason: "Missing required billing permission" },
+                    details: { reason: `Missing required billing permission: ${keys.join(", ")}` },
                 });
 
-                return next(new AppError(`Access denied. Insufficient permission for ${permissionKey}`, 403));
+                return next(new AppError(`Access denied. Insufficient permission for ${keys.join(", ")}`, 403));
             }
 
-            req.billingPermission = permissionKey;
+            req.billingPermission = keys.find(pk => hasBillingPermission(req.user, pk));
             next();
         } catch (error) {
             next(error);

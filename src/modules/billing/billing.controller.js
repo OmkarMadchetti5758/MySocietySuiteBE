@@ -1,6 +1,7 @@
 "use strict";
 
 const BillingService = require("./billing.service");
+const InvoiceService = require("./invoice.service");
 const { sendSuccess } = require("../../utils/response.utils");
 const { getBillingAuditModel } = require("../../services/billingAudit.service");
 
@@ -97,27 +98,120 @@ class BillingController {
         }
     }
 
+    // ── Invoice Stats ────────────────────────────────────────────────────────
+    static async getInvoiceSummaryStats(req, res, next) {
+        try {
+            const stats = await InvoiceService.getInvoiceSummaryStats(req);
+            return sendSuccess(res, 200, "Invoice summary stats fetched successfully", stats);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── List Invoices (paginated, filtered) ──────────────────────────────────
+    static async getInvoices(req, res, next) {
+        try {
+            const result = await InvoiceService.listInvoices(req);
+            return sendSuccess(res, 200, "Invoices fetched successfully", result);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── Get Single Invoice ───────────────────────────────────────────────────
+    static async getInvoiceById(req, res, next) {
+        try {
+            const invoice = await InvoiceService.getInvoiceById(req, req.params.id);
+            return sendSuccess(res, 200, "Invoice details fetched successfully", invoice);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── Preview Calculation ──────────────────────────────────────────────────
+    static async previewInvoiceCalculation(req, res, next) {
+        try {
+            const preview = await InvoiceService.previewInvoiceCalculation(req, req.body);
+            return sendSuccess(res, 200, "Invoice calculation preview generated", preview);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── Generate Single Invoice ──────────────────────────────────────────────
     static async generateInvoice(req, res, next) {
         try {
-            const invoice = await BillingService.generateInvoice(req, req.body);
+            const invoice = await InvoiceService.generateInvoice(req, req.body);
             return sendSuccess(res, 201, "Invoice generated successfully", invoice);
         } catch (err) {
             next(err);
         }
     }
 
-    static async getInvoices(req, res, next) {
+    // ── Bulk Generate Invoices ───────────────────────────────────────────────
+    static async bulkGenerateInvoices(req, res, next) {
         try {
-            const invoices = await BillingService.getInvoices(req);
-            return sendSuccess(res, 200, "Invoices fetched successfully", invoices);
+            const result = await InvoiceService.bulkGenerateInvoices(req, req.body);
+            return sendSuccess(res, 201, "Bulk invoice generation completed", result);
         } catch (err) {
             next(err);
         }
     }
 
+    // ── Cancel Invoice ───────────────────────────────────────────────────────
+    static async cancelInvoice(req, res, next) {
+        try {
+            const { reason } = req.body;
+            const invoice = await InvoiceService.cancelInvoice(req, req.params.id, reason);
+            return sendSuccess(res, 200, "Invoice cancelled successfully", invoice);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── Record Payment on Invoice ────────────────────────────────────────────
+    static async recordInvoicePayment(req, res, next) {
+        try {
+            const result = await InvoiceService.recordPayment(req, req.params.id, req.body);
+            return sendSuccess(res, 201, "Payment recorded successfully", result);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── Get Payments for Invoice ─────────────────────────────────────────────
+    static async getInvoicePayments(req, res, next) {
+        try {
+            const result = await InvoiceService.getInvoicePayments(req, req.params.id);
+            return sendSuccess(res, 200, "Invoice payments fetched successfully", result);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── One-Time Charges ─────────────────────────────────────────────────────
+    static async addOneTimeCharge(req, res, next) {
+        try {
+            const charge = await InvoiceService.addOneTimeCharge(req, req.body);
+            return sendSuccess(res, 201, "One-time charge added successfully", charge);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async listOneTimeCharges(req, res, next) {
+        try {
+            const result = await InvoiceService.listOneTimeCharges(req);
+            return sendSuccess(res, 200, "One-time charges fetched successfully", result);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ── Resident Own-Invoices ────────────────────────────────────────────────
     static async getMyInvoices(req, res, next) {
         try {
-            const invoices = await BillingService.getMyInvoices(req);
+            const invoices = await InvoiceService.getMyInvoices(req);
             return sendSuccess(res, 200, "Own invoices fetched successfully", invoices);
         } catch (err) {
             next(err);
@@ -126,7 +220,7 @@ class BillingController {
 
     static async getMyInvoiceById(req, res, next) {
         try {
-            const invoice = await BillingService.getMyInvoiceById(req, req.params.id);
+            const invoice = await InvoiceService.getMyInvoiceById(req, req.params.id);
             return sendSuccess(res, 200, "Invoice details fetched successfully", invoice);
         } catch (err) {
             next(err);

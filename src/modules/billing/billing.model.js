@@ -94,29 +94,137 @@ const billingConfigurationSchema = new mongoose.Schema(
 // ── 2. Billing Invoice Schema ──────────────────────────────────────────────
 const billingInvoiceSchema = new mongoose.Schema(
     {
-        societyId:    { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
-        invoiceNumber:{ type: String, required: true },
-        flatId:       { type: mongoose.Schema.Types.ObjectId, ref: "Flat", required: true, index: true },
-        userId:       { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-        billingPeriod:{ type: String, required: true }, // e.g. "2026-09"
-        totalAmount:  { type: Number, required: true, min: 0 },
-        paidAmount:   { type: Number, default: 0 },
-        status:       { type: String, enum: ["unpaid", "partially_paid", "paid", "overdue"], default: "unpaid", index: true },
-        dueDate:      { type: Date, required: true },
-        generatedBy:  { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        societyId:      { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
+        invoiceNumber:  { type: String, required: true },
+        flatId:         { type: mongoose.Schema.Types.ObjectId, ref: "Flat", required: true, index: true },
+
+        // Resident at time of generation (snapshot)
+        userId:         { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+        residentName:   { type: String, default: "" },
+        flatNumber:     { type: String, default: "" },
+        blockName:      { type: String, default: "" },
+
+        // Period & Dates
+        billingPeriod:  { type: String, required: true }, // e.g. "2026-09"
+        invoiceDate:    { type: Date, default: Date.now },
+        dueDate:        { type: Date, required: true },
+
+        // Amounts
+        subTotal:       { type: Number, default: 0, min: 0 },   // sum of base charges
+        totalGst:       { type: Number, default: 0, min: 0 },
+        cgst:           { type: Number, default: 0 },
+        sgst:           { type: Number, default: 0 },
+        arrearsAmount:  { type: Number, default: 0, min: 0 },
+        fineAmount:     { type: Number, default: 0, min: 0 },
+        creditNoteAmount:   { type: Number, default: 0, min: 0 },
+        discountAmount:     { type: Number, default: 0, min: 0 },
+        advanceAdjustment:  { type: Number, default: 0, min: 0 },
+        totalAmount:    { type: Number, required: true, min: 0 },
+        paidAmount:     { type: Number, default: 0 },
+
+        // Lifecycle Status
+        // NEW invoices use uppercase states; legacy data may have lowercase
+        status: {
+            type: String,
+            enum: [
+                "DRAFT", "GENERATED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CANCELLED",
+                // backward-compat legacy values
+                "unpaid", "partially_paid", "paid", "overdue",
+            ],
+            default: "GENERATED",
+            index: true,
+        },
+
+        // Charge line items
         lineItems: [
             {
-                chargeHeadId: { type: mongoose.Schema.Types.ObjectId, ref: "ChargeHead" },
-                chargeHeadName: String,
+                chargeHeadId:    { type: mongoose.Schema.Types.ObjectId, ref: "ChargeHead" },
+                chargeHeadName:  String,
+                chargeHeadCode:  String,
                 calculationType: String,
-                rate: Number,
-                baseAmount: Number,
-                gstApplicable: Boolean,
-                gstRate: Number,
-                gstAmount: Number,
-                totalAmount: Number,
+                rate:            Number,
+                quantity:        Number,   // sq ft for PER_SQ_FT
+                baseAmount:      Number,
+                gstApplicable:   Boolean,
+                gstRate:         Number,
+                gstAmount:       Number,
+                totalAmount:     Number,
             },
         ],
+
+        // Arrears snapshot (line-by-line or single total per config)
+        arrearsBreakdown: [
+            {
+                billingPeriod: String,
+                amount:        Number,
+                invoiceId:     { type: mongoose.Schema.Types.ObjectId, ref: "BillingInvoice" },
+            },
+        ],
+
+        // Generation metadata
+        generatedBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        generatedAt:    { type: Date, default: Date.now },
+        isBulk:         { type: Boolean, default: false },
+        bulkJobId:      { type: String, default: null },
+
+        // Cancellation
+        cancelledBy:        { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        cancelledAt:        { type: Date, default: null },
+        cancellationReason: { type: String, default: null },
+    },
+    { timestamps: true }
+);
+
+// ── Duplicate Prevention: same society + flat + billing period must be unique ──
+billingInvoiceSchema.index(
+    { societyId: 1, flatId: 1, billingPeriod: 1 },
+    { unique: true, partialFilterExpression: { status: { $nin: ["CANCELLED"] } } }
+);
+billingInvoiceSchema.index({ societyId: 1, invoiceNumber: 1 }, { unique: true });
+
+// ── 2B. One-Time Charge Schema ─────────────────────────────────────────────
+const oneTimeChargeSchema = new mongoose.Schema(
+    {
+        societyId:    { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
+        flatId:       { type: mongoose.Schema.Types.ObjectId, ref: "Flat", required: true, index: true },
+        userId:       { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        chargeHeadId: { type: mongoose.Schema.Types.ObjectId, ref: "ChargeHead", default: null },
+        description:  { type: String, required: true, trim: true },
+        amount:       { type: Number, required: true, min: 0 },
+        taxRate:      { type: Number, default: 0 },
+        taxAmount:    { type: Number, default: 0 },
+        totalAmount:  { type: Number, required: true },
+        billingPeriod:{ type: String, required: true },
+        effectiveDate:{ type: Date, default: Date.now },
+        invoiceId:    { type: mongoose.Schema.Types.ObjectId, ref: "BillingInvoice", default: null },
+        status:       { type: String, enum: ["PENDING", "INCLUDED", "CANCELLED"], default: "PENDING", index: true },
+        createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    },
+    { timestamps: true }
+);
+
+// ── 2C. Invoice Payment Schema ─────────────────────────────────────────────
+const invoicePaymentSchema = new mongoose.Schema(
+    {
+        societyId:      { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
+        invoiceId:      { type: mongoose.Schema.Types.ObjectId, ref: "BillingInvoice", required: true, index: true },
+        flatId:         { type: mongoose.Schema.Types.ObjectId, ref: "Flat", required: true, index: true },
+        userId:         { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        amountPaid:     { type: Number, required: true, min: 0.01 },
+        paymentMode:    {
+            type: String,
+            enum: ["CASH", "CHEQUE", "BANK_TRANSFER", "UPI", "ONLINE", "OTHER"],
+            default: "CASH",
+        },
+        paymentAccount: { type: String, default: null },  // e.g. "HDFC - Collection A/c"
+        paymentDate:    { type: Date, default: Date.now },
+        receiptNumber:  { type: String, default: null },
+        referenceNumber:{ type: String, default: null },
+        notes:          { type: String, default: "" },
+        paymentType:    { type: String, enum: ["OFFLINE", "ONLINE"], default: "OFFLINE" },
+        recordedBy:     { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        // For advance excess handling
+        excessAmount:   { type: Number, default: 0 },
     },
     { timestamps: true }
 );
@@ -240,6 +348,8 @@ function getBillingModels(db) {
         ChargeHead:              db.models.ChargeHead || db.model("ChargeHead", chargeHeadSchema),
         BillingConfiguration:    db.models.BillingConfiguration || db.model("BillingConfiguration", billingConfigurationSchema),
         BillingInvoice:          db.models.BillingInvoice || db.model("BillingInvoice", billingInvoiceSchema),
+        OneTimeCharge:           db.models.OneTimeCharge || db.model("OneTimeCharge", oneTimeChargeSchema),
+        InvoicePayment:          db.models.InvoicePayment || db.model("InvoicePayment", invoicePaymentSchema),
         CreditNote:              db.models.CreditNote || db.model("CreditNote", creditNoteSchema),
         Discount:                db.models.Discount || db.model("Discount", discountSchema),
         JournalVoucher:          db.models.JournalVoucher || db.model("JournalVoucher", journalVoucherSchema),
@@ -253,6 +363,8 @@ module.exports = {
     chargeHeadSchema,
     billingConfigurationSchema,
     billingInvoiceSchema,
+    oneTimeChargeSchema,
+    invoicePaymentSchema,
     creditNoteSchema,
     discountSchema,
     journalVoucherSchema,
