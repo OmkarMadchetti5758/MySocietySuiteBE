@@ -41,6 +41,36 @@ async function generateReceiptNumber(societyId, db) {
     return `RCP/${getFinancialYear()}/${String(count + 1).padStart(6, "0")}`;
 }
 
+async function _getWingsMap(db, societyId) {
+    const wingsMap = {};
+    try {
+        const blockSchema = require("../block/block.model");
+        const BlockModel = db.models.Block || db.model("Block", blockSchema);
+        const blockDoc = await BlockModel.findOne({ societyId }).lean();
+        if (blockDoc && Array.isArray(blockDoc.wings)) {
+            for (const w of blockDoc.wings) {
+                wingsMap[String(w._id)] = w.name || w.code || "";
+            }
+        }
+    } catch (_) {}
+    return wingsMap;
+}
+
+async function _getFlatsWingsMap(db, societyId) {
+    const map = {};
+    try {
+        const flatSchema = require("../flat/flat.model");
+        const FlatModel = db.models.Flat || db.model("Flat", flatSchema);
+        const wingsMap = await _getWingsMap(db, societyId);
+        const flats = await FlatModel.find({ societyId }).select("_id flatNumber blockId wing").lean();
+        for (const f of flats) {
+            const wingName = wingsMap[String(f.blockId)] || f.wing || "";
+            map[String(f._id)] = wingName;
+        }
+    } catch (_) {}
+    return map;
+}
+
 async function _calculateCharges(societyId, flatId, billingDate, db) {
     const { ChargeHead, OneTimeCharge } = getBillingModels(db);
 
@@ -53,13 +83,15 @@ async function _calculateCharges(societyId, flatId, billingDate, db) {
     } catch (_) {}
 
     const date = new Date(billingDate);
+    const periodEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+
     const chargeHeads = await ChargeHead.find({
         societyId,
         status: { $in: ["APPROVED", "approved"] },
         isActive: { $ne: false },
         deletedAt: null,
         $or: [
-            { effectiveFrom: { $lte: date } },
+            { effectiveFrom: { $lte: periodEnd } },
             { effectiveFrom: null },
             { effectiveFrom: { $exists: false } }
         ],
@@ -289,10 +321,32 @@ class InvoiceService {
         }
 
         const skip = (Number(page) - 1) * Number(limit);
-        const [invoices, total] = await Promise.all([
-            BillingInvoice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+        const [invoicesRaw, total, flatsWingsMap] = await Promise.all([
+            BillingInvoice.find(filter)
+                .populate("generatedBy", "name firstName lastName email")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .lean(),
             BillingInvoice.countDocuments(filter),
+            _getFlatsWingsMap(req.opsDb, req.user.societyId),
         ]);
+
+        const invoices = invoicesRaw.map(inv => {
+            const resolvedWing = flatsWingsMap[String(inv.flatId)] || inv.blockName || "";
+            let generatedByName = inv.generatedBy;
+            if (inv.generatedBy && typeof inv.generatedBy === "object") {
+                const u = inv.generatedBy;
+                generatedByName = u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email;
+            }
+            return {
+                ...inv,
+                wingName: resolvedWing,
+                blockName: resolvedWing || inv.blockName,
+                generatedByName,
+                generatedBy: generatedByName || inv.generatedBy?._id || inv.generatedBy,
+            };
+        });
 
         return {
             invoices,
@@ -310,9 +364,18 @@ class InvoiceService {
         const invoice = await BillingInvoice.findOne({
             _id: invoiceId,
             societyId: req.user.societyId,
-        }).lean();
+        })
+        .populate("generatedBy", "name firstName lastName email")
+        .lean();
 
         if (!invoice) throw new AppError("Invoice not found.", 404);
+
+        if (invoice.generatedBy && typeof invoice.generatedBy === "object") {
+            const u = invoice.generatedBy;
+            const fullName = u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email;
+            invoice.generatedByName = fullName;
+            invoice.generatedBy = fullName || u._id;
+        }
 
         const isStaff = canAccessBillingResource(req.user, invoice, BILLING_PERMISSIONS.INVOICE_VIEW);
         if (!isStaff) {
@@ -732,13 +795,36 @@ class InvoiceService {
         const filter = { societyId: req.user.societyId };
         if (flatId) filter.flatId = flatId;
         if (billingPeriod) filter.billingPeriod = billingPeriod;
-        if (status) filter.status = status.toUpperCase();
+        if (status && status !== 'ALL') filter.status = status.toUpperCase();
 
         const skip = (Number(page) - 1) * Number(limit);
-        const [charges, total] = await Promise.all([
-            OneTimeCharge.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+        const [chargesRaw, total, flatsWingsMap] = await Promise.all([
+            OneTimeCharge.find(filter)
+                .populate("flatId", "flatNumber blockName wing")
+                .populate("createdBy", "name firstName lastName email")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .lean(),
             OneTimeCharge.countDocuments(filter),
+            _getFlatsWingsMap(req.opsDb, req.user.societyId),
         ]);
+
+        const charges = chargesRaw.map(c => {
+            const flatObj = c.flatId && typeof c.flatId === 'object' ? c.flatId : null;
+            const flatIdStr = flatObj?._id ? String(flatObj._id) : String(c.flatId || '');
+            const flatNumber = flatObj?.flatNumber || (typeof c.flatId === 'string' ? c.flatId : '—');
+            const creatorObj = c.createdBy && typeof c.createdBy === 'object' ? c.createdBy : null;
+            const createdByName = creatorObj ? (creatorObj.name || `${creatorObj.firstName || ''} ${creatorObj.lastName || ''}`.trim() || creatorObj.email) : 'Admin';
+            const resolvedWing = flatsWingsMap[flatIdStr] || flatObj?.wing || flatObj?.blockName || '';
+            return {
+                ...c,
+                flatNumber,
+                wingName: resolvedWing,
+                blockName: resolvedWing,
+                createdByName,
+            };
+        });
 
         return {
             charges,
