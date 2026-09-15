@@ -20,12 +20,22 @@ class ResidentRepository {
             blockDoc = await Block.create({ societyId, wings: [] });
         }
 
+        // Find the correct wing by wingCode so blockId points to wing._id (not block doc _id)
+        let wingId = null;
+        if (wingCode && blockDoc.wings && blockDoc.wings.length > 0) {
+            const matchedWing = blockDoc.wings.find(
+                w => w.code === wingCode || w.name === wingCode
+            );
+            if (matchedWing) wingId = matchedWing._id;
+        }
+
         flat = await Flat.create({
             societyId,
-            blockId: blockDoc._id,
+            blockId: wingId || blockDoc._id,
             flatNumber: displayFlatNumber,
             status: FLAT_STATUS.OCCUPIED,
         });
+
 
         return { flat, created: true };
     }
@@ -69,6 +79,21 @@ class ResidentRepository {
                 residentType,
                 isActive: true,
             });
+
+            // Update flat's ownerName so it shows correctly in the Guard's Walk-in Visitor dropdown
+            const Flat = opsDb.model("Flat");
+            const isOwner = residentType === RESIDENT_TYPE.OWNER;
+            await Flat.findOneAndUpdate(
+                { _id: flat._id },
+                {
+                    $set: {
+                        status: FLAT_STATUS.OCCUPIED,
+                        occupancyStatus: isOwner ? "Owner Occupied" : "Tenant Occupied",
+                        ownerName: isOwner ? data.name : flat.ownerName || data.name,
+                    }
+                }
+            );
+
 
             const mappingEntries = [];
             if (email) {
@@ -114,7 +139,7 @@ class ResidentRepository {
                 });
             } else if (createdFlat && flat?._id) {
                 const opsDb = getOperationsConnection();
-                await opsDb.model("Flat").deleteOne({ _id: flat._id }).catch(() => {});
+                await opsDb.model("Flat").deleteOne({ _id: flat._id }).catch(() => { });
             }
             throw error;
         }
@@ -134,15 +159,15 @@ class ResidentRepository {
         const InviteToken = masterDb.model("InviteToken");
         const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
-        await Resident.deleteOne({ userId, societyId }).catch(() => {});
-        await User.deleteOne({ _id: userId }).catch(() => {});
-        await UserSocietyMapping.deleteMany({ userId, societyId }).catch(() => {});
-        await InviteToken.deleteMany({ adminId: userId, purpose: "resident" }).catch(() => {});
+        await Resident.deleteOne({ userId, societyId }).catch(() => { });
+        await User.deleteOne({ _id: userId }).catch(() => { });
+        await UserSocietyMapping.deleteMany({ userId, societyId }).catch(() => { });
+        await InviteToken.deleteMany({ adminId: userId, purpose: "resident" }).catch(() => { });
 
         if (createdFlat && flatId) {
             const remaining = await Resident.countDocuments({ flatId }).catch(() => 1);
             if (remaining === 0) {
-                await Flat.deleteOne({ _id: flatId }).catch(() => {});
+                await Flat.deleteOne({ _id: flatId }).catch(() => { });
             }
         }
     }

@@ -2,6 +2,7 @@
 
 const VisitorService = require("./visitor.service");
 const { sendSuccess, sendError } = require("../../utils/response.utils");
+const { ROLES } = require("../../common/constants");
 
 class VisitorController {
     /**
@@ -65,9 +66,18 @@ class VisitorController {
      */
     async getVisitorHistory(req, res, next) {
         try {
+            const filters = { ...req.query };
+
+            // The checkPermission middleware has set req.permission.scope.
+            // If the scope is "own" (resident), force flatId to their own flatId
+            // and do not allow it to be overridden through the client's query.
+            if (req.permission && req.permission.scope === "own") {
+                filters.flatId = req.user.flatId;
+            }
+
             const data = await VisitorService.getVisitorHistory(
                 req.user.societyId,
-                req.query
+                filters
             );
             return sendSuccess(res, 200, "Visitor history fetched", data);
         } catch (error) {
@@ -153,8 +163,8 @@ class VisitorController {
                 return sendError(res, 400, "qrCode is required");
             }
             const data = await VisitorService.validateQrPass(
-                qrCode, 
-                gateId, 
+                qrCode,
+                gateId,
                 req.user.societyId,
                 req.user.id
             );

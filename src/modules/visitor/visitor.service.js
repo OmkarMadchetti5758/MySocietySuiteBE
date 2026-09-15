@@ -66,7 +66,7 @@ class VisitorService {
 
         entry.status = status; // approved or rejected
         entry.approvedBy = residentId;
-        
+
         if (status === VISITOR_STATUS.APPROVED) {
             entry.status = VISITOR_STATUS.CHECKED_IN; // Fast track check-in
         }
@@ -146,7 +146,7 @@ class VisitorService {
         const opsDb = getOperationsConnection();
         const QRDigitalPass = opsDb.model("QRDigitalPass");
         const VisitorEntry = opsDb.model("VisitorEntry");
-        
+
         const qrPass = await QRDigitalPass.findOne({ passCode: qrCode, societyId }).populate("flatId");
         if (!qrPass) {
             const err = new AppError("Invalid QR Code: Pass not found in system", 404);
@@ -235,14 +235,19 @@ class VisitorService {
         const VisitorEntry = opsDb.model("VisitorEntry");
 
         const query = { societyId, status: VISITOR_STATUS.PENDING };
+        console.log('getPendingVisitors query --> ', query);
+
         if (flatId) {
             query.flatId = flatId;
         }
 
+        console.log('Flat Id -->', flatId);
+
         const entries = await VisitorEntry.find(query)
+            // .populate("flatId")
             .sort({ createdAt: -1 })
             .lean();
-
+        console.log("Entries in society status pending --->", entries)
         return entries;
     }
 
@@ -259,7 +264,7 @@ class VisitorService {
             .sort({ createdAt: -1 })
             .limit(100)
             .lean();
-
+ 
         return entries;
     }
 
