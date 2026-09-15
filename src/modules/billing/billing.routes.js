@@ -71,18 +71,88 @@ router.patch(
 );
 
 // ── 2. Invoices ────────────────────────────────────────────────────────────
+
+// Invoice summary statistics (dashboard cards)
+router.get(
+    "/invoices/stats",
+    requireBillingPermission([BILLING_PERMISSIONS.INVOICE_VIEW, BILLING_PERMISSIONS.OWN_INVOICE_VIEW]),
+    BillingController.getInvoiceSummaryStats
+);
+
+// List all invoices (paginated, filtered, searched)
 router.get(
     "/invoices",
     requireBillingPermission(BILLING_PERMISSIONS.INVOICE_VIEW),
     BillingController.getInvoices
 );
+
+// Preview invoice calculation (no DB write)
+router.post(
+    "/invoices/preview",
+    requireBillingPermission(BILLING_PERMISSIONS.INVOICE_GENERATE),
+    BillingController.previewInvoiceCalculation
+);
+
+// Bulk generate invoices
+router.post(
+    "/invoices/bulk-generate",
+    requireBillingPermission(BILLING_PERMISSIONS.INVOICE_GENERATE),
+    BillingController.bulkGenerateInvoices
+);
+
+// Generate single invoice
 router.post(
     "/invoices/generate",
     requireBillingPermission(BILLING_PERMISSIONS.INVOICE_GENERATE),
     BillingController.generateInvoice
 );
 
+// Get single invoice by ID
+router.get(
+    "/invoices/:id",
+    requireBillingPermission(BILLING_PERMISSIONS.INVOICE_VIEW),
+    BillingController.getInvoiceById
+);
+
+// Cancel invoice
+router.post(
+    "/invoices/:id/cancel",
+    requireBillingPermission(BILLING_PERMISSIONS.INVOICE_UPDATE),
+    BillingController.cancelInvoice
+);
+
+// Record payment on invoice
+router.post(
+    "/invoices/:id/payments",
+    requireBillingPermission(BILLING_PERMISSIONS.PAYMENT_OFFLINE_CREATE),
+    BillingController.recordInvoicePayment
+);
+
+// Get payment history for invoice
+router.get(
+    "/invoices/:id/payments",
+    requireBillingPermission(BILLING_PERMISSIONS.PAYMENT_VIEW),
+    BillingController.getInvoicePayments
+);
+
+// ── 2B. One-Time Charges ───────────────────────────────────────────────────
+router.post(
+    "/one-time-charges",
+    requireBillingPermission(BILLING_PERMISSIONS.INVOICE_GENERATE),
+    BillingController.addOneTimeCharge
+);
+router.get(
+    "/one-time-charges",
+    requireBillingPermission(BILLING_PERMISSIONS.INVOICE_VIEW),
+    BillingController.listOneTimeCharges
+);
+
 // Resident Own-Invoices Scope (IDOR Protected)
+router.get(
+    "/my/invoices/stats",
+    requireBillingPermission(BILLING_PERMISSIONS.OWN_INVOICE_VIEW),
+    BillingController.getInvoiceSummaryStats
+);
 router.get(
     "/my/invoices",
     requireBillingPermission(BILLING_PERMISSIONS.OWN_INVOICE_VIEW),

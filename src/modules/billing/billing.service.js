@@ -423,13 +423,14 @@ class BillingService {
     static async getApplicableChargeHeads(societyId, flatId, residentType, blockId, billingDate = new Date()) {
         const { ChargeHead } = getBillingModels();
         const date = new Date(billingDate);
+        const periodEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 
         const chargeHeads = await ChargeHead.find({
             societyId,
             status: "APPROVED",
             isActive: true,
             deletedAt: null,
-            effectiveFrom: { $lte: date },
+            effectiveFrom: { $lte: periodEnd },
             $or: [{ effectiveTo: null }, { effectiveTo: { $gte: date } }],
         }).lean();
 
