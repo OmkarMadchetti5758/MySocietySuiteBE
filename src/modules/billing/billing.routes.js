@@ -5,6 +5,7 @@ const authenticate = require("../../middleware/authenticate");
 const { requireBillingPermission } = require("../../middleware/billingAuthorize.middleware");
 const { BILLING_PERMISSIONS } = require("../../common/billingPermissions");
 const BillingController = require("./billing.controller");
+const DunningController = require("./dunning.controller");
 
 const router = express.Router();
 
@@ -252,6 +253,78 @@ router.get(
     "/audit-logs",
     requireBillingPermission(BILLING_PERMISSIONS.AUDIT_LOG_VIEW),
     BillingController.getAuditLogs
+);
+
+// ── 7. Fines, Interest & Arrears (Dunning) ────────────────────────────────
+router.get(
+    "/dunning/overview",
+    requireBillingPermission([BILLING_PERMISSIONS.DUNNING_VIEW, BILLING_PERMISSIONS.OWN_INVOICE_VIEW]),
+    DunningController.getOverviewStats
+);
+router.get(
+    "/dunning/rules",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_VIEW),
+    DunningController.getRules
+);
+router.post(
+    "/dunning/rules",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_RULE_CREATE),
+    DunningController.createRule
+);
+router.post(
+    "/dunning/rules/:id/approve",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_RULE_APPROVE),
+    DunningController.approveRule
+);
+router.post(
+    "/dunning/rules/:id/reject",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_RULE_APPROVE),
+    DunningController.rejectRule
+);
+router.get(
+    "/dunning/arrears",
+    requireBillingPermission([BILLING_PERMISSIONS.DUNNING_VIEW, BILLING_PERMISSIONS.OWN_INVOICE_VIEW]),
+    DunningController.getArrears
+);
+router.get(
+    "/dunning/ageing",
+    requireBillingPermission([BILLING_PERMISSIONS.DUNNING_VIEW, BILLING_PERMISSIONS.OWN_INVOICE_VIEW]),
+    DunningController.getAgeing
+);
+router.get(
+    "/dunning/defaulters",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_VIEW),
+    DunningController.getDefaulters
+);
+router.get(
+    "/dunning/reminders",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_VIEW),
+    DunningController.getReminders
+);
+router.post(
+    "/dunning/reminders/config",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_RULE_CREATE),
+    DunningController.updateDunningConfig
+);
+router.post(
+    "/dunning/reminders/send",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_REMINDER_SEND),
+    DunningController.sendReminder
+);
+router.get(
+    "/dunning/waivers",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_VIEW),
+    DunningController.getWaivers
+);
+router.post(
+    "/dunning/waivers",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_WAIVER_CREATE),
+    DunningController.waiveFine
+);
+router.post(
+    "/dunning/run",
+    requireBillingPermission(BILLING_PERMISSIONS.DUNNING_RULE_CREATE),
+    DunningController.runDunningProcess
 );
 
 module.exports = router;

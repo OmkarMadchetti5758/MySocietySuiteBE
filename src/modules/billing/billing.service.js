@@ -139,7 +139,7 @@ class BillingService {
 
     static async updateChargeHead(req, chargeHeadId, data) {
         const { ChargeHead } = getBillingModels(req.opsDb);
-        
+
         const existing = await ChargeHead.findOne({
             _id: chargeHeadId,
             societyId: req.user.societyId,
@@ -149,15 +149,12 @@ class BillingService {
         if (!existing) {
             throw new AppError("Charge head not found.", 404);
         }
-
-        // If existing charge head is already APPROVED or ACTIVE, per BRD section 18,
-        // do not mutate historical active configuration. Create a new candidate version in PENDING_APPROVAL.
         if (existing.status === "APPROVED" || existing.status === "active") {
             const newVersionNumber = (existing.version || 1) + 1;
             const updatedName = (data.name || existing.name).trim();
             const updatedCategory = (data.category || existing.category).toUpperCase();
             const updatedCalcType = (data.calculationType || existing.calculationType).toUpperCase();
-            
+
             let parsedDefaultAmount = data.defaultAmount !== undefined ? Number(data.defaultAmount) : existing.defaultAmount;
             let parsedRatePerSqFt = data.ratePerSqFt !== undefined ? Number(data.ratePerSqFt) : existing.ratePerSqFt;
 
@@ -318,7 +315,7 @@ class BillingService {
         chargeHead.approvedBy = req.user.id;
         chargeHead.approvedAt = new Date();
         chargeHead.effectiveFrom = req.body?.effectiveFrom ? new Date(req.body.effectiveFrom) : new Date();
-        
+
         // If this version has a parent charge head, deactivate/archive old parent version
         if (chargeHead.parentChargeHeadId) {
             await ChargeHead.updateOne(
@@ -848,7 +845,7 @@ class BillingService {
             entries,
             totalAmount,
             narration,
-            status: "pending_approval", // BRD specifies Committee Admin approval required
+            status: "pending_approval", 
             createdBy: req.user.id,
         });
 

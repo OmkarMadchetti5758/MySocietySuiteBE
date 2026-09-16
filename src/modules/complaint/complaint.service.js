@@ -647,22 +647,6 @@ class ComplaintService {
 
         return complaint;
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── Resident: Reopen ──────────────────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Resident reopens a RESOLVED complaint (unsatisfied with resolution).
-     * Per BRD: reopening is allowed from RESOLVED state (before CLOSED).
-     * Remarks are required.
-     *
-     * SLA: A new SLA cycle starts for the reopened complaint.
-     *
-     * Security:
-     *  - Only the complaint owner can reopen
-     *  - societyId always in filter
-     */
     async reopenComplaint({ societyId, complaintId, userId, role, reopeningRemarks }) {
         const opsDb = getOperationsConnection();
 
@@ -699,7 +683,6 @@ class ComplaintService {
                     throw new AppError("Complaint is still in progress. It cannot be reopened.", 400, "REOPEN_NOT_ALLOWED");
                 }
                 if (current.status === COMPLAINT_STATUS.CLOSED) {
-                    // Per BRD: reopening from CLOSED is not defined. RESOLVED → OPEN is the allowed path.
                     throw new AppError(
                         "Closed complaints cannot be reopened. Please raise a new complaint.",
                         400,
@@ -782,14 +765,6 @@ class ComplaintService {
             .lean();
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── Reporting / Summary ───────────────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Returns complaint summary metrics for a society.
-     * Supports the BRD Complaint Summary Report.
-     */
     async getComplaintSummary(societyId) {
         const opsDb = getOperationsConnection();
         const Complaint = opsDb.model("Complaint");
