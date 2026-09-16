@@ -12,11 +12,12 @@ class FlatController {
             const operationsDb = getOperationsConnection();
             const Flat = operationsDb.model("Flat");
             const Resident = operationsDb.model("Resident");
+            const Block = operationsDb.model("Block");
 
             const filter = { societyId: req.user.societyId };
             if (blockId) filter.blockId = blockId;
 
-            let flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 });
+            let flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 }).lean();
 
             const activeResidents = await Resident.find({
                 societyId: req.user.societyId,
@@ -40,13 +41,10 @@ class FlatController {
                         ResidentRepository.syncFlatOccupancy(req.user.societyId, flat._id)
                     )
                 );
-                flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 });
+                flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 }).lean();
             }
 
-            const [flats, blockDoc] = await Promise.all([
-                Flat.find(filter).sort({ floor: 1, flatNumber: 1 }).lean(),
-                Block.findOne({ societyId: req.user.societyId }).lean(),
-            ]);
+            const blockDoc = await Block.findOne({ societyId: req.user.societyId }).lean();
 
             const wingMap = new Map();
             if (blockDoc?.wings) {
@@ -55,7 +53,7 @@ class FlatController {
                 }
             }
 
-            const populatedFlats = flats.map(flat => ({
+            const populatedFlats = flats.map((flat) => ({
                 ...flat,
                 blockId: wingMap.get(String(flat.blockId)) || flat.blockId,
             }));

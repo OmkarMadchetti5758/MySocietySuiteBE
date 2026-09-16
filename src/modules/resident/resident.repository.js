@@ -84,36 +84,36 @@ class ResidentRepository {
             throw new AppError(RESIDENT_ERRORS.FLAT_REQUIRED, 400);
         }
 
-        let wingId = blockId;
-        if (!wingId && wingCode) {
-            const blockDoc = await Block.findOne({ societyId }).lean();
-            const wing = blockDoc?.wings?.find((w) => w.code === wingCode);
-            wingId = wing?._id;
+        const blockDoc = await Block.findOne({ societyId }).lean();
+        let targetBlockId = blockId;
+
+        if (!targetBlockId && wingCode && blockDoc?.wings?.length) {
+            const matchedWing = blockDoc.wings.find(
+                (wing) => wing.code === wingCode || wing.name === wingCode
+            );
+            targetBlockId = matchedWing?._id || null;
         }
 
-        if (!wingId) {
+        if (!targetBlockId) {
             throw new AppError(RESIDENT_ERRORS.WING_REQUIRED, 400);
         }
 
-        // Find the correct wing by wingCode so blockId points to wing._id (not block doc _id)
-        let wingId = null;
-        if (wingCode && blockDoc.wings && blockDoc.wings.length > 0) {
-            const matchedWing = blockDoc.wings.find(
-                w => w.code === wingCode || w.name === wingCode
-            );
-            if (matchedWing) wingId = matchedWing._id;
+        const existingFlat = await Flat.findOne({
+            societyId,
+            blockId: targetBlockId,
+            flatNumber: trimmedFlatNumber,
+        }).lean();
+
+        if (existingFlat) {
+            return { flat: existingFlat, created: false };
         }
 
-        flat = await Flat.create({
+        const flat = await Flat.create({
             societyId,
-            blockId: wingId || blockDoc._id,
-            flatNumber: displayFlatNumber,
+            blockId: targetBlockId,
+            flatNumber: trimmedFlatNumber,
             status: FLAT_STATUS.OCCUPIED,
         });
-        if (!flat) {
-            throw new AppError(RESIDENT_ERRORS.FLAT_NOT_FOUND, 404);
-        }
-
 
         return { flat, created: true };
     }
@@ -125,6 +125,7 @@ class ResidentRepository {
         const User = opsDb.model("User");
         const Resident = opsDb.model("Resident");
         const InviteToken = masterDb.model("InviteToken");
+        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
         const role = data.role || ROLES.RESIDENT_OWNER;
         const residentType = data.residentType || RESIDENT_TYPE.OWNER;
