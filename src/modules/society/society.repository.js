@@ -50,7 +50,7 @@ class SocietyRepository {
 
     async updateSociety(societyId, updateData) {
         const Society = await this._getSocietyModel();
-        return Society.findByIdAndUpdate(societyId, updateData, { new: true, runValidators: true }).lean();
+        return Society.findByIdAndUpdate(societyId, updateData, { returnDocument: "after", runValidators: true }).lean();
     }
 }
 

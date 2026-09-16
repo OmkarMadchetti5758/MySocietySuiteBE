@@ -52,7 +52,7 @@ async function _getWingsMap(db, societyId) {
                 wingsMap[String(w._id)] = w.name || w.code || "";
             }
         }
-    } catch (_) {}
+    } catch (_) { }
     return wingsMap;
 }
 
@@ -67,7 +67,7 @@ async function _getFlatsWingsMap(db, societyId) {
             const wingName = wingsMap[String(f.blockId)] || f.wing || "";
             map[String(f._id)] = wingName;
         }
-    } catch (_) {}
+    } catch (_) { }
     return map;
 }
 
@@ -80,7 +80,7 @@ async function _calculateCharges(societyId, flatId, billingDate, db) {
         const FlatModel = db.models.Flat || db.model("Flat", flatSchema);
         const flat = await FlatModel.findById(flatId).lean();
         flatArea = flat?.area || 0;
-    } catch (_) {}
+    } catch (_) { }
 
     const date = new Date(billingDate);
     const periodEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -365,8 +365,8 @@ class InvoiceService {
             _id: invoiceId,
             societyId: req.user.societyId,
         })
-        .populate("generatedBy", "name firstName lastName email")
-        .lean();
+            .populate("generatedBy", "name firstName lastName email")
+            .lean();
 
         if (!invoice) throw new AppError("Invoice not found.", 404);
 

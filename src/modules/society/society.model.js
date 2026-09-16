@@ -74,6 +74,7 @@ const societySchema = new mongoose.Schema(
 
 // At least one contact method must be present
 societySchema.pre("validate", async function () {
+    if (typeof this.getUpdate === "function") return;
     if (!this.contactEmail && !this.contactPhone) {
         throw new Error("At least one of contactEmail or contactPhone is required.");
     }

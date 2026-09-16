@@ -5,7 +5,6 @@ const { getOperationsConnection } = require("../../config/operationsDb");
 const AppError = require("../../common/AppError");
 const { BOOKING_STATUS, ROLES } = require("../../common/constants");
 
-// In-memory idempotency store (per BRD §40; use Redis in production for multi-instance)
 const idempotencyStore = new Map();
 
 class AmenityBookingService {

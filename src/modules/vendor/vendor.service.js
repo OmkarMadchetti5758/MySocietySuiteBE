@@ -8,19 +8,13 @@ const emailService = require("../../services/email.service");
 
 // Valid status transitions for vendor task updates
 const ALLOWED_VENDOR_TRANSITIONS = {
-    [COMPLAINT_STATUS.OPEN]:        [COMPLAINT_STATUS.IN_PROGRESS],
+    [COMPLAINT_STATUS.OPEN]: [COMPLAINT_STATUS.IN_PROGRESS],
     [COMPLAINT_STATUS.IN_PROGRESS]: [COMPLAINT_STATUS.RESOLVED],
     // Vendors cannot reopen resolved/closed/rejected tasks
 };
 
 class VendorService {
 
-    // ── Vendor Identity ───────────────────────────────────────────────────────
-
-    /**
-     * Resolve the Vendor._id linked to an authenticated User.
-     * Called in vendor-portal routes to avoid trusting the client for vendorId.
-     */
     async getVendorIdForUser(societyId, userId) {
         const opsDb = getOperationsConnection();
         const Vendor = opsDb.model("Vendor");
@@ -61,7 +55,7 @@ class VendorService {
         // Validate contract dates
         if (vendorData.contractStartDate && vendorData.contractEndDate) {
             const start = new Date(vendorData.contractStartDate);
-            const end   = new Date(vendorData.contractEndDate);
+            const end = new Date(vendorData.contractEndDate);
             if (isNaN(start.getTime()) || isNaN(end.getTime())) {
                 throw new AppError("Invalid contract date format.", 400, "INVALID_VENDOR_DATA");
             }
@@ -88,7 +82,7 @@ class VendorService {
         // Society-scoped uniqueness: same name + serviceCategory within a society
         const duplicate = await Vendor.findOne({
             societyId,
-            name:            { $regex: new RegExp(`^${name}$`, "i") },
+            name: { $regex: new RegExp(`^${name}$`, "i") },
             serviceCategory: vendorData.serviceCategory,
         }).lean();
         if (duplicate) {
@@ -107,7 +101,7 @@ class VendorService {
                     name,
                     email,
                     mobile: phone,
-                    role:   "vendor",
+                    role: "vendor",
                     status: "invited",
                 }], { session });
 
@@ -142,12 +136,12 @@ class VendorService {
                     ...vendorData,
                     name,
                     societyId,
-                    status:    "INVITED",
-                    userId:    newUserId,
+                    status: "INVITED",
+                    userId: newUserId,
                     createdBy: userId,
                     updatedBy: userId,
                 }], { session });
-                
+
                 newVendor = vendorDocs[0];
             });
         } finally {
@@ -155,7 +149,7 @@ class VendorService {
         }
 
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-        const inviteLink  = `${frontendUrl}/activate-account?token=${plainToken}`;
+        const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
         await emailService.sendInviteEmail({
             to: email,
@@ -215,10 +209,10 @@ class VendorService {
 
         // Validate contract dates
         const start = safeData.contractStartDate ? new Date(safeData.contractStartDate) : undefined;
-        const end   = safeData.contractEndDate   ? new Date(safeData.contractEndDate)   : undefined;
+        const end = safeData.contractEndDate ? new Date(safeData.contractEndDate) : undefined;
 
         if (start && isNaN(start.getTime())) throw new AppError("Invalid contractStartDate.", 400);
-        if (end   && isNaN(end.getTime()))   throw new AppError("Invalid contractEndDate.", 400);
+        if (end && isNaN(end.getTime())) throw new AppError("Invalid contractEndDate.", 400);
         if (start && end && end < start) {
             throw new AppError("contractEndDate cannot be before contractStartDate.", 400, "INVALID_VENDOR_DATA");
         }
@@ -405,10 +399,6 @@ class VendorService {
         return task;
     }
 
-    /**
-     * Vendor update — restricted to permitted fields only.
-     * Re-validates ownership at write time to handle race conditions (BRD §19).
-     */
     async updateVendorTask(societyId, vendorId, taskId, updateData) {
         const opsDb = getOperationsConnection();
         const Complaint = opsDb.model("Complaint");
@@ -420,7 +410,6 @@ class VendorService {
             assignedVendorId: vendorId,
         });
 
-        // Ownership check at update time (BRD §19 — handles reassignment race)
         if (!current) {
             throw new AppError(
                 "This task is no longer assigned to you.",
@@ -459,14 +448,11 @@ class VendorService {
             allowedUpdates.remarks = updateData.remarks;
         }
 
-        // Silently ignore any attempt to modify protected fields
-        // (societyId, residentId, assignedVendorId, flatId, category, createdBy)
-
         const updated = await Complaint.findOneAndUpdate(
             {
                 _id: taskId,
                 societyId,
-                assignedVendorId: vendorId, // Re-check ownership atomically at write time
+                assignedVendorId: vendorId,
             },
             { $set: allowedUpdates },
             { new: true, runValidators: true }
@@ -493,7 +479,7 @@ class VendorService {
         return VendorAssignmentHistory.find({ societyId, vendorId })
             .sort({ assignedAt: -1 })
             .populate("taskId", "title status category priority createdAt resolvedAt")
-            .populate("assignedBy",   "firstName lastName email")
+            .populate("assignedBy", "firstName lastName email")
             .populate("unassignedBy", "firstName lastName email")
             .lean();
     }

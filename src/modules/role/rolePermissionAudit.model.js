@@ -2,15 +2,6 @@
 
 const mongoose = require("mongoose");
 
-/**
- * Role Permission Audit — Operations DB
- *
- * Immutable audit trail for every permission change on a role.
- * Required by BRD §10 Auditability.
- *
- * Every PATCH to /societies/:societyId/roles/:roleKey writes one doc here.
- * Docs are never updated or deleted — append-only.
- */
 const rolePermissionAuditSchema = new mongoose.Schema(
     {
         societyId: {
