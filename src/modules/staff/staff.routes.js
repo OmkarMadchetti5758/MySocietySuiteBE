@@ -21,4 +21,8 @@ router.get(
     getShiftAndGateView
 );
 
+router.route("/:id")
+    .put(checkPermission(MODULES.STAFF_MANAGEMENT, PERMISSION_LEVELS.FULL), require("./staff.controller").updateStaff)
+    .delete(checkPermission(MODULES.STAFF_MANAGEMENT, PERMISSION_LEVELS.FULL), require("./staff.controller").deleteStaff);
+
 module.exports = router;

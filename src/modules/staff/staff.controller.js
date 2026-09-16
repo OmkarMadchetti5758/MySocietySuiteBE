@@ -189,3 +189,69 @@ exports.getShiftAndGateView = async (req, res, next) => {
         next(error);
     }
 };
+
+exports.updateStaff = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { name, designation, shiftTiming, gateOrArea, address } = req.body;
+
+        if (!name || !designation || !shiftTiming) {
+            return next(new AppError("Name, designation, and shiftTiming are required", 400));
+        }
+
+        const opsDb = getOperationsConnection();
+        const Staff = opsDb.model("Staff");
+        const User = opsDb.model("User");
+
+        const staff = await Staff.findOne({ _id: id, societyId: req.societyId });
+        if (!staff) {
+            return next(new AppError("Staff member not found", 404));
+        }
+
+        staff.name = name;
+        staff.role = designation;
+        staff.shift = shiftTiming;
+        if (gateOrArea !== undefined) staff.gateOrArea = gateOrArea;
+        if (address !== undefined) staff.address = address;
+
+        await staff.save();
+
+        if (staff.userId) {
+            await User.updateOne({ _id: staff.userId, societyId: req.societyId }, { name });
+        }
+
+        return sendSuccess(res, 200, "Staff updated successfully", staff);
+    } catch (error) {
+        next(error);
+    }
+};
+
+exports.deleteStaff = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+
+        const masterDb = getMasterConnection();
+        const opsDb = getOperationsConnection();
+
+        const Staff = opsDb.model("Staff");
+        const User = opsDb.model("User");
+        const Mapping = masterDb.model("UserSocietyMapping");
+
+        const staff = await Staff.findOne({ _id: id, societyId: req.societyId });
+        if (!staff) {
+            return next(new AppError("Staff member not found", 404));
+        }
+
+        if (staff.userId) {
+            await Mapping.deleteMany({ userId: staff.userId, societyId: req.societyId });
+            await User.deleteOne({ _id: staff.userId, societyId: req.societyId });
+        }
+
+        await Staff.deleteOne({ _id: id, societyId: req.societyId });
+
+        return sendSuccess(res, 200, "Staff member deleted successfully");
+    } catch (error) {
+        next(error);
+    }
+};
+
