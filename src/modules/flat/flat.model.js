@@ -84,6 +84,6 @@ const flatSchema = new mongoose.Schema(
 );
 
 flatSchema.index({ societyId: 1, blockId: 1 });
-flatSchema.index({ societyId: 1, flatNumber: 1 }, { unique: true });
+flatSchema.index({ societyId: 1, blockId: 1, flatNumber: 1 }, { unique: true });
 
 module.exports = flatSchema;

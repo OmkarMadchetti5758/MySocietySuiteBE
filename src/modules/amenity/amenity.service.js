@@ -9,7 +9,6 @@ class AmenityService {
     get AmenitySlot() { return getOperationsConnection().model("AmenitySlot"); }
     get AmenityBooking() { return getOperationsConnection().model("AmenityBooking"); }
 
-    // ─── Amenity CRUD ────────────────────────────────────────────────────────────
 
     async createAmenity(societyId, userId, data) {
         const name = (data.name || "").trim();
@@ -68,7 +67,6 @@ class AmenityService {
         return amenity;
     }
 
-    // ─── Slot CRUD ───────────────────────────────────────────────────────────────
 
     async createAmenitySlot(societyId, amenityId, userId, data) {
         // Verify amenity belongs to society

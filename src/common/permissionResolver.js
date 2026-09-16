@@ -10,20 +10,19 @@ const {
     ROLES,
 } = require("./constants");
 
-/** Maps DB catalog moduleKey → runtime MODULES constant */
 const MODULE_KEY_TO_MODULE = Object.freeze({
-    societyFlatSetup:             MODULES.SOCIETY_FLAT_SETUP,
-    billingAccounts:              MODULES.BILLING_ACCOUNTS,
-    visitorManagement:            MODULES.VISITOR_MANAGEMENT,
-    complaintsHelpdesk:           MODULES.COMPLAINTS_HELPDESK,
-    noticeBoardPolls:             MODULES.NOTICE_BOARD_POLLS,
-    amenityBooking:               MODULES.AMENITY_BOOKING,
-    parkingManagement:            MODULES.PARKING_MANAGEMENT,
-    vendorManagement:             MODULES.VENDOR_MANAGEMENT,
-    staffManagement:              MODULES.STAFF_MANAGEMENT,
-    documentsManager:             MODULES.DOCUMENTS_MANAGER,
-    reportsDashboard:             MODULES.REPORTS_DASHBOARD,
-    aiAssistant:                  MODULES.AI_ASSISTANT,
+    societyFlatSetup: MODULES.SOCIETY_FLAT_SETUP,
+    billingAccounts: MODULES.BILLING_ACCOUNTS,
+    visitorManagement: MODULES.VISITOR_MANAGEMENT,
+    complaintsHelpdesk: MODULES.COMPLAINTS_HELPDESK,
+    noticeBoardPolls: MODULES.NOTICE_BOARD_POLLS,
+    amenityBooking: MODULES.AMENITY_BOOKING,
+    parkingManagement: MODULES.PARKING_MANAGEMENT,
+    vendorManagement: MODULES.VENDOR_MANAGEMENT,
+    staffManagement: MODULES.STAFF_MANAGEMENT,
+    documentsManager: MODULES.DOCUMENTS_MANAGER,
+    reportsDashboard: MODULES.REPORTS_DASHBOARD,
+    aiAssistant: MODULES.AI_ASSISTANT,
     festivalCollectionManagement: MODULES.FESTIVAL_COLLECTION,
 });
 
@@ -32,43 +31,43 @@ const MODULE_KEY_TO_MODULE = Object.freeze({
  * User documents store `admin`; GLOBAL role templates use the same key after seed alignment.
  */
 const USER_ROLE_TO_ROLE_KEY = Object.freeze({
-    [ROLES.ADMIN]:            "admin",
-    committee_admin:          "admin",
+    [ROLES.ADMIN]: "admin",
+    committee_admin: "admin",
     [ROLES.COMMITTEE_MEMBER]: "admin",
 });
 
 /** Higher rank = broader data visibility when permission levels tie */
 const SCOPE_RANK = Object.freeze({
-    [PERMISSION_SCOPE.PLATFORM]:   7,
-    [PERMISSION_SCOPE.ALL]:        6,
-    [PERMISSION_SCOPE.SOCIETY]:    5,
-    [PERMISSION_SCOPE.FINANCIAL]:  4,
-    [PERMISSION_SCOPE.FACILITY]:   4,
-    [PERMISSION_SCOPE.OWN]:        3,
+    [PERMISSION_SCOPE.PLATFORM]: 7,
+    [PERMISSION_SCOPE.ALL]: 6,
+    [PERMISSION_SCOPE.SOCIETY]: 5,
+    [PERMISSION_SCOPE.FINANCIAL]: 4,
+    [PERMISSION_SCOPE.FACILITY]: 4,
+    [PERMISSION_SCOPE.OWN]: 3,
     [PERMISSION_SCOPE.RESTRICTED]: 2,
-    [PERMISSION_SCOPE.ASSIGNED]:   2,
-    [PERMISSION_SCOPE.NONE]:       0,
-    null:                          0,
+    [PERMISSION_SCOPE.ASSIGNED]: 2,
+    [PERMISSION_SCOPE.NONE]: 0,
+    null: 0,
 });
 
 /** Maps DB access vocabulary → numeric permission level */
 const ACCESS_TO_LEVEL = Object.freeze({
-    none:               PERMISSION_LEVELS.NO_ACCESS,
-    view:               PERMISSION_LEVELS.VIEW,
-    vote:               PERMISSION_LEVELS.VIEW,
-    view_restricted:    PERMISSION_LEVELS.VIEW,
-    view_own_profile:   PERMISSION_LEVELS.VIEW,
-    financial_queries:  PERMISSION_LEVELS.VIEW,
-    facility_queries:   PERMISSION_LEVELS.VIEW,
-    view_pay_own:       PERMISSION_LEVELS.MANAGE,
-    approve_own:        PERMISSION_LEVELS.MANAGE,
-    raise_own:          PERMISSION_LEVELS.MANAGE,
-    book_own:           PERMISSION_LEVELS.MANAGE,
-    pay_own:            PERMISSION_LEVELS.MANAGE,
-    manage:             PERMISSION_LEVELS.MANAGE,
-    manage_assigned:    PERMISSION_LEVELS.MANAGE,
-    financial:          PERMISSION_LEVELS.FULL,
-    full:               PERMISSION_LEVELS.FULL,
+    none: PERMISSION_LEVELS.NO_ACCESS,
+    view: PERMISSION_LEVELS.VIEW,
+    vote: PERMISSION_LEVELS.VIEW,
+    view_restricted: PERMISSION_LEVELS.VIEW,
+    view_own_profile: PERMISSION_LEVELS.VIEW,
+    financial_queries: PERMISSION_LEVELS.VIEW,
+    facility_queries: PERMISSION_LEVELS.VIEW,
+    view_pay_own: PERMISSION_LEVELS.MANAGE,
+    approve_own: PERMISSION_LEVELS.MANAGE,
+    raise_own: PERMISSION_LEVELS.MANAGE,
+    book_own: PERMISSION_LEVELS.MANAGE,
+    pay_own: PERMISSION_LEVELS.MANAGE,
+    manage: PERMISSION_LEVELS.MANAGE,
+    manage_assigned: PERMISSION_LEVELS.MANAGE,
+    financial: PERMISSION_LEVELS.FULL,
+    full: PERMISSION_LEVELS.FULL,
 });
 
 function resolveRoleKey(role) {
@@ -104,9 +103,6 @@ function scopeRank(scope) {
     return SCOPE_RANK[scope] ?? 0;
 }
 
-/**
- * Union permission matrices — highest level wins; on tie, broader scope wins.
- */
 function mergePermissionMatrices(matrices) {
     const merged = {};
 

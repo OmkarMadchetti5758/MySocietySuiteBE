@@ -6,6 +6,8 @@ const RESIDENT_ERRORS = Object.freeze({
     MOBILE_EXISTS: "A user with this mobile number already exists in this society",
     IDENTIFIER_TAKEN: "This email or phone number is already registered on the platform",
     FLAT_REQUIRED: "Flat number is required",
+    FLAT_NOT_FOUND: "Selected flat was not found in this wing",
+    WING_REQUIRED: "Wing / Block is required",
 });
 
 module.exports = { RESIDENT_ERRORS };

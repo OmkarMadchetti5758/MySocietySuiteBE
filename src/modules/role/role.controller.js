@@ -3,19 +3,8 @@
 const RoleService = require("./role.service");
 const { sendSuccess } = require("../../utils/response.utils");
 
-/**
- * RoleController
- *
- * Thin HTTP layer — validates inputs, delegates to RoleService, sends response.
- * All business logic lives in role.service.js.
- */
 class RoleController {
 
-    /**
-     * @desc  List all society-level roles (with merged permissions)
-     * @route GET /api/v1/societies/:societyId/roles
-     * @access Private — committee_admin
-     */
     async listRoles(req, res, next) {
         try {
             const { societyId } = req.params;
@@ -26,11 +15,6 @@ class RoleController {
         }
     }
 
-    /**
-     * @desc  Get single role with full permission map + audit info
-     * @route GET /api/v1/societies/:societyId/roles/:roleKey
-     * @access Private — committee_admin
-     */
     async getRole(req, res, next) {
         try {
             const { societyId, roleKey } = req.params;
@@ -41,18 +25,6 @@ class RoleController {
         }
     }
 
-    /**
-     * @desc  Partially update one or more module permissions for a role
-     * @route PATCH /api/v1/societies/:societyId/roles/:roleKey
-     * @access Private — committee_admin
-     *
-     * Body: {
-     *   permissions: {
-     *     billingAccounts: { enabled: false },
-     *     staffManagement: { enabled: true, access: "view" }
-     *   }
-     * }
-     */
     async patchRole(req, res, next) {
         try {
             const { societyId, roleKey } = req.params;
@@ -75,11 +47,6 @@ class RoleController {
         }
     }
 
-    /**
-     * @desc  Reset a role to the GLOBAL template (delete society-specific override)
-     * @route POST /api/v1/societies/:societyId/roles/:roleKey/reset
-     * @access Private — committee_admin
-     */
     async resetRole(req, res, next) {
         try {
             const { societyId, roleKey } = req.params;

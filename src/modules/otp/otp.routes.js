@@ -6,19 +6,7 @@ const { sendSuccess, sendError } = require("../../utils/response.utils");
 
 const router = express.Router();
 
-/**
- * OTP Routes — /api/v1/otp
- *
- * These routes are NOT protected by authenticate middleware because
- * the user is mid-onboarding and doesn't have a session yet.
- * Rate limiting is enforced within OtpService itself.
- */
 
-/**
- * @route  POST /api/v1/otp/send
- * @desc   Send (or resend) an OTP to the given identifier
- * @body   { identifier: string, purpose: string, societyId: string }
- */
 router.post("/send", async (req, res, next) => {
     try {
         const { identifier, purpose, societyId } = req.body;
@@ -32,11 +20,6 @@ router.post("/send", async (req, res, next) => {
     }
 });
 
-/**
- * @route  POST /api/v1/otp/verify
- * @desc   Verify an OTP code
- * @body   { identifier: string, code: string, purpose: string, societyId: string }
- */
 router.post("/verify", async (req, res, next) => {
     try {
         const { identifier, code, purpose, societyId } = req.body;
@@ -50,11 +33,6 @@ router.post("/verify", async (req, res, next) => {
     }
 });
 
-/**
- * @route  GET /api/v1/otp/status
- * @desc   Check if an identifier already has a verified OTP (for flow-resume)
- * @query  identifier, purpose, societyId
- */
 router.get("/status", async (req, res, next) => {
     try {
         const { identifier, purpose, societyId } = req.query;

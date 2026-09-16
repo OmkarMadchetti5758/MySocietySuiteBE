@@ -43,5 +43,6 @@ router.use("/vehicle", require("../../modules/vehicle/vehicle.routes"));
 router.use("/sos", require("../../modules/sos/sos.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
+router.use("/billing", require("../../modules/billing/billing.routes"));
 
 module.exports = router;

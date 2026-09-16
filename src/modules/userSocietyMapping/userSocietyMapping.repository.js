@@ -2,48 +2,126 @@
 
 const { getMasterConnection } = require("../../config/masterDb");
 const { resolveRoleKey } = require("../../common/permissionResolver");
+const { canonicalIdentifier } = require("../../common/loginIdentifier");
+const AppError = require("../../common/AppError");
 
 /**
  * UserSocietyMappingRepository
  *
- * Keeps login mappings in sync with user.role and supports dual-role users via roleKeys[].
+ * Login lookup is identifier → society. A user with both email and mobile
+ * MUST have two mapping rows so they can sign in with either.
  */
 class UserSocietyMappingRepository {
     _getModel() {
         return getMasterConnection().model("UserSocietyMapping");
     }
 
+    normalizeIdentifier(value) {
+        return canonicalIdentifier(value);
+    }
+
+    /**
+     * Unique, normalised identifiers for a user (email and/or mobile).
+     */
+    collectIdentifiers(email, mobile) {
+        const identifiers = [];
+        const seen = new Set();
+
+        for (const value of [email, mobile]) {
+            const id = this.normalizeIdentifier(value);
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            identifiers.push(id);
+        }
+
+        return identifiers;
+    }
+
     /**
      * Create identifier mappings for a user (email and/or mobile).
      */
-    async createMappings({ societyId, userId, email, mobile, roleKeys, flatId = null }) {
+    async createMappings({ societyId, userId, email, mobile, roleKeys, flatId = null, status = "active" }) {
         const Mapping = this._getModel();
         const normalizedRoleKeys = [...new Set((roleKeys || []).map(resolveRoleKey).filter(Boolean))];
-        const entries = [];
+        const identifiers = this.collectIdentifiers(email, mobile);
 
-        if (email) {
-            entries.push({
-                identifier: email.toLowerCase().trim(),
-                societyId,
-                userId,
-                roleKeys: normalizedRoleKeys,
-                flatId,
-            });
-        }
-
-        if (mobile) {
-            entries.push({
-                identifier: mobile.trim(),
-                societyId,
-                userId,
-                roleKeys: normalizedRoleKeys,
-                flatId,
-            });
-        }
+        const entries = identifiers.map((identifier) => ({
+            identifier,
+            societyId,
+            userId,
+            roleKeys: normalizedRoleKeys,
+            flatId,
+            status,
+        }));
 
         if (entries.length === 0) return [];
 
-        return Mapping.insertMany(entries);
+        try {
+            return await Mapping.insertMany(entries, { ordered: false });
+        } catch (err) {
+            const isDup = err.code === 11000 || err.writeErrors?.some((e) => e.code === 11000);
+            if (!isDup) throw err;
+
+            const existing = await Mapping.find({
+                societyId,
+                userId,
+                identifier: { $in: identifiers },
+            }).lean();
+            const have = new Set(existing.map((row) => row.identifier));
+            if (identifiers.every((id) => have.has(id))) {
+                return existing;
+            }
+
+            throw new AppError(
+                "This email or phone number is already registered in this society.",
+                409,
+                "IDENTIFIER_TAKEN"
+            );
+        }
+    }
+
+    /**
+     * Ensure every identifier on the user has a mapping row.
+     * Used on create, update, and as a login-time repair for older records.
+     */
+    async ensureIdentifierMappings(societyId, user, extras = {}) {
+        if (!user?._id) return [];
+
+        const Mapping = this._getModel();
+        const identifiers = this.collectIdentifiers(user.email, user.mobile);
+        if (identifiers.length === 0) return [];
+
+        const existing = await Mapping.find({ societyId, userId: user._id }).lean();
+        const existingIds = new Set(existing.map((row) => row.identifier));
+
+        const template = existing[0] || {};
+        const roleKeys = extras.roleKeys
+            || template.roleKeys
+            || (user.role ? [resolveRoleKey(user.role)] : []);
+        const flatId = extras.flatId !== undefined ? extras.flatId : (template.flatId || null);
+        const status = extras.status || template.status || "active";
+
+        const missing = identifiers.filter((id) => !existingIds.has(id));
+        if (missing.length === 0) return existing;
+
+        try {
+            await Mapping.insertMany(
+                missing.map((identifier) => ({
+                    identifier,
+                    societyId,
+                    userId: user._id,
+                    roleKeys,
+                    flatId,
+                    status,
+                })),
+                { ordered: false }
+            );
+        } catch (err) {
+            // Duplicate key: another request created the same identifier concurrently
+            if (err.code !== 11000) throw err;
+        }
+
+        return Mapping.find({ societyId, userId: user._id }).lean();
     }
 
     /**
@@ -90,26 +168,17 @@ class UserSocietyMappingRepository {
 
     /**
      * Sync mappings after user create/update.
-     * Creates missing mappings; updates roleKeys on existing ones.
+     * Creates missing identifier rows; updates roleKeys on existing ones.
      */
     async syncUserRoleKeys(societyId, user, { replacePrimary = false } = {}) {
         if (!user?._id || !user.role) return;
 
         const Mapping = this._getModel();
         const normalized = resolveRoleKey(user.role);
-        const existing = await Mapping.find({ societyId, userId: user._id }).lean();
 
-        if (existing.length === 0) {
-            await this.createMappings({
-                societyId,
-                userId: user._id,
-                email: user.email,
-                mobile: user.mobile,
-                roleKeys: [normalized],
-                flatId: user.flatId || null,
-            });
-            return;
-        }
+        await this.ensureIdentifierMappings(societyId, user, {
+            roleKeys: [normalized],
+        });
 
         const update = replacePrimary
             ? { $set: { roleKeys: [normalized] } }

@@ -4,6 +4,7 @@ const { getOperationsConnection } = require("../../config/operationsDb");
 const AppError = require("../../common/AppError");
 const { sendSuccess, sendPaginated } = require("../../utils/response.utils");
 const { FESTIVAL_STATUS, ROLES, PAGINATION } = require("../../common/constants");
+const { uploadMulterFile, deleteStoredFile, STORAGE_FOLDERS } = require("../../services/storage.service");
 
 const getFestivalModel = () => getOperationsConnection().model("Festival");
 
@@ -37,6 +38,15 @@ exports.createFestival = async (req, res, next) => {
         const { title, description, date, startTime, endTime, venue, image } = req.body;
         const societyId = req.societyId;
 
+        let imageUrl = image;
+        if (typeof imageUrl === "string" && imageUrl.startsWith("blob:")) {
+            imageUrl = undefined;
+        }
+        if (req.file) {
+            const uploaded = await uploadMulterFile(req.file, STORAGE_FOLDERS.FESTIVALS, societyId);
+            imageUrl = uploaded.url;
+        }
+
         const hasConflict = await checkVenueConflict(societyId, venue, date, startTime, endTime);
         if (hasConflict) {
             return next(new AppError("VENUE_CONFLICT", 409, "VENUE_CONFLICT"));
@@ -50,7 +60,7 @@ exports.createFestival = async (req, res, next) => {
             startTime,
             endTime,
             venue,
-            image,
+            image: imageUrl,
             status: FESTIVAL_STATUS.DRAFT,
             createdBy: req.user.id,
         });
@@ -172,6 +182,27 @@ exports.updateFestival = async (req, res, next) => {
         delete updates.societyId;
         delete updates.createdBy;
         delete updates.status; // status changed via specific endpoints
+        delete updates.existingImage;
+
+        if (typeof updates.image === "string" && updates.image.startsWith("blob:")) {
+            delete updates.image;
+        }
+
+        if (req.file) {
+            const uploaded = await uploadMulterFile(req.file, STORAGE_FOLDERS.FESTIVALS, societyId);
+            if (festival.image && festival.image !== uploaded.url) {
+                await deleteStoredFile(festival.image);
+            }
+            updates.image = uploaded.url;
+        } else if (Object.prototype.hasOwnProperty.call(req.body, "existingImage")) {
+            const existingImage = req.body.existingImage;
+            if (!existingImage) {
+                if (festival.image) {
+                    await deleteStoredFile(festival.image);
+                }
+                updates.image = null;
+            }
+        }
 
         Object.assign(festival, updates);
         festival.updatedBy = req.user.id;
@@ -288,6 +319,10 @@ exports.deleteFestival = async (req, res, next) => {
 
         if (festival.status !== FESTIVAL_STATUS.DRAFT) {
             return next(new AppError("INVALID_STATUS_TRANSITION", 400, "Cannot delete non-draft events. Cancel them instead."));
+        }
+
+        if (festival.image) {
+            await deleteStoredFile(festival.image);
         }
 
         await festival.deleteOne();

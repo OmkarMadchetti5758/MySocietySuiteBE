@@ -113,16 +113,15 @@ class VendorService {
 
                 const newUserId = newUser[0]._id;
 
-                // Create UserSocietyMapping entries
-                // Only create one record. First priority is email, then phone.
-                const identifier = email || phone;
-                await UserSocietyMapping.create([{
-                    identifier,
+                const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+                await MappingRepository.createMappings({
                     societyId,
                     userId: newUserId,
+                    email,
+                    mobile: phone,
                     roleKeys: ["vendor"],
                     flatId: null,
-                }]);
+                });
 
                 // Create InviteToken
                 const generated = InviteToken.generateToken();

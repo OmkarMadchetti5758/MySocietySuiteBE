@@ -5,11 +5,6 @@ const env = require("./env");
 
 let masterConnection = null;
 
-/**
- * Connects to the Master Database.
- * Stores the connection instance for reuse.
- * Should be called once at server startup.
- */
 const connectMasterDB = async () => {
     if (masterConnection) {
         return masterConnection;
@@ -29,7 +24,7 @@ const connectMasterDB = async () => {
         masterConnection.model("Role", require("../modules/role/role.model"));
         masterConnection.model("Permission", require("../modules/permission/permission.model"));
         masterConnection.model("InviteToken", require("../modules/auth/inviteToken.model"));
-        masterConnection.model("Otp",         require("../modules/otp/otp.model"));
+        masterConnection.model("Otp", require("../modules/otp/otp.model"));
         // UserSocietyMapping is also registered on master for login-identifier → societyId lookup
         masterConnection.model("UserSocietyMapping", require("../modules/userSocietyMapping/userSocietyMapping.model"));
 
@@ -43,10 +38,6 @@ const connectMasterDB = async () => {
     }
 };
 
-/**
- * Returns the active master DB connection.
- * Must be called after connectMasterDB() has resolved.
- */
 const getMasterConnection = () => {
     if (!masterConnection) {
         throw new Error("Master DB is not connected. Call connectMasterDB() first.");
@@ -54,10 +45,6 @@ const getMasterConnection = () => {
     return masterConnection;
 };
 
-/**
- * Drops legacy identifier+databaseName indexes and ensures current schema indexes.
- * Pre-E11000 on resident/admin mapping inserts after societyId migration.
- */
 const syncUserSocietyMappingIndexes = async (connection) => {
     try {
         const collection = connection.collection("usersocietymappings");

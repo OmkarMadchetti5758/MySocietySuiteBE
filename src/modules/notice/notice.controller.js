@@ -2,6 +2,7 @@
 
 const NoticeService = require("./notice.service");
 const { sendSuccess, sendError } = require("../../utils/response.utils");
+const { uploadMulterFile, deleteStoredFile, STORAGE_FOLDERS } = require("../../services/storage.service");
 
 class NoticeController {
     async createNotice(req, res, next) {
@@ -10,7 +11,8 @@ class NoticeController {
                 req.body.targetBlockId = null;
             }
             if (req.file) {
-                req.body.attachmentUrl = `/uploads/${req.file.filename}`;
+                const uploaded = await uploadMulterFile(req.file, STORAGE_FOLDERS.NOTICES, req.societyId);
+                req.body.attachmentUrl = uploaded.url;
             } else if (typeof req.body.attachmentUrl === "string" && req.body.attachmentUrl.startsWith("blob:")) {
                 req.body.attachmentUrl = null;
             }
@@ -54,7 +56,12 @@ class NoticeController {
                 req.body.targetBlockId = null;
             }
             if (req.file) {
-                req.body.attachmentUrl = `/uploads/${req.file.filename}`;
+                const uploaded = await uploadMulterFile(req.file, STORAGE_FOLDERS.NOTICES, req.societyId);
+                req.body.attachmentUrl = uploaded.url;
+                const existing = await NoticeService.getNoticeById(req.societyId, req.params.id);
+                if (existing?.attachmentUrl && existing.attachmentUrl !== uploaded.url) {
+                    await deleteStoredFile(existing.attachmentUrl);
+                }
             } else if (typeof req.body.attachmentUrl === "string" && req.body.attachmentUrl.startsWith("blob:")) {
                 delete req.body.attachmentUrl;
             }
@@ -71,6 +78,9 @@ class NoticeController {
         try {
             const notice = await NoticeService.deleteNotice(req.societyId, req.params.id);
             if (!notice) return sendError(res, 404, "Notice not found");
+            if (notice.attachmentUrl) {
+                await deleteStoredFile(notice.attachmentUrl);
+            }
             return sendSuccess(res, 200, "Notice deleted successfully", notice);
         } catch (error) {
             next(error);

@@ -13,19 +13,8 @@ const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
 
 const router = express.Router();
 
-/**
- * @route   GET /api/v1/societies/active
- * @desc    Get all active societies for dropdowns
- * @access  Public
- */
 router.get("/active", SocietyController.getActiveSocieties.bind(SocietyController));
 
-/**
- * @route   POST /api/v1/societies/register
- * @desc    Register a new society — REMOVED from public access.
- *          Use POST /api/v1/super-admin/societies (Super Admin only).
- * @access  Super Admin only
- */
 router.post(
     "/register",
     authenticate,
@@ -43,11 +32,6 @@ router.post(
     SocietyController.registerSociety.bind(SocietyController)
 );
 
-/**
- * @route   GET /api/v1/societies/current
- * @desc    Get the current society's details
- * @access  Private
- */
 router.get(
     "/current",
     authenticate,
@@ -56,11 +40,6 @@ router.get(
     SocietyController.getCurrentSociety.bind(SocietyController)
 );
 
-/**
- * @route   PUT /api/v1/societies/current
- * @desc    Update the current society's details
- * @access  Private — society_flat_setup FULL
- */
 router.put(
     "/current",
     authenticate,

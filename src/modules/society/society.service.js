@@ -44,24 +44,14 @@ class SocietyService {
 
         const adminUser = await UserRepository.createUser(newSociety._id, adminData);
 
-        // 5. Create mapping in Master DB so they can login globally
-        const mappings = [];
-        if (adminEmail) {
-            mappings.push({
-                identifier: adminEmail,
-                societyId: newSociety._id,
-                userId: adminUser._id,
-                roleKeys: ["admin"],
-            });
-        } else if (adminMobile) {
-            mappings.push({
-                identifier: adminMobile,
-                societyId: newSociety._id,
-                userId: adminUser._id,
-                roleKeys: ["admin"],
-            });
-        }
-        await SocietyRepository.createUserMappings(mappings);
+        const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+        await MappingRepository.createMappings({
+            societyId: newSociety._id,
+            userId: adminUser._id,
+            email: adminEmail,
+            mobile: adminMobile,
+            roleKeys: ["admin"],
+        });
 
         return {
             society: newSociety,

@@ -10,6 +10,7 @@ const authenticate = require("../../middleware/authenticate");
 const injectSocietyId = require("../../middleware/injectSocietyId");
 const checkPermission = require("../../middleware/checkPermission");
 const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
+const upload = require("../../middleware/upload.middleware");
 
 // Apply standard auth and society injection to all festival routes
 router.use(authenticate);
@@ -33,6 +34,7 @@ router.get(
 router.post(
     "/",
     checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    upload.single("image"),
     festivalValidation.createFestivalValidation,
     validate,
     festivalController.createFestival
@@ -42,6 +44,7 @@ router.post(
 router.patch(
     "/:id",
     checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    upload.single("image"),
     festivalValidation.updateFestivalValidation,
     validate,
     festivalController.updateFestival

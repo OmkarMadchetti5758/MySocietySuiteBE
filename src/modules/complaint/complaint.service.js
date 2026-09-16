@@ -8,27 +8,27 @@ const { COMPLAINT_STATUS, COMPLAINT_PRIORITY, ROLES } = require("../../common/co
 // Defines exactly which transitions are legal from each state.
 // This is the single source of truth — enforced in _assertValidTransition().
 const VALID_TRANSITIONS = {
-    [COMPLAINT_STATUS.OPEN]:        [COMPLAINT_STATUS.IN_PROGRESS],
+    [COMPLAINT_STATUS.OPEN]: [COMPLAINT_STATUS.IN_PROGRESS],
     [COMPLAINT_STATUS.IN_PROGRESS]: [COMPLAINT_STATUS.RESOLVED],
-    [COMPLAINT_STATUS.RESOLVED]:    [COMPLAINT_STATUS.CLOSED, COMPLAINT_STATUS.OPEN], // CLOSED=confirm, OPEN=reopen
+    [COMPLAINT_STATUS.RESOLVED]: [COMPLAINT_STATUS.CLOSED, COMPLAINT_STATUS.OPEN], // CLOSED=confirm, OPEN=reopen
 };
 
 // ── SLA hours per priority (configurable defaults) ────────────────────────────
 // Can be overridden via GlobalSetting in future; kept here for single-responsibility.
 const SLA_HOURS_BY_PRIORITY = {
-    [COMPLAINT_PRIORITY.LOW]:      72, // 3 days
-    [COMPLAINT_PRIORITY.MEDIUM]:   48, // 2 days
-    [COMPLAINT_PRIORITY.HIGH]:     24, // 1 day
-    [COMPLAINT_PRIORITY.URGENT]:   8,  // 8 hours
+    [COMPLAINT_PRIORITY.LOW]: 72, // 3 days
+    [COMPLAINT_PRIORITY.MEDIUM]: 48, // 2 days
+    [COMPLAINT_PRIORITY.HIGH]: 24, // 1 day
+    [COMPLAINT_PRIORITY.URGENT]: 8,  // 8 hours
 };
 
 // ── Valid sort fields allowlist ────────────────────────────────────────────────
 const SORT_ALLOWLIST = {
-    newest:          { createdAt: -1 },
-    oldest:          { createdAt: 1 },
-    sla_due_soon:    { "sla.dueAt": 1 },
-    recently_updated:{ updatedAt: -1 },
-    priority:        { priority: -1, createdAt: -1 },
+    newest: { createdAt: -1 },
+    oldest: { createdAt: 1 },
+    sla_due_soon: { "sla.dueAt": 1 },
+    recently_updated: { updatedAt: -1 },
+    priority: { priority: -1, createdAt: -1 },
 };
 
 // ── Valid complaint categories allowlist ──────────────────────────────────────
@@ -177,36 +177,9 @@ class ComplaintService {
         }
         return resident;
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── Complaint Creation ────────────────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Create a new complaint ticket.
-     *
-     * Security:
-     *  - societyId, raisedBy, flatId are derived from JWT/authenticated user — NEVER from client.
-     *  - category is validated against the predefined allowlist.
-     *  - description is trimmed and checked for whitespace-only.
-     *  - attachments are pre-uploaded URLs; service validates they are strings only.
-     *
-     * Concurrency:
-     *  - ticketId uses atomic findOneAndUpdate($inc) — collision-safe.
-     *
-     * @param {Object} params
-     * @param {string} params.societyId        - From JWT
-     * @param {string} params.userId           - From JWT
-     * @param {string} params.role             - From JWT (for history record)
-     * @param {string} params.category         - From request body (validated)
-     * @param {string} params.description      - From request body (validated)
-     * @param {string} [params.priority]       - Optional from body, restricted to enum
-     * @param {string[]} [params.attachments]  - Optional pre-uploaded URLs
-     */
     async createComplaint({ societyId, userId, role, category, description, priority, attachments = [] }) {
         const opsDb = getOperationsConnection();
 
-        // ── Input Validation ──────────────────────────────────────────────────
         const trimmedCategory = (category || "").trim();
         if (!trimmedCategory) {
             throw new AppError("Category is required.", 400, "INVALID_COMPLAINT_DATA");
@@ -257,13 +230,13 @@ class ComplaintService {
                     [{
                         ticketId,
                         societyId,
-                        flatId:      resident.flatId,
-                        raisedBy:    userId,
-                        category:    trimmedCategory,
+                        flatId: resident.flatId,
+                        raisedBy: userId,
+                        category: trimmedCategory,
                         description: trimmedDescription,
-                        priority:    resolvedPriority,
+                        priority: resolvedPriority,
                         attachments: validAttachments,
-                        status:      COMPLAINT_STATUS.OPEN,
+                        status: COMPLAINT_STATUS.OPEN,
                         sla,
                     }],
                     { session }
@@ -275,12 +248,12 @@ class ComplaintService {
                     opsDb,
                     {
                         societyId,
-                        complaintId:     complaint._id,
-                        action:          "CREATED",
-                        performedBy:     userId,
+                        complaintId: complaint._id,
+                        action: "CREATED",
+                        performedBy: userId,
                         performedByRole: role,
-                        newValue:        { status: COMPLAINT_STATUS.OPEN, ticketId },
-                        remarks:         null,
+                        newValue: { status: COMPLAINT_STATUS.OPEN, ticketId },
+                        remarks: null,
                     },
                     session
                 );
@@ -302,7 +275,7 @@ class ComplaintService {
     async getResidentInfo(societyId, userId, email) {
         const opsDb = getOperationsConnection();
         const resident = await this._resolveResidentContext(opsDb, societyId, userId);
-        
+
         // Populate the flat and block details
         const Flat = opsDb.model("Flat");
         const flat = await Flat.findById(resident.flatId).populate("blockId", "name").lean();
@@ -330,9 +303,9 @@ class ComplaintService {
 
         const [complaints, total] = await Promise.all([
             Complaint.find(query)
-                .populate("raisedBy",       "name email mobile")
-                .populate("assignedStaffId","name role phone")
-                .populate("assignedVendorId","name serviceCategory phone email")
+                .populate("raisedBy", "name email mobile")
+                .populate("assignedStaffId", "name role phone")
+                .populate("assignedVendorId", "name serviceCategory phone email")
                 .populate({
                     path: "flatId",
                     select: "flatNumber blockId",
@@ -367,12 +340,12 @@ class ComplaintService {
         }
 
         const complaint = await Complaint.findOne(filter)
-            .populate("raisedBy",        "name email mobile")
+            .populate("raisedBy", "name email mobile")
             .populate("assignedStaffId", "name role phone")
-            .populate("assignedVendorId","name serviceCategory phone email")
-            .populate("assignedBy",      "name email")
-            .populate("resolvedBy",      "name email")
-            .populate("closedBy",        "name email")
+            .populate("assignedVendorId", "name serviceCategory phone email")
+            .populate("assignedBy", "name email")
+            .populate("resolvedBy", "name email")
+            .populate("closedBy", "name email")
             .populate({
                 path: "flatId",
                 select: "flatNumber blockId",
@@ -391,24 +364,6 @@ class ComplaintService {
         return complaint;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── Assignment ────────────────────────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Assign or reassign a complaint to an internal staff member or a vendor.
-     * Validates assignee eligibility and same-society membership.
-     * Uses a session to atomically update complaint + write history.
-     *
-     * @param {Object} params
-     * @param {string} params.societyId        - From JWT
-     * @param {string} params.complaintId      - From URL params
-     * @param {string} params.assignedBy       - userId from JWT
-     * @param {string} params.role             - role from JWT
-     * @param {"internal_staff"|"vendor"} params.assignedToType
-     * @param {string} params.assigneeId       - staffId or vendorId
-     * @param {string} [params.remarks]        - Optional assignment remarks
-     */
     async assignComplaint({ societyId, complaintId, assignedBy, role, assignedToType, assigneeId, remarks }) {
         const opsDb = getOperationsConnection();
 
@@ -442,8 +397,8 @@ class ComplaintService {
                 }
 
                 // Idempotency: same assignment already in place
-                const isSameStaff   = assignedToType === "internal_staff" && current.assignedStaffId?.toString() === assigneeId.toString();
-                const isSameVendor  = assignedToType === "vendor" && current.assignedVendorId?.toString() === assigneeId.toString();
+                const isSameStaff = assignedToType === "internal_staff" && current.assignedStaffId?.toString() === assigneeId.toString();
+                const isSameVendor = assignedToType === "vendor" && current.assignedVendorId?.toString() === assigneeId.toString();
                 if (isSameStaff || isSameVendor) {
                     throw new AppError("Complaint is already assigned to this assignee.", 400, "ALREADY_ASSIGNED");
                 }
@@ -452,30 +407,32 @@ class ComplaintService {
                 const action = isReassignment ? "REASSIGNED" : "ASSIGNED";
 
                 const previousAssignee = {
-                    type:     current.assignedToType,
-                    staffId:  current.assignedStaffId,
+                    type: current.assignedToType,
+                    staffId: current.assignedStaffId,
                     vendorId: current.assignedVendorId,
                 };
 
                 // Clear previous assignment fields
                 const updateFields = {
-                    assignedToType:  assignedToType,
+                    assignedToType: assignedToType,
                     assignedStaffId: assignedToType === "internal_staff" ? assigneeId : null,
-                    assignedVendorId:assignedToType === "vendor"          ? assigneeId : null,
+                    assignedVendorId: assignedToType === "vendor" ? assigneeId : null,
                     assignedBy,
-                    assignedAt:      new Date(),
-                    $inc:            { version: 1 },
+                    assignedAt: new Date(),
+                    $inc: { version: 1 },
                 };
 
                 const updated = await Complaint.findOneAndUpdate(
                     { _id: complaintId, societyId },
-                    { $set: {
-                        assignedToType:   updateFields.assignedToType,
-                        assignedStaffId:  updateFields.assignedStaffId,
-                        assignedVendorId: updateFields.assignedVendorId,
-                        assignedBy:       updateFields.assignedBy,
-                        assignedAt:       updateFields.assignedAt,
-                    }, $inc: { version: 1 } },
+                    {
+                        $set: {
+                            assignedToType: updateFields.assignedToType,
+                            assignedStaffId: updateFields.assignedStaffId,
+                            assignedVendorId: updateFields.assignedVendorId,
+                            assignedBy: updateFields.assignedBy,
+                            assignedAt: updateFields.assignedAt,
+                        }, $inc: { version: 1 }
+                    },
                     { new: true, session }
                 );
 
@@ -491,11 +448,11 @@ class ComplaintService {
                         societyId,
                         complaintId: complaint._id,
                         action,
-                        performedBy:     assignedBy,
+                        performedBy: assignedBy,
                         performedByRole: role,
-                        previousValue:   previousAssignee,
-                        newValue:        { type: assignedToType, assigneeId },
-                        remarks:         remarks ?? null,
+                        previousValue: previousAssignee,
+                        newValue: { type: assignedToType, assigneeId },
+                        remarks: remarks ?? null,
                     },
                     session
                 );
@@ -507,28 +464,6 @@ class ComplaintService {
         return complaint;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── Status Update (by Assignee) ───────────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Update complaint status. Called by assignees (staff or vendor).
-     *
-     * Security:
-     *  - For vendors: verifies complaint.assignedVendorId === vendorId at write time (race-safe)
-     *  - For staff: verifies complaint.assignedStaffId === staffId at write time
-     *  - societyId always in filter
-     *
-     * @param {Object} params
-     * @param {string} params.societyId
-     * @param {string} params.complaintId
-     * @param {string} params.newStatus         - Target status (limited by transition rules)
-     * @param {string} params.updatedBy         - userId from JWT
-     * @param {string} params.role              - role from JWT
-     * @param {"vendor"|"staff"|"admin"} params.callerType
-     * @param {string} [params.assigneeId]      - vendorId or staffId (for ownership check)
-     * @param {string} [params.resolutionRemarks]
-     */
     async updateComplaintStatus({ societyId, complaintId, newStatus, updatedBy, role, callerType, assigneeId, resolutionRemarks }) {
         const opsDb = getOperationsConnection();
 
@@ -608,12 +543,12 @@ class ComplaintService {
                     {
                         societyId,
                         complaintId: complaint._id,
-                        action:      newStatus === COMPLAINT_STATUS.RESOLVED ? "RESOLUTION_SUBMITTED" : "STATUS_CHANGED",
-                        performedBy:     updatedBy,
+                        action: newStatus === COMPLAINT_STATUS.RESOLVED ? "RESOLUTION_SUBMITTED" : "STATUS_CHANGED",
+                        performedBy: updatedBy,
                         performedByRole: role,
-                        previousValue:   { status: current.status },
-                        newValue:        { status: newStatus },
-                        remarks:         resolutionRemarks ?? null,
+                        previousValue: { status: current.status },
+                        newValue: { status: newStatus },
+                        remarks: resolutionRemarks ?? null,
                     },
                     session
                 );
@@ -696,12 +631,12 @@ class ComplaintService {
                     {
                         societyId,
                         complaintId: complaint._id,
-                        action:          "RESOLUTION_CONFIRMED",
-                        performedBy:     userId,
+                        action: "RESOLUTION_CONFIRMED",
+                        performedBy: userId,
                         performedByRole: role,
-                        previousValue:   { status: COMPLAINT_STATUS.RESOLVED },
-                        newValue:        { status: COMPLAINT_STATUS.CLOSED },
-                        remarks:         null,
+                        previousValue: { status: COMPLAINT_STATUS.RESOLVED },
+                        newValue: { status: COMPLAINT_STATUS.CLOSED },
+                        remarks: null,
                     },
                     session
                 );
@@ -783,11 +718,11 @@ class ComplaintService {
                     { _id: complaintId, societyId, raisedBy: userId, status: COMPLAINT_STATUS.RESOLVED },
                     {
                         $set: {
-                            status:           COMPLAINT_STATUS.OPEN,
-                            reopenedAt:       now,
-                            reopenedBy:       userId,
+                            status: COMPLAINT_STATUS.OPEN,
+                            reopenedAt: now,
+                            reopenedBy: userId,
                             reopeningRemarks: trimmedRemarks,
-                            sla:              newSla,
+                            sla: newSla,
                             // Reset assignment so admin can reassign
                         },
                         $inc: { version: 1, reopenCount: 1 },
@@ -809,12 +744,12 @@ class ComplaintService {
                     {
                         societyId,
                         complaintId: complaint._id,
-                        action:          "REOPENED",
-                        performedBy:     userId,
+                        action: "REOPENED",
+                        performedBy: userId,
                         performedByRole: role,
-                        previousValue:   { status: COMPLAINT_STATUS.RESOLVED },
-                        newValue:        { status: COMPLAINT_STATUS.OPEN },
-                        remarks:         trimmedRemarks,
+                        previousValue: { status: COMPLAINT_STATUS.RESOLVED },
+                        newValue: { status: COMPLAINT_STATUS.OPEN },
+                        remarks: trimmedRemarks,
                     },
                     session
                 );
@@ -869,7 +804,7 @@ class ComplaintService {
             Complaint.aggregate([
                 {
                     $match: {
-                        societyId:  require("mongoose").Types.ObjectId.createFromHexString(societyId.toString()),
+                        societyId: require("mongoose").Types.ObjectId.createFromHexString(societyId.toString()),
                         resolvedAt: { $ne: null },
                     },
                 },
@@ -882,7 +817,7 @@ class ComplaintService {
                     $group: {
                         _id: null,
                         avgResolutionTimeMs: { $avg: "$resolutionTimeMs" },
-                        totalResolved:       { $sum: 1 },
+                        totalResolved: { $sum: 1 },
                     },
                 },
             ]),
@@ -899,27 +834,15 @@ class ComplaintService {
             : null;
 
         return {
-            open:                   counts.open,
-            inProgress:             counts.in_progress,
-            resolved:               counts.resolved,
-            closed:                 counts.closed,
-            totalResolved:          resData.totalResolved ?? 0,
+            open: counts.open,
+            inProgress: counts.in_progress,
+            resolved: counts.resolved,
+            closed: counts.closed,
+            totalResolved: resData.totalResolved ?? 0,
             avgResolutionTimeHours,
         };
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ── SLA Escalation (run by scheduler) ────────────────────────────────────
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Escalates complaints whose SLA due date has passed and are still OPEN or IN_PROGRESS.
-     *
-     * Idempotent: uses $set on escalation.isEscalated = true and checks it isn't already set.
-     * Safe to call multiple times — will not re-escalate already-escalated tickets.
-     *
-     * @returns {{ escalatedCount: number }}
-     */
     async runSlaEscalation() {
         const opsDb = getOperationsConnection();
         const Complaint = opsDb.model("Complaint");
@@ -928,17 +851,17 @@ class ComplaintService {
 
         const result = await Complaint.updateMany(
             {
-                status:                  { $in: [COMPLAINT_STATUS.OPEN, COMPLAINT_STATUS.IN_PROGRESS] },
-                "sla.dueAt":             { $lte: now },
-                "escalation.isEscalated":false, // Idempotency — skip already-escalated tickets
+                status: { $in: [COMPLAINT_STATUS.OPEN, COMPLAINT_STATUS.IN_PROGRESS] },
+                "sla.dueAt": { $lte: now },
+                "escalation.isEscalated": false, // Idempotency — skip already-escalated tickets
             },
             {
                 $set: {
-                    "sla.status":               "breached",
-                    "escalation.isEscalated":    true,
-                    "escalation.escalatedAt":    now,
-                    "escalation.escalationLevel":1,
-                    "escalation.escalationReason":"SLA breach — no action taken within configured window",
+                    "sla.status": "breached",
+                    "escalation.isEscalated": true,
+                    "escalation.escalatedAt": now,
+                    "escalation.escalationLevel": 1,
+                    "escalation.escalationReason": "SLA breach — no action taken within configured window",
                 },
                 $inc: { version: 1 },
             }
@@ -957,14 +880,14 @@ class ComplaintService {
             for (const c of escalated) {
                 try {
                     await this._createHistory(opsDb, {
-                        societyId:       c.societyId,
-                        complaintId:     c._id,
-                        action:          "ESCALATED",
-                        performedBy:     SYSTEM_ACTOR_ID,
+                        societyId: c.societyId,
+                        complaintId: c._id,
+                        action: "ESCALATED",
+                        performedBy: SYSTEM_ACTOR_ID,
                         performedByRole: "system",
-                        previousValue:   { "escalation.isEscalated": false },
-                        newValue:        { "escalation.isEscalated": true },
-                        remarks:         "Auto-escalated by SLA scheduler",
+                        previousValue: { "escalation.isEscalated": false },
+                        newValue: { "escalation.isEscalated": true },
+                        remarks: "Auto-escalated by SLA scheduler",
                     });
                 } catch (_) {
                     // Non-critical: history failure must not fail the main escalation

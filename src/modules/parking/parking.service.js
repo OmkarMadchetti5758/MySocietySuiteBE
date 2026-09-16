@@ -1,5 +1,6 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const { getOperationsConnection } = require("../../config/operationsDb");
 const AppError = require("../../common/AppError");
 const {
@@ -8,11 +9,13 @@ const {
     PARKING_ASSIGNMENT_TYPE,
     VISITOR_PARKING_STATUS,
     PARKING_REQUEST_STATUS,
+    PARKING_VIOLATION_STATUS,
     PARKING_TYPE,
     VEHICLE_TYPE,
     ROLES,
 } = require("../../common/constants");
 const { getPaginationOptions, buildPaginationMeta } = require("../../utils/pagination.utils");
+const { uploadMulterFiles, STORAGE_FOLDERS } = require("../../services/storage.service");
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +37,19 @@ const isResidentRole = (role) =>
  */
 const isManagerRole = (role) =>
     [ROLES.ADMIN, ROLES.COMMITTEE_MEMBER, ROLES.GUARD_MANAGER, ROLES.FACILITY_MANAGER].includes(role);
+
+/**
+ * Match societyId whether it is stored as ObjectId or string.
+ * Aggregation $match does not always cast the way Model.find does.
+ */
+const societyScope = (societyId) => {
+    if (societyId == null) return { societyId };
+    const ids = [societyId];
+    if (mongoose.Types.ObjectId.isValid(String(societyId))) {
+        ids.push(new mongoose.Types.ObjectId(String(societyId)));
+    }
+    return { societyId: { $in: ids } };
+};
 
 // ── Slot helpers ───────────────────────────────────────────────────────────────
 
@@ -248,18 +264,61 @@ const ParkingService = {
         const Vehicle = db.model("Vehicle");
         const VisitorParking = db.model("VisitorParking");
         const ParkingAssignment = db.model("ParkingAssignment");
+        const ParkingRequest = db.model("ParkingRequest");
+        const ParkingViolation = db.model("ParkingViolation");
+        const societyFilter = societyScope(societyId);
 
-        const mongoose = require("mongoose");
-        const socObjId = mongoose.Types.ObjectId.isValid(societyId) ? new mongoose.Types.ObjectId(String(societyId)) : societyId;
-
-        const [slotStats, vehicleCount, activeVisitors, activeAssignments] = await Promise.all([
+        const [
+            slotStats,
+            typeStats,
+            vehicleCount,
+            activeVisitors,
+            activeAssignments,
+            pendingRequests,
+            openViolations,
+            recentAssignments,
+            recentVisitors,
+            recentViolations,
+            recentRequests,
+        ] = await Promise.all([
             ParkingSlot.aggregate([
-                { $match: { societyId: socObjId } },
+                { $match: societyFilter },
                 { $group: { _id: "$status", count: { $sum: 1 } } },
             ]),
-            Vehicle.countDocuments({ societyId, isActive: true }),
-            VisitorParking.countDocuments({ societyId, status: VISITOR_PARKING_STATUS.ACTIVE }),
-            ParkingAssignment.countDocuments({ societyId, status: PARKING_ASSIGNMENT_STATUS.ACTIVE }),
+            ParkingSlot.aggregate([
+                { $match: societyFilter },
+                { $group: { _id: "$type", count: { $sum: 1 } } },
+            ]),
+            Vehicle.countDocuments({ ...societyFilter, isActive: true }),
+            VisitorParking.countDocuments({ ...societyFilter, status: VISITOR_PARKING_STATUS.ACTIVE }),
+            ParkingAssignment.countDocuments({ ...societyFilter, status: PARKING_ASSIGNMENT_STATUS.ACTIVE }),
+            ParkingRequest.countDocuments({ ...societyFilter, status: PARKING_REQUEST_STATUS.PENDING }),
+            ParkingViolation.countDocuments({ ...societyFilter, status: PARKING_VIOLATION_STATUS.OPEN }),
+            ParkingAssignment.find(societyFilter)
+                .populate("parkingSlotId", "slotNumber wing floor")
+                .populate("userId", "name")
+                .populate("residentId", "residentType")
+                .populate("vehicleId", "regNumber type")
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .lean(),
+            VisitorParking.find(societyFilter)
+                .populate("parkingSlotId", "slotNumber wing floor")
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .lean(),
+            ParkingViolation.find(societyFilter)
+                .populate("parkingSlotId", "slotNumber wing floor")
+                .populate("vehicleId", "regNumber type")
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .lean(),
+            ParkingRequest.find(societyFilter)
+                .populate("userId", "name")
+                .populate("vehicleId", "regNumber type")
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .lean(),
         ]);
 
         const byStatus = {};
@@ -269,17 +328,104 @@ const ParkingService = {
             total += entry.count;
         }
 
-        return {
+        const byType = {};
+        for (const entry of typeStats) {
+            if (entry._id) byType[entry._id] = entry.count;
+        }
+
+        const availableSlots = byStatus[PARKING_STATUS.AVAILABLE] || 0;
+        const allocatedSlots = byStatus[PARKING_STATUS.ALLOCATED] || 0;
+        const occupiedSlots = byStatus[PARKING_STATUS.OCCUPIED] || 0;
+
+        const recentActivities = [
+            ...recentAssignments.map((item) => ({
+                _id: item._id,
+                kind: "assignment",
+                createdAt: item.createdAt,
+                parkingSlotId: item.parkingSlotId,
+                residentId: { name: item.userId?.name || "Resident" },
+                vehicleId: {
+                    registrationNumber: item.vehicleId?.regNumber || "N/A",
+                    regNumber: item.vehicleId?.regNumber,
+                },
+                title: `Slot ${item.parkingSlotId?.slotNumber || "N/A"} allocated to ${item.userId?.name || "Resident"}`,
+                subtitle: `Vehicle: ${item.vehicleId?.regNumber || "N/A"} • Wing ${item.parkingSlotId?.wing || "N/A"}`,
+            })),
+            ...recentVisitors.map((item) => ({
+                _id: item._id,
+                kind: "visitor",
+                createdAt: item.createdAt,
+                parkingSlotId: item.parkingSlotId,
+                residentId: { name: item.visitorName || "Visitor" },
+                vehicleId: { registrationNumber: item.vehicleNumber || "N/A", regNumber: item.vehicleNumber },
+                title: `${item.visitorName || "Visitor"} ${item.status === VISITOR_PARKING_STATUS.ACTIVE ? "checked in" : "checked out"}`,
+                subtitle: `Vehicle: ${item.vehicleNumber || "N/A"} • Slot ${item.parkingSlotId?.slotNumber || "N/A"}`,
+            })),
+            ...recentViolations.map((item) => ({
+                _id: item._id,
+                kind: "violation",
+                createdAt: item.createdAt,
+                parkingSlotId: item.parkingSlotId,
+                residentId: { name: item.unregisteredVehicleNumber || item.vehicleId?.regNumber || "Vehicle" },
+                vehicleId: {
+                    registrationNumber: item.vehicleId?.regNumber || item.unregisteredVehicleNumber || "N/A",
+                    regNumber: item.vehicleId?.regNumber || item.unregisteredVehicleNumber,
+                },
+                title: `Violation reported${item.parkingSlotId?.slotNumber ? ` at slot ${item.parkingSlotId.slotNumber}` : ""}`,
+                subtitle: `${String(item.violationType || "other").replace(/_/g, " ")} • ${item.status || "open"}`,
+            })),
+            ...recentRequests.map((item) => ({
+                _id: item._id,
+                kind: "request",
+                createdAt: item.createdAt,
+                parkingSlotId: null,
+                residentId: { name: item.userId?.name || "Resident" },
+                vehicleId: {
+                    registrationNumber: item.vehicleId?.regNumber || "N/A",
+                    regNumber: item.vehicleId?.regNumber,
+                },
+                title: `Parking request ${item.status || "pending"} from ${item.userId?.name || "Resident"}`,
+                subtitle: item.requestedSlotType
+                    ? `Requested type: ${String(item.requestedSlotType).replace(/_/g, " ")}`
+                    : "Slot allocation request",
+            })),
+        ]
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+            .slice(0, 10);
+
+        const overview = {
             totalSlots: total,
-            available:   byStatus[PARKING_STATUS.AVAILABLE]   || 0,
-            allocated:   byStatus[PARKING_STATUS.ALLOCATED]   || 0,
-            occupied:    byStatus[PARKING_STATUS.OCCUPIED]    || 0, // legacy
-            reserved:    byStatus[PARKING_STATUS.RESERVED]    || 0,
+            availableSlots,
+            allocatedSlots,
+            occupiedSlots,
+            reservedSlots: byStatus[PARKING_STATUS.RESERVED] || 0,
+            maintenanceSlots: byStatus[PARKING_STATUS.MAINTENANCE] || 0,
+            inactiveSlots: byStatus[PARKING_STATUS.INACTIVE] || 0,
+            activeAssignments,
+            activeVisitors,
+            pendingRequests,
+            openViolations,
+            totalVehicles: vehicleCount,
+        };
+
+        return {
+            overview,
+            byType,
+            byStatus,
+            recentActivities,
+            // Backward-compatible flat fields
+            totalSlots: total,
+            available: availableSlots,
+            allocated: allocatedSlots,
+            occupied: occupiedSlots,
+            reserved: byStatus[PARKING_STATUS.RESERVED] || 0,
             maintenance: byStatus[PARKING_STATUS.MAINTENANCE] || 0,
-            inactive:    byStatus[PARKING_STATUS.INACTIVE]    || 0,
+            inactive: byStatus[PARKING_STATUS.INACTIVE] || 0,
             totalVehicles: vehicleCount,
             activeVisitorSessions: activeVisitors,
             activeAssignments,
+            pendingRequests,
+            openViolations,
         };
     },
 
@@ -955,7 +1101,11 @@ const ParkingService = {
             unregisteredVehicleNumber, violationType, description,
         } = body;
 
-        const evidence = files ? files.map((f) => `/uploads/${f.filename}`) : [];
+        let evidence = [];
+        if (files && files.length > 0) {
+            const uploaded = await uploadMulterFiles(files, STORAGE_FOLDERS.PARKING, societyId);
+            evidence = uploaded.map((file) => file.url);
+        }
 
         const violation = await ParkingViolation.create({
             societyId,

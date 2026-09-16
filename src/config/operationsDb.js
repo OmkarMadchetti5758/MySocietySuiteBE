@@ -24,7 +24,6 @@ const connectOperationsDB = async () => {
             dbName: env.OPERATIONS_DB_NAME,
         }).asPromise();
 
-        // ── Register all operational collection models ──────────────────────
         // Each model uses the societyId-scoped schemas defined in their module.
         opsConnection.model("User",                  require("../modules/user/user.model"));
         opsConnection.model("Block",                 require("../modules/block/block.model"));
@@ -64,6 +63,11 @@ const connectOperationsDB = async () => {
         opsConnection.model("GuardGateAssignment",   require("../modules/guard/guardGateAssignment.model"));
         opsConnection.model("QRDigitalPass",         require("../modules/visitor/qrDigitalPass.model"));
         // ────────────────────────────────────────────────────────────────────
+        const billingModels = require("../modules/billing/billing.model");
+        opsConnection.model("ChargeHead",           billingModels.chargeHeadSchema);
+        opsConnection.model("BillingConfiguration", billingModels.billingConfigurationSchema);
+
+        await syncFlatIndexes(opsConnection);
 
         console.log(`✅ Operations DB connected: ${opsConnection.name}`);
         return opsConnection;
@@ -73,12 +77,6 @@ const connectOperationsDB = async () => {
     }
 };
 
-/**
- * Returns the active operations DB connection.
- * Must be called after connectOperationsDB() has resolved.
- *
- * Use this in repositories instead of the old getTenantConnection().
- */
 const getOperationsConnection = () => {
     if (!opsConnection) {
         throw new Error(
@@ -86,6 +84,33 @@ const getOperationsConnection = () => {
         );
     }
     return opsConnection;
+};
+
+/**
+ * Drop society-wide unique flatNumber index so the same number can exist in different wings.
+ */
+const syncFlatIndexes = async (connection) => {
+    try {
+        const collection = connection.collection("flats");
+        const indexes = await collection.indexes();
+        const legacy = indexes.find(
+            (idx) =>
+                idx.unique &&
+                idx.key?.societyId === 1 &&
+                idx.key?.flatNumber === 1 &&
+                idx.key?.blockId === undefined
+        );
+        if (legacy) {
+            await collection.dropIndex(legacy.name);
+            console.log(`🗑️  Dropped legacy Flat index: ${legacy.name}`);
+        }
+
+        await connection.model("Flat").syncIndexes();
+    } catch (error) {
+        if (error.code !== 26 && error.codeName !== "NamespaceNotFound") {
+            console.warn(`⚠️  Flat index sync: ${error.message}`);
+        }
+    }
 };
 
 module.exports = { connectOperationsDB, getOperationsConnection };

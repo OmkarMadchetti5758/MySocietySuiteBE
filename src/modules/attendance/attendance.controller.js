@@ -6,9 +6,6 @@ const AppError = require("../../common/AppError");
 const { sendSuccess } = require("../../utils/response.utils");
 const { ROLES } = require("../../common/constants");
 
-// @desc    Mark attendance for a staff member
-// @route   POST /api/attendance
-// @access  Private (Facility Manager / Admin — STAFF_MANAGEMENT MANAGE)
 exports.markAttendance = async (req, res, next) => {
     try {
         const { staffId, date, status, notes, checkInTime, checkOutTime } = req.body;
@@ -39,8 +36,8 @@ exports.markAttendance = async (req, res, next) => {
             markedBy: req.user._id,
             markedAt: new Date(),
         };
-        if (notes !== undefined)        updatePayload.notes = notes;
-        if (checkInTime !== undefined)  updatePayload.checkInTime = checkInTime;
+        if (notes !== undefined) updatePayload.notes = notes;
+        if (checkInTime !== undefined) updatePayload.checkInTime = checkInTime;
         if (checkOutTime !== undefined) updatePayload.checkOutTime = checkOutTime;
 
         const attendance = await Attendance.findOneAndUpdate(
@@ -55,9 +52,6 @@ exports.markAttendance = async (req, res, next) => {
     }
 };
 
-// @desc    Get attendance for a specific date
-// @route   GET /api/attendance?date=YYYY-MM-DD
-// @access  Private
 exports.getAttendance = async (req, res, next) => {
     try {
         const { date } = req.query;
@@ -79,9 +73,6 @@ exports.getAttendance = async (req, res, next) => {
     }
 };
 
-// @desc    Get monthly report per staff
-// @route   GET /api/attendance/report?month=8&year=2026
-// @access  Private
 exports.getMonthlyReport = async (req, res, next) => {
     try {
         const { month, year } = req.query;
@@ -107,9 +98,9 @@ exports.getMonthlyReport = async (req, res, next) => {
                 $group: {
                     _id: "$staff",
                     present: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
-                    absent:  { $sum: { $cond: [{ $eq: ["$status", "absent"]  }, 1, 0] } },
-                    leave:   { $sum: { $cond: [{ $eq: ["$status", "on-leave"]}, 1, 0] } },
-                    total:   { $sum: 1 }
+                    absent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
+                    leave: { $sum: { $cond: [{ $eq: ["$status", "on-leave"] }, 1, 0] } },
+                    total: { $sum: 1 }
                 }
             }
         ]);
@@ -120,9 +111,6 @@ exports.getMonthlyReport = async (req, res, next) => {
     }
 };
 
-// @desc    Get attendance summary counts for a specific date (for stat cards)
-// @route   GET /api/attendance/summary?date=YYYY-MM-DD
-// @access  Private (VIEW)
 exports.getSummary = async (req, res, next) => {
     try {
         const { date } = req.query;
@@ -144,9 +132,9 @@ exports.getSummary = async (req, res, next) => {
                 {
                     $group: {
                         _id: null,
-                        present:  { $sum: { $cond: [{ $eq: ["$status", "present"]  }, 1, 0] } },
-                        absent:   { $sum: { $cond: [{ $eq: ["$status", "absent"]   }, 1, 0] } },
-                        onLeave:  { $sum: { $cond: [{ $eq: ["$status", "on-leave"] }, 1, 0] } },
+                        present: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
+                        absent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
+                        onLeave: { $sum: { $cond: [{ $eq: ["$status", "on-leave"] }, 1, 0] } },
                     },
                 },
             ]),
@@ -155,9 +143,9 @@ exports.getSummary = async (req, res, next) => {
         const counts = statsCounts[0] || { present: 0, absent: 0, onLeave: 0 };
 
         return sendSuccess(res, 200, "Attendance summary retrieved", {
-            total:   totalStaff,
+            total: totalStaff,
             present: counts.present,
-            absent:  counts.absent,
+            absent: counts.absent,
             onLeave: counts.onLeave,
         });
     } catch (error) {

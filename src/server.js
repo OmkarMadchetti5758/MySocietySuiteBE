@@ -1,7 +1,7 @@
 "use strict";
 
-const app = require("./app");
 const env = require("./config/env");
+const app = require("./app");
 const { connectMasterDB } = require("./config/masterDb");
 const { connectOperationsDB } = require("./config/operationsDb");
 const { logger } = require("./middleware/logger");

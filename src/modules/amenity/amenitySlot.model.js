@@ -2,9 +2,6 @@
 
 const mongoose = require("mongoose");
 
-/**
- * AmenitySlot — configurable time slot for an amenity.
- */
 const amenitySlotSchema = new mongoose.Schema(
     {
         societyId: {
