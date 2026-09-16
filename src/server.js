@@ -6,6 +6,7 @@ const { connectMasterDB } = require("./config/masterDb");
 const { connectOperationsDB } = require("./config/operationsDb");
 const { logger } = require("./middleware/logger");
 const { startSlaScheduler, stopSlaScheduler } = require("./services/slaScheduler");
+const { initSocket } = require("./config/socket");
 
 const startServer = async () => {
     try {
@@ -23,6 +24,9 @@ const startServer = async () => {
             logger.info(`🚀 Server running on http://localhost:${env.PORT}`);
             logger.info(`Environment: ${env.NODE_ENV}`);
         });
+
+        // 5. Initialize Socket.IO
+        initSocket(server);
 
         // 3. Graceful Shutdown Handlers
         process.on("unhandledRejection", (err) => {

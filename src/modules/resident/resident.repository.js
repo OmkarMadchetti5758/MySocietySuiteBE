@@ -95,16 +95,27 @@ class ResidentRepository {
             throw new AppError(RESIDENT_ERRORS.WING_REQUIRED, 400);
         }
 
-        const flat = await Flat.findOne({
+        // Find the correct wing by wingCode so blockId points to wing._id (not block doc _id)
+        let wingId = null;
+        if (wingCode && blockDoc.wings && blockDoc.wings.length > 0) {
+            const matchedWing = blockDoc.wings.find(
+                w => w.code === wingCode || w.name === wingCode
+            );
+            if (matchedWing) wingId = matchedWing._id;
+        }
+
+        flat = await Flat.create({
             societyId,
-            blockId: wingId,
-            flatNumber: trimmedFlatNumber,
+            blockId: wingId || blockDoc._id,
+            flatNumber: displayFlatNumber,
+            status: FLAT_STATUS.OCCUPIED,
         });
         if (!flat) {
             throw new AppError(RESIDENT_ERRORS.FLAT_NOT_FOUND, 404);
         }
 
-        return { flat, created: false };
+
+        return { flat, created: true };
     }
 
     async createResidentWithInvite(societyId, data) {
@@ -148,6 +159,42 @@ class ResidentRepository {
                 moveInDate: new Date(),
             });
 
+            // Update flat's ownerName so it shows correctly in the Guard's Walk-in Visitor dropdown
+            const Flat = opsDb.model("Flat");
+            const isOwner = residentType === RESIDENT_TYPE.OWNER;
+            await Flat.findOneAndUpdate(
+                { _id: flat._id },
+                {
+                    $set: {
+                        status: FLAT_STATUS.OCCUPIED,
+                        occupancyStatus: isOwner ? "Owner Occupied" : "Tenant Occupied",
+                        ownerName: isOwner ? data.name : flat.ownerName || data.name,
+                    }
+                }
+            );
+
+
+            const mappingEntries = [];
+            if (email) {
+                mappingEntries.push({
+                    identifier: email,
+                    societyId,
+                    userId: user._id,
+                    roleKeys: [role],
+                    flatId: flat._id,
+                });
+            } else if (phone) {
+                mappingEntries.push({
+                    identifier: phone,
+                    societyId,
+                    userId: user._id,
+                    roleKeys: [role],
+                    flatId: flat._id,
+                });
+            }
+            if (mappingEntries.length > 0) {
+                await UserSocietyMapping.insertMany(mappingEntries);
+            }
             await this.syncFlatOccupancy(societyId, flat._id, {
                 ownerName: residentType === RESIDENT_TYPE.OWNER ? data.name : undefined,
                 ownerContact: residentType === RESIDENT_TYPE.OWNER ? phone : undefined,
@@ -186,7 +233,7 @@ class ResidentRepository {
                 });
             } else if (createdFlat && flat?._id) {
                 const opsDb = getOperationsConnection();
-                await opsDb.model("Flat").deleteOne({ _id: flat._id }).catch(() => {});
+                await opsDb.model("Flat").deleteOne({ _id: flat._id }).catch(() => { });
             }
             throw error;
         }
@@ -206,10 +253,10 @@ class ResidentRepository {
         const InviteToken = masterDb.model("InviteToken");
         const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
-        await Resident.deleteOne({ userId, societyId }).catch(() => {});
-        await User.deleteOne({ _id: userId }).catch(() => {});
-        await UserSocietyMapping.deleteMany({ userId, societyId }).catch(() => {});
-        await InviteToken.deleteMany({ adminId: userId, purpose: "resident" }).catch(() => {});
+        await Resident.deleteOne({ userId, societyId }).catch(() => { });
+        await User.deleteOne({ _id: userId }).catch(() => { });
+        await UserSocietyMapping.deleteMany({ userId, societyId }).catch(() => { });
+        await InviteToken.deleteMany({ adminId: userId, purpose: "resident" }).catch(() => { });
 
         if (flatId) {
             if (createdFlat) {

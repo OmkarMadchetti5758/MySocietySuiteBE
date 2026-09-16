@@ -119,7 +119,7 @@ class SmsService {
         const message = buildOtpMessage(otp);
 
         if (NODE_ENV !== "production") {
-            console.log(`[SmsService] DEV MODE — SMS not sent to gateway (${mobile})`);
+            console.log(`[SmsService] DEV MODE — SMS not sent to gateway (${mobile}). OTP is: ${otp}`);
             return { sent: false, mobile, devMode: true };
         }
 
