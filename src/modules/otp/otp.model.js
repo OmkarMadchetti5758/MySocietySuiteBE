@@ -32,7 +32,7 @@ const otpSchema = new mongoose.Schema(
         purpose: {
             type: String,
             required: true,
-            enum: ["manager_invite", "resident_invite", "staff_invite", "vendor_invite"],
+            enum: ["manager_invite", "resident_invite", "staff_invite", "vendor_invite", "guard_login"],
             // Scopes OTPs so the same identifier can have OTPs for different flows
         },
         societyId: {
@@ -87,8 +87,8 @@ otpSchema.index({ identifier: 1, purpose: 1, societyId: 1 }, { unique: true });
 
 // ── Static Helpers ─────────────────────────────────────────────────────────────
 otpSchema.statics.generateCode = function () {
-    // Cryptographically random 6-digit OTP
-    const code = String(crypto.randomInt(100000, 999999));
+    // Hardcode OTP to 123456 in development, else generate cryptographically random 6-digit OTP
+    const code = process.env.NODE_ENV !== "production" ? "123456" : String(crypto.randomInt(100000, 999999));
     const codeHash = crypto.createHash("sha256").update(code).digest("hex");
     return { code, codeHash };
 };

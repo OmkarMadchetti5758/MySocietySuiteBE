@@ -13,6 +13,8 @@ const PERMISSION_CATALOG = [
         validAccessLevels: ["none", "view", "full"],
         hardBlockedFor: ["security_guard", "vendor"],
         description: "Configure society structure, blocks, and flat assignments.",
+        hardBlockedFor:  ["vendor"],
+        description:     "Configure society structure, blocks, and flat assignments.",
     },
     {
         moduleKey: "billingAccounts",
@@ -219,6 +221,19 @@ const GLOBAL_ROLES = [
             reportsDashboard: { access: "none", enabled: false },
             aiAssistant: { access: "none", enabled: false },
             festivalCollectionManagement: { access: "none", enabled: false },
+            societyFlatSetup:             { access: "view",  enabled: true  },
+            billingAccounts:              { access: "none",  enabled: false },
+            visitorManagement:            { access: "full",  enabled: true  }, // Entry logging only (guard interface)
+            complaintsHelpdesk:           { access: "none",  enabled: false },
+            noticeBoardPolls:             { access: "view",  enabled: true  },
+            amenityBooking:               { access: "none",  enabled: false },
+            parkingManagement:            { access: "manage", enabled: true  },
+            vendorManagement:             { access: "none",  enabled: false },
+            staffManagement:              { access: "none",  enabled: false },
+            documentsManager:             { access: "none",  enabled: false },
+            reportsDashboard:             { access: "none",  enabled: false },
+            aiAssistant:                  { access: "none",  enabled: false },
+            festivalCollectionManagement: { access: "none",  enabled: false },
         },
     },
     {

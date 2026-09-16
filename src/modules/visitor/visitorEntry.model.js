@@ -1,7 +1,7 @@
 "use strict";
 
 const mongoose = require("mongoose");
-const { VISITOR_STATUS } = require("../../common/constants");
+const { VISITOR_STATUS, VISITOR_CATEGORY } = require("../../common/constants");
 
 /**
  * VisitorEntry — gate-level visitor log.
@@ -41,6 +41,23 @@ const visitorEntrySchema = new mongoose.Schema(
             type: String,
             enum: Object.values(VISITOR_STATUS),
             default: VISITOR_STATUS.PENDING,
+        },
+        category: {
+            type: String,
+            enum: Object.values(VISITOR_CATEGORY),
+            required: [true, "Visitor category is required"],
+        },
+        gateId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Gate",
+        },
+        isQrPass: {
+            type: Boolean,
+            default: false,
+        },
+        qrPassId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "QRDigitalPass",
         },
         entryTime: {
             type: Date,
