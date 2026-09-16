@@ -61,6 +61,7 @@ const defaulterRecordSchema = new mongoose.Schema(
         societyId:         { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
         flatId:            { type: mongoose.Schema.Types.ObjectId, ref: "Flat", default: null, index: true },
         flatNumber:        { type: String, default: "A-101" },
+        wingName:          { type: String, default: "Wing A" },
         residentName:      { type: String, default: "" },
         unpaidCyclesCount: { type: Number, required: true, default: 0 },
         totalOutstanding:  { type: Number, required: true, default: 0 },
@@ -96,6 +97,7 @@ const fineWaiverSchema = new mongoose.Schema(
     {
         societyId:        { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
         invoiceId:        { type: mongoose.Schema.Types.ObjectId, ref: "BillingInvoice", default: null, index: true },
+        invoiceNumber:    { type: String, default: "" },
         fineApplicationId:{ type: mongoose.Schema.Types.ObjectId, ref: "FineApplication", default: null },
         flatId:           { type: mongoose.Schema.Types.ObjectId, ref: "Flat", default: null },
         flatNumber:       { type: String, required: true },

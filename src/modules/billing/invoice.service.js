@@ -679,7 +679,8 @@ class InvoiceService {
         const amount = Number(amountPaid);
         if (isNaN(amount) || amount <= 0) throw new AppError("amountPaid must be a positive number.", 400);
 
-        const outstanding = (invoice.totalAmount || 0) - (invoice.paidAmount || 0);
+        const totalPayable = Math.round(((invoice.totalAmount || 0) + (invoice.fineAmount || 0)) * 100) / 100;
+        const outstanding = Math.max(0, Math.round((totalPayable - (invoice.paidAmount || 0)) * 100) / 100);
         let excessAmount = 0;
         let effectivePaid = amount;
 
@@ -708,7 +709,7 @@ class InvoiceService {
         });
 
         const newPaidAmount = Math.round(((invoice.paidAmount || 0) + effectivePaid) * 100) / 100;
-        const newStatus = newPaidAmount >= invoice.totalAmount ? "PAID" : "PARTIALLY_PAID";
+        const newStatus = newPaidAmount >= totalPayable ? "PAID" : "PARTIALLY_PAID";
 
         invoice.paidAmount = newPaidAmount;
         invoice.status = newStatus;

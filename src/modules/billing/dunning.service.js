@@ -136,7 +136,13 @@ class DunningService {
             societyId,
             status: { $in: UNPAID_STATUSES },
             dueDate: { $lt: new Date() }
-        }).populate("flatId", "flatNumber ownerName block");
+        })
+        .populate({
+            path: "flatId",
+            select: "flatNumber ownerName block wing wingName buildingName blockId",
+            populate: { path: "blockId", select: "name wings" }
+        })
+        .sort({ dueDate: 1 });
 
         const now = new Date();
 
@@ -150,12 +156,25 @@ class DunningService {
             const fine = inv.fineAmount || 0;
             const totalDue = outstanding + fine;
 
+            let wing = inv.flatId?.wingName || inv.flatId?.wing || inv.blockName || inv.flatId?.blockId?.name || '';
+            if (!wing && inv.flatId?.flatNumber) {
+                const match = String(inv.flatId.flatNumber).match(/^([A-Za-z]+)[-\s]?/);
+                if (match) wing = `Wing ${match[1].toUpperCase()}`;
+            }
+            if (!wing && inv.flatNumber) {
+                const match = String(inv.flatNumber).match(/^([A-Za-z]+)[-\s]?/);
+                if (match) wing = `Wing ${match[1].toUpperCase()}`;
+            }
+            if (!wing) wing = 'Wing A';
+
             return {
                 id: inv._id,
-                flat: inv.flatId ? `${inv.flatId.block || 'Block'}-${inv.flatId.flatNumber}` : 'Flat A-101',
-                resident: inv.flatId?.ownerName || 'Resident',
+                flat: inv.flatId?.flatNumber ? `${inv.flatId.flatNumber}` : (inv.flatNumber || '101'),
+                wing,
+                resident: inv.flatId?.ownerName || inv.residentName || 'Resident',
                 previousInvoice: inv.invoiceNumber || `INV-${inv._id.toString().slice(-4)}`,
-                billingCycle: inv.billingCycle || 'July 2026',
+                billingCycle: inv.billingCycle || inv.billingPeriod || 'July 2026',
+                dueDate: inv.dueDate || inv.createdAt,
                 originalAmount,
                 paid,
                 outstanding,
@@ -202,19 +221,13 @@ class DunningService {
         const { DefaulterRecord } = getDunningModels(db);
         const societyId = this.getSocietyId(req);
 
-        let defaulters = await DefaulterRecord.find({ societyId }).sort({ daysOverdue: -1 });
-
-        if (defaulters.length === 0) {
-            await this.runDefaulterCheck(req);
-            defaulters = await DefaulterRecord.find({ societyId }).sort({ daysOverdue: -1 });
-        }
-
-        return defaulters;
+        await this.runDefaulterCheck(req);
+        return await DefaulterRecord.find({ societyId, status: "DEFAULTER" }).sort({ daysOverdue: -1 });
     }
 
     static async runDefaulterCheck(req) {
         const db = req.opsDb;
-        const { DefaulterRecord, DunningConfig } = getDunningModels(db);
+        const { DefaulterRecord, DunningConfig, DunningReminder } = getDunningModels(db);
         const societyId = this.getSocietyId(req);
 
         const config = await DunningConfig.findOne({ societyId }) || { defaulterUnpaidCyclesThreshold: 2 };
@@ -225,13 +238,18 @@ class DunningService {
             if (!flatMap[item.flat]) {
                 flatMap[item.flat] = {
                     flat: item.flat,
+                    wing: item.wing || 'Wing A',
                     resident: item.resident,
                     unpaidCycles: 0,
                     outstanding: 0,
-                    oldestDueDate: item.billingCycle,
+                    oldestDueDate: item.dueDate ? new Date(item.dueDate) : new Date(),
                     daysOverdue: 0,
                     fineAmount: 0
                 };
+            } else {
+                if (item.dueDate && new Date(item.dueDate) < new Date(flatMap[item.flat].oldestDueDate)) {
+                    flatMap[item.flat].oldestDueDate = new Date(item.dueDate);
+                }
             }
             flatMap[item.flat].unpaidCycles += 1;
             flatMap[item.flat].outstanding += item.totalDue;
@@ -242,16 +260,24 @@ class DunningService {
         for (const key of Object.keys(flatMap)) {
             const data = flatMap[key];
             if (data.unpaidCycles >= config.defaulterUnpaidCyclesThreshold) {
+                const latestReminder = await DunningReminder.findOne({
+                    societyId,
+                    $or: [{ flatNumber: data.flat }, { flat: data.flat }]
+                }).sort({ sentAt: -1 });
+
                 await DefaulterRecord.findOneAndUpdate(
                     { societyId, flatNumber: data.flat },
                     {
                         societyId,
                         flatNumber: data.flat,
+                        wingName: data.wing,
                         residentName: data.resident,
                         unpaidCyclesCount: data.unpaidCycles,
                         totalOutstanding: data.outstanding,
+                        oldestDueDate: data.oldestDueDate,
                         daysOverdue: data.daysOverdue,
                         totalFineAmount: data.fineAmount,
+                        lastReminderSentAt: latestReminder ? latestReminder.sentAt : null,
                         status: "DEFAULTER"
                     },
                     { upsert: true, new: true }
@@ -293,20 +319,30 @@ class DunningService {
 
     static async sendReminder(req, data) {
         const db = req.opsDb;
-        const { DunningReminder } = getDunningModels(db);
+        const { DunningReminder, DefaulterRecord } = getDunningModels(db);
         const societyId = this.getSocietyId(req);
+
+        const sentAt = new Date();
+        const targetFlat = data.flat || data.flatNumber || "A-101";
 
         const reminder = new DunningReminder({
             societyId,
-            flatNumber: data.flat || "A-101",
-            residentName: data.resident || "Resident",
+            flatNumber: targetFlat,
+            residentName: data.resident || data.residentName || "Resident",
             reminderType: data.reminderType || "DEFAULTER_FOLLOWUP",
             channel: data.channel || "SMS",
-            sentAt: new Date(),
+            sentAt,
             deliveryStatus: "DELIVERED"
         });
 
-        return await reminder.save();
+        await reminder.save();
+
+        await DefaulterRecord.findOneAndUpdate(
+            { societyId, flatNumber: targetFlat },
+            { lastReminderSentAt: sentAt }
+        );
+
+        return reminder;
     }
 
     // ── 7. Fine Waivers (Strict Committee Admin Authorization + Mandatory Reason) ──
@@ -335,6 +371,7 @@ class DunningService {
         const waiver = new FineWaiver({
             societyId,
             invoiceId: invoiceId || null,
+            invoiceNumber: invoiceNumber || (data.invoice ? data.invoice : ""),
             flatNumber: flatNumber || "A-101",
             residentName: residentName || "Resident",
             originalFine: Number(originalFine) || 0,
