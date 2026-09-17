@@ -124,6 +124,36 @@ class DunningService {
         return await rule.save();
     }
 
+    // Helper: Map flat wing names from Block & Flat models
+    static async _getFlatsWingsMap(db, societyId) {
+        const map = {};
+        try {
+            const blockSchema = require("../block/block.model");
+            const flatSchema = require("../flat/flat.model");
+            const BlockModel = db.models.Block || db.model("Block", blockSchema);
+            const FlatModel = db.models.Flat || db.model("Flat", flatSchema);
+
+            const wingsMap = {};
+            const blockDoc = await BlockModel.findOne({ societyId }).lean();
+            if (blockDoc && Array.isArray(blockDoc.wings)) {
+                for (const w of blockDoc.wings) {
+                    wingsMap[String(w._id)] = w.name || w.code || "";
+                }
+            }
+
+            const flats = await FlatModel.find({ societyId }).select("_id flatNumber blockId wing").lean();
+            for (const f of flats) {
+                let wingName = f.wing || (f.blockId ? wingsMap[String(f.blockId)] : "") || "";
+                if (!wingName && f.flatNumber) {
+                    const match = String(f.flatNumber).match(/^([A-Za-z]+)[-\s]?/);
+                    if (match) wingName = `Wing ${match[1].toUpperCase()}`;
+                }
+                map[String(f._id)] = wingName;
+            }
+        } catch (_) { }
+        return map;
+    }
+
     // ── 3. Arrears Tracking & Breakdown ────────────────────────────────────────
     static async getArrears(req) {
         const db = req.opsDb;
@@ -145,6 +175,7 @@ class DunningService {
         .sort({ dueDate: 1 });
 
         const now = new Date();
+        const flatsWingsMap = await this._getFlatsWingsMap(db, societyId);
 
         return overdueInvoices.map(inv => {
             const originalAmount = inv.totalAmount || 0;
@@ -156,7 +187,8 @@ class DunningService {
             const fine = inv.fineAmount || 0;
             const totalDue = outstanding + fine;
 
-            let wing = inv.flatId?.wingName || inv.flatId?.wing || inv.blockName || inv.flatId?.blockId?.name || '';
+            const flatIdStr = inv.flatId?._id ? String(inv.flatId._id) : (inv.flatId ? String(inv.flatId) : '');
+            let wing = flatsWingsMap[flatIdStr] || inv.flatId?.wingName || inv.flatId?.wing || inv.blockName || inv.flatId?.blockId?.name || '';
             if (!wing && inv.flatId?.flatNumber) {
                 const match = String(inv.flatId.flatNumber).match(/^([A-Za-z]+)[-\s]?/);
                 if (match) wing = `Wing ${match[1].toUpperCase()}`;
@@ -300,7 +332,21 @@ class DunningService {
             secondReminderDays: 7
         };
 
-        const history = await DunningReminder.find({ societyId }).sort({ sentAt: -1 }).limit(100);
+        const rawHistory = await DunningReminder.find({ societyId })
+            .populate("invoiceId", "invoiceNumber")
+            .sort({ sentAt: -1 })
+            .limit(100);
+
+        const history = rawHistory.map(rem => {
+            const obj = rem.toObject ? rem.toObject() : rem;
+            const invNum = obj.invoiceNumber || obj.invoice || obj.invoiceId?.invoiceNumber || 'N/A';
+            return {
+                ...obj,
+                invoice: invNum,
+                invoiceNumber: invNum
+            };
+        });
+
         return { config, history };
     }
 
@@ -320,19 +366,132 @@ class DunningService {
     static async sendReminder(req, data) {
         const db = req.opsDb;
         const { DunningReminder, DefaulterRecord } = getDunningModels(db);
+        const { BillingInvoice } = getBillingModels(db);
         const societyId = this.getSocietyId(req);
 
         const sentAt = new Date();
         const targetFlat = data.flat || data.flatNumber || "A-101";
 
+        let invId = data.invoiceId || null;
+        let invNum = data.invoice || data.invoiceNumber || "";
+        let residentEmail = null;
+        let residentName = data.resident || data.residentName || "Resident";
+
+        // Find invoice or flat to resolve registered email
+        try {
+            const flatSchema = require("../flat/flat.model");
+            const userSchema = require("../user/user.model");
+            const FlatModel = db.models.Flat || db.model("Flat", flatSchema);
+            const UserModel = db.models.User || db.model("User", userSchema);
+
+            const flatDoc = await FlatModel.findOne({
+                societyId,
+                $or: [
+                    { flatNumber: targetFlat },
+                    { flatNumber: `Flat ${targetFlat}` },
+                    { flatNumber: String(targetFlat).replace(/^(Block|Flat)[-\s]*/i, '') }
+                ]
+            }).populate("primaryOwner activeTenant");
+
+            if (flatDoc) {
+                const residentUser = flatDoc.activeTenant || flatDoc.primaryOwner;
+                if (residentUser?.email) {
+                    residentEmail = residentUser.email;
+                    if (residentUser.name) residentName = residentUser.name;
+                }
+            }
+
+            if (!residentEmail) {
+                const userDoc = await UserModel.findOne({
+                    societyId,
+                    $or: [
+                        { name: new RegExp(`^${residentName}$`, "i") },
+                        { email: { $exists: true, $ne: null } }
+                    ]
+                });
+                if (userDoc?.email) {
+                    residentEmail = userDoc.email;
+                }
+            }
+        } catch (err) {
+            console.warn("[DunningService] Resident email lookup warning:", err.message);
+        }
+
+        let pendingAmount = Number(data.totalOutstanding || data.pendingAmount) || 0;
+        let fineAmount = Number(data.fineAmount) || 0;
+
+        if (targetFlat) {
+            const UNPAID_STATUSES = ["GENERATED", "ISSUED", "OVERDUE", "PARTIALLY_PAID", "unpaid", "partially_paid", "overdue"];
+            
+            // Populate flat lookup to ensure we match flatId reference if flatNumber string field is unpopulated on invoice
+            const arrearsList = await this.getArrears(req);
+            const flatArrears = arrearsList.filter(item => String(item.flat).toLowerCase() === String(targetFlat).toLowerCase() || String(item.flat).toLowerCase() === `flat ${String(targetFlat).toLowerCase()}`);
+
+            if (flatArrears.length > 0) {
+                if (!invNum) {
+                    const oldest = flatArrears[0];
+                    invId = oldest.id;
+                    invNum = oldest.previousInvoice;
+                }
+
+                let calcTotalOutstanding = 0;
+                let calcTotalFine = 0;
+                flatArrears.forEach(item => {
+                    calcTotalOutstanding += item.totalDue;
+                    calcTotalFine += item.fine;
+                });
+
+                if (calcTotalOutstanding > 0) pendingAmount = calcTotalOutstanding;
+                if (calcTotalFine > 0) fineAmount = calcTotalFine;
+            }
+        }
+
+        // Send email via EmailService if registered email is found
+        let deliveryStatus = "DELIVERED";
+        let failureReason = null;
+
+        if (residentEmail) {
+            try {
+                const emailService = require("../../services/email.service");
+                const subject = `Overdue Maintenance Dues Reminder - Flat ${targetFlat}`;
+                const formattedPending = pendingAmount > 0 ? `₹${pendingAmount.toLocaleString()}` : 'N/A';
+                const formattedFine = fineAmount > 0 ? `₹${fineAmount.toLocaleString()}` : '₹0';
+
+                const text = `Dear ${residentName},\n\nThis is a reminder regarding your pending maintenance dues for Flat ${targetFlat}.\nInvoice Ref: ${invNum || 'N/A'}\nTotal Pending Dues: ${formattedPending}\nLate Fee / Fine: ${formattedFine}\n\nPlease settle the outstanding balance at your earliest convenience.\n\nThank you,\nSociety Management`;
+                const html = `
+                    <div style="font-family:Arial,sans-serif;max-width:550px;margin:0 auto;color:#1a1a1a;border:1px solid #e5e7eb;padding:24px;border-radius:16px">
+                      <h2 style="color:#ea580c;margin-top:0">Overdue Maintenance Dues Reminder</h2>
+                      <p>Dear <strong>${residentName}</strong>,</p>
+                      <p>This is an automated reminder regarding your overdue maintenance dues for <strong>Flat ${targetFlat}</strong>.</p>
+                      <div style="background:#fff7ed;padding:18px;border-radius:12px;border:1px solid #ffedd5;margin:20px 0">
+                        <p style="margin:6px 0;font-size:14px"><strong>Flat / Unit:</strong> ${targetFlat}</p>
+                        <p style="margin:6px 0;font-size:14px"><strong>Invoice Reference:</strong> ${invNum || 'N/A'}</p>
+                        <p style="margin:6px 0;font-size:16px;color:#dc2626"><strong>Total Pending Dues:</strong> ${formattedPending}</p>
+                        ${fineAmount > 0 ? `<p style="margin:6px 0;font-size:14px;color:#9333ea"><strong>Applied Fine / Interest:</strong> ${formattedFine}</p>` : ''}
+                      </div>
+                      <p>Please clear your pending dues at your earliest convenience to avoid additional penalties.</p>
+                      <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #e5e7eb;pt-4">This notification was sent to your registered email address (${residentEmail}).</p>
+                    </div>
+                `;
+
+                await emailService._send({ to: residentEmail, subject, text, html });
+            } catch (err) {
+                console.error("[DunningService] Failed sending reminder email:", err.message);
+                failureReason = err.message;
+            }
+        }
+
         const reminder = new DunningReminder({
             societyId,
+            invoiceId: invId,
+            invoiceNumber: invNum,
             flatNumber: targetFlat,
-            residentName: data.resident || data.residentName || "Resident",
+            residentName: residentName,
             reminderType: data.reminderType || "DEFAULTER_FOLLOWUP",
-            channel: data.channel || "SMS",
+            channel: "EMAIL",
             sentAt,
-            deliveryStatus: "DELIVERED"
+            deliveryStatus,
+            failureReason
         });
 
         await reminder.save();
@@ -342,7 +501,12 @@ class DunningService {
             { lastReminderSentAt: sentAt }
         );
 
-        return reminder;
+        return {
+            ...reminder.toObject(),
+            message: residentEmail 
+                ? `Reminder email dispatched successfully to ${residentEmail}` 
+                : `Reminder logged via EMAIL for Flat ${targetFlat}`
+        };
     }
 
     // ── 7. Fine Waivers (Strict Committee Admin Authorization + Mandatory Reason) ──
@@ -351,7 +515,32 @@ class DunningService {
         const { FineWaiver } = getDunningModels(db);
         const societyId = this.getSocietyId(req);
 
-        return await FineWaiver.find({ societyId }).sort({ waivedAt: -1 });
+        const rawWaivers = await FineWaiver.find({ societyId })
+            .populate("invoiceId", "invoiceNumber")
+            .populate("waivedBy", "name firstName lastName email")
+            .sort({ waivedAt: -1 });
+
+        return rawWaivers.map(wav => {
+            const obj = wav.toObject ? wav.toObject() : wav;
+            const invNum = obj.invoiceNumber || obj.invoice || obj.invoiceId?.invoiceNumber || 'N/A';
+            
+            let adminName = obj.waivedByName;
+            if (obj.waivedBy && typeof obj.waivedBy === 'object') {
+                const full = `${obj.waivedBy.firstName || ''} ${obj.waivedBy.lastName || ''}`.trim();
+                adminName = obj.waivedBy.name || full || obj.waivedBy.email || adminName;
+            }
+            if (!adminName || adminName === 'Committee Admin') {
+                adminName = req.user?.name || req.user?.firstName || 'Committee Admin';
+            }
+
+            return {
+                ...obj,
+                invoice: invNum,
+                invoiceNumber: invNum,
+                waivedByName: adminName,
+                waivedBy: adminName
+            };
+        });
     }
 
     static async waiveFine(req, data) {
@@ -360,7 +549,8 @@ class DunningService {
         const { BillingInvoice } = getBillingModels(db);
         const societyId = this.getSocietyId(req);
         const userId = this.getUserId(req);
-        const userName = req.user?.name || "Committee Admin";
+        
+        let userName = req.user?.name || `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim() || req.user?.email || "Committee Admin";
 
         const { invoiceId, invoiceNumber, flatNumber, residentName, originalFine, waivedAmount, reason } = data;
 
@@ -368,13 +558,43 @@ class DunningService {
             throw new Error("Waiver reason is mandatory according to society audit rules.");
         }
 
+        let targetInvoiceId = invoiceId || null;
+        let targetInvoiceNum = invoiceNumber || data.invoice || "";
+        let calculatedOriginalFine = Number(originalFine) || 0;
+        let pendingAmount = Number(data.pendingAmount) || 0;
+
+        let queryConditions = [];
+        if (targetInvoiceId && mongoose.Types.ObjectId.isValid(targetInvoiceId)) {
+            queryConditions.push({ _id: targetInvoiceId });
+        }
+        if (targetInvoiceNum) {
+            queryConditions.push({ invoiceNumber: targetInvoiceNum });
+        }
+        if (queryConditions.length === 0 && flatNumber) {
+            queryConditions.push({ flatNumber }, { invoiceNumber: flatNumber });
+        }
+
+        const inv = await BillingInvoice.findOne({
+            societyId,
+            $or: queryConditions
+        }).sort({ createdAt: -1 });
+
+        if (inv) {
+            targetInvoiceId = inv._id;
+            targetInvoiceNum = inv.invoiceNumber;
+            calculatedOriginalFine = Number(originalFine) !== undefined ? Number(originalFine) : (inv.fineAmount || 0);
+            const outstanding = Math.max(0, (inv.totalAmount || 0) - (inv.paidAmount || 0));
+            pendingAmount = Number(data.pendingAmount) || (outstanding + calculatedOriginalFine);
+        }
+
         const waiver = new FineWaiver({
             societyId,
-            invoiceId: invoiceId || null,
-            invoiceNumber: invoiceNumber || (data.invoice ? data.invoice : ""),
+            invoiceId: targetInvoiceId,
+            invoiceNumber: targetInvoiceNum,
             flatNumber: flatNumber || "A-101",
             residentName: residentName || "Resident",
-            originalFine: Number(originalFine) || 0,
+            originalFine: calculatedOriginalFine,
+            pendingAmount: pendingAmount,
             waivedAmount: Number(waivedAmount) || 0,
             reason: reason.trim(),
             waivedBy: userId,
@@ -384,12 +604,9 @@ class DunningService {
 
         await waiver.save();
 
-        if (invoiceId && mongoose.Types.ObjectId.isValid(invoiceId)) {
-            const invoice = await BillingInvoice.findById(invoiceId);
-            if (invoice) {
-                invoice.fineAmount = Math.max(0, (invoice.fineAmount || 0) - Number(waivedAmount));
-                await invoice.save();
-            }
+        if (inv) {
+            inv.fineAmount = Math.max(0, (inv.fineAmount || 0) - Number(waivedAmount));
+            await inv.save();
         }
 
         return waiver;
