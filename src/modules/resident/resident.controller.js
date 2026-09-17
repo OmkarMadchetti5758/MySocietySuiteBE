@@ -22,6 +22,26 @@ class ResidentController {
             next(error);
         }
     }
+
+    async updateResident(req, res, next) {
+        try {
+            const { userId } = req.params;
+            const result = await ResidentService.updateResident(req.societyId, userId, req.body);
+            return sendSuccess(res, 200, "Resident updated successfully", result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async deleteResident(req, res, next) {
+        try {
+            const { userId } = req.params;
+            await ResidentService.deleteResident(req.societyId, userId);
+            return sendSuccess(res, 200, "Resident deleted successfully");
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new ResidentController();

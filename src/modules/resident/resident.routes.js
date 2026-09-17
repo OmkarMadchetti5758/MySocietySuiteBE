@@ -26,5 +26,16 @@ router.post(
     validate,
     ResidentController.inviteResident
 );
+router.put(
+    "/:userId",
+    checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.FULL),
+    ResidentController.updateResident
+);
+
+router.delete(
+    "/:userId",
+    checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.FULL),
+    ResidentController.deleteResident
+);
 
 module.exports = router;

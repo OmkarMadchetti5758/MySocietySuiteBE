@@ -84,6 +84,12 @@ router.patch(
     vendorController.updateVendor
 );
 
+router.delete(
+    "/:id",
+    checkPermission(MODULES.VENDOR_MANAGEMENT, PERMISSION_LEVELS.FULL),
+    vendorController.deleteVendor
+);
+
 router.get(
     "/:id/history",
     checkPermission(MODULES.VENDOR_MANAGEMENT, PERMISSION_LEVELS.VIEW),

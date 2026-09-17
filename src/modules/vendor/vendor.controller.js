@@ -46,6 +46,15 @@ class VendorController {
         }
     }
 
+    async deleteVendor(req, res, next) {
+        try {
+            await VendorService.deleteVendor(req.societyId, req.params.id);
+            return sendSuccess(res, 200, "Vendor deleted successfully");
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async getVendorHistory(req, res, next) {
         try {
             const data = await VendorService.getVendorHistory(req.societyId, req.params.id);

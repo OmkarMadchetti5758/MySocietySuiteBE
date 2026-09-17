@@ -353,6 +353,72 @@ class ResidentRepository {
             totalPages: Math.ceil(total / limit) || 1,
         };
     }
+
+    async updateResident(societyId, userId, data) {
+        const opsDb = getOperationsConnection();
+        const User = opsDb.model("User");
+        const Resident = opsDb.model("Resident");
+
+        const user = await User.findOneAndUpdate(
+            { _id: userId, societyId },
+            { $set: { name: data.name, email: data.email, mobile: data.phone } },
+            { new: true }
+        );
+
+        if (!user) {
+            throw new AppError("User not found", 404);
+        }
+
+        if (data.residentType || data.role) {
+            const resident = await Resident.findOne({ userId, societyId });
+            if (resident) {
+                if (data.residentType) resident.residentType = data.residentType;
+                await resident.save();
+                
+                if (resident.flatId) {
+                    await this.syncFlatOccupancy(societyId, resident.flatId, {
+                        ownerName: data.residentType === RESIDENT_TYPE.OWNER ? data.name : undefined,
+                        ownerContact: data.residentType === RESIDENT_TYPE.OWNER ? data.phone : undefined,
+                    });
+                }
+            }
+            if (data.role) {
+                user.role = data.role;
+                await user.save();
+                
+                const masterDb = getMasterConnection();
+                const UserSocietyMapping = masterDb.model("UserSocietyMapping");
+                await UserSocietyMapping.updateMany(
+                    { userId, societyId },
+                    { $set: { roleKeys: [data.role] } }
+                );
+            }
+        }
+
+        return user;
+    }
+
+    async deleteResident(societyId, userId) {
+        const masterDb = getMasterConnection();
+        const opsDb = getOperationsConnection();
+
+        const User = opsDb.model("User");
+        const Resident = opsDb.model("Resident");
+        const InviteToken = masterDb.model("InviteToken");
+        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
+
+        const resident = await Resident.findOne({ userId, societyId });
+        
+        await Resident.deleteOne({ userId, societyId });
+        await User.deleteOne({ _id: userId, societyId });
+        await UserSocietyMapping.deleteMany({ userId, societyId });
+        await InviteToken.deleteMany({ adminId: userId, purpose: "resident" });
+
+        if (resident && resident.flatId) {
+            await this.syncFlatOccupancy(societyId, resident.flatId, { clearOwnerOnVacant: true });
+        }
+        return true;
+    }
 }
 
 module.exports = new ResidentRepository();

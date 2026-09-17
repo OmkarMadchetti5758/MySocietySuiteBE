@@ -92,6 +92,14 @@ class ResidentService {
             ...(process.env.NODE_ENV === "development" ? { devInviteLink: inviteLink } : {}),
         };
     }
+
+    async updateResident(societyId, userId, data) {
+        return ResidentRepository.updateResident(societyId, userId, data);
+    }
+
+    async deleteResident(societyId, userId) {
+        return ResidentRepository.deleteResident(societyId, userId);
+    }
 }
 
 module.exports = new ResidentService();

@@ -231,6 +231,28 @@ class VendorService {
         return vendor;
     }
 
+    async deleteVendor(societyId, vendorId) {
+        const opsDb = getOperationsConnection();
+        const masterDb = getMasterConnection();
+        
+        const Vendor = opsDb.model("Vendor");
+        const User = opsDb.model("User");
+        const Mapping = masterDb.model("UserSocietyMapping");
+
+        const vendor = await Vendor.findOne({ _id: vendorId, societyId });
+        if (!vendor) {
+            throw new AppError("Vendor not found.", 404, "VENDOR_NOT_FOUND");
+        }
+
+        if (vendor.userId) {
+            await Mapping.deleteMany({ userId: vendor.userId, societyId });
+            await User.deleteOne({ _id: vendor.userId, societyId });
+        }
+
+        await Vendor.deleteOne({ _id: vendorId, societyId });
+        return true;
+    }
+
     // ── Vendor Eligibility Check ──────────────────────────────────────────────
 
     _assertVendorEligible(vendor) {
