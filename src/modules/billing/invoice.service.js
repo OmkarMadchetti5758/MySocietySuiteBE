@@ -303,7 +303,10 @@ class InvoiceService {
                 GENERATED: ["GENERATED"],
                 CANCELLED: ["CANCELLED"],
             };
-            filter.status = { $in: statusMap[status.toUpperCase()] || [status] };
+            // Support comma-separated status values e.g. "GENERATED,PARTIALLY_PAID,OVERDUE"
+            const statusKeys = status.split(",").map(s => s.trim().toUpperCase());
+            const resolvedStatuses = statusKeys.flatMap(key => statusMap[key] || [key]);
+            filter.status = { $in: resolvedStatuses };
         }
 
         if (billingPeriod) filter.billingPeriod = billingPeriod;
