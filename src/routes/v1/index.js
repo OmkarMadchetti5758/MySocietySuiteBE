@@ -45,7 +45,7 @@ router.use("/sos", require("../../modules/sos/sos.routes"));
 // router.use("/societies", societyRoutes);
 router.use("/billing", require("../../modules/billing/billing.routes"));
 router.use("/documents", require("../../modules/document/document.routes"));
-// router.use("/payments", require("../../modules/payment/payment.routes"));
-// router.use("/reconciliation", require("../../modules/reconciliation/reconciliation.routes"));
+router.use("/payments", require("../../modules/payment/payment.routes"));
+router.use("/reconciliation", require("../../modules/reconciliation/reconciliation.routes"));
 
 module.exports = router;
