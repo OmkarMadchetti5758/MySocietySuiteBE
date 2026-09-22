@@ -284,7 +284,7 @@ class DunningService {
                 }
             }
             flatMap[item.flat].unpaidCycles += 1;
-            flatMap[item.flat].outstanding += item.totalDue;
+            flatMap[item.flat].outstanding += (item.outstanding !== undefined ? item.outstanding : (item.totalDue - item.fine));
             flatMap[item.flat].daysOverdue = Math.max(flatMap[item.flat].daysOverdue, item.daysOverdue);
             flatMap[item.flat].fineAmount += item.fine;
         });
@@ -421,11 +421,30 @@ class DunningService {
         let fineAmount = Number(data.fineAmount) || 0;
 
         if (targetFlat) {
-            const UNPAID_STATUSES = ["GENERATED", "ISSUED", "OVERDUE", "PARTIALLY_PAID", "unpaid", "partially_paid", "overdue"];
-            
-            // Populate flat lookup to ensure we match flatId reference if flatNumber string field is unpopulated on invoice
+            const cleanTarget = String(targetFlat).toLowerCase().replace(/^(block|flat)[-\s]*/i, '').trim();
+
+            // 1. Try to fetch directly from DefaulterRecord for aggregate total outstanding & fine if not passed
+            const defaulterRec = await DefaulterRecord.findOne({
+                societyId,
+                $or: [
+                    { flatNumber: targetFlat },
+                    { flatNumber: cleanTarget },
+                    { flatNumber: `Flat ${cleanTarget}` },
+                    { flatNumber: `101` }
+                ]
+            });
+
+            if (defaulterRec) {
+                if (!pendingAmount && defaulterRec.totalOutstanding > 0) pendingAmount = defaulterRec.totalOutstanding;
+                if (!fineAmount && defaulterRec.totalFineAmount > 0) fineAmount = defaulterRec.totalFineAmount;
+            }
+
+            // 2. Fetch from arrearsList as secondary fallback or refine invoice details
             const arrearsList = await this.getArrears(req);
-            const flatArrears = arrearsList.filter(item => String(item.flat).toLowerCase() === String(targetFlat).toLowerCase() || String(item.flat).toLowerCase() === `flat ${String(targetFlat).toLowerCase()}`);
+            const flatArrears = arrearsList.filter(item => {
+                const cleanItem = String(item.flat).toLowerCase().replace(/^(block|flat)[-\s]*/i, '').trim();
+                return cleanItem === cleanTarget || String(item.flat).toLowerCase() === String(targetFlat).toLowerCase();
+            });
 
             if (flatArrears.length > 0) {
                 if (!invNum) {
@@ -434,15 +453,17 @@ class DunningService {
                     invNum = oldest.previousInvoice;
                 }
 
-                let calcTotalOutstanding = 0;
-                let calcTotalFine = 0;
-                flatArrears.forEach(item => {
-                    calcTotalOutstanding += item.totalDue;
-                    calcTotalFine += item.fine;
-                });
+                if (!pendingAmount || !fineAmount) {
+                    let calcTotalOutstanding = 0;
+                    let calcTotalFine = 0;
+                    flatArrears.forEach(item => {
+                        calcTotalOutstanding += (item.outstanding !== undefined ? item.outstanding : (item.totalDue - (item.fine || 0)));
+                        calcTotalFine += (item.fine || 0);
+                    });
 
-                if (calcTotalOutstanding > 0) pendingAmount = calcTotalOutstanding;
-                if (calcTotalFine > 0) fineAmount = calcTotalFine;
+                    if (!pendingAmount && calcTotalOutstanding > 0) pendingAmount = calcTotalOutstanding;
+                    if (!fineAmount && calcTotalFine > 0) fineAmount = calcTotalFine;
+                }
             }
         }
 
