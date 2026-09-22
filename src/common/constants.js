@@ -564,10 +564,12 @@ const STAFF_TYPE = Object.freeze({
 });
 
 const DOCUMENT_TYPE = Object.freeze({
+    MINUTES_OF_MEETING: "Minutes of Meeting",
+    CIRCULARS: "Circulars",
+    COMPLIANCE: "Compliance",
+    FINANCIAL: "Financial",
     AGREEMENT: "agreement",
     NOC: "noc",
-    CIRCULAR: "circular",
-    MINUTES: "minutes",
     AUDIT_REPORT: "audit_report",
     OTHER: "other",
 });

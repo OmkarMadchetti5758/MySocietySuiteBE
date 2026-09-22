@@ -2,6 +2,7 @@
 
 const path = require("path");
 const { randomUUID } = require("crypto");
+const fs = require("fs");
 const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const env = require("../config/env");
@@ -19,6 +20,7 @@ const STORAGE_FOLDERS = {
     HELPDESK: "helpdesk",
     SOCIETY: "society",
     PARKING: "parking",
+    DOCUMENTS: "documents",
 };
 
 const ALLOWED_FOLDERS = new Set(Object.values(STORAGE_FOLDERS));
@@ -31,10 +33,20 @@ const MIME_EXTENSIONS = {
     "image/gif": ".gif",
     "image/bmp": ".bmp",
     "image/svg+xml": ".svg",
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.ms-excel": ".xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "text/csv": ".csv",
+};
+
+const isConfigured = () => {
+    return BUCKET && env.DO_SPACES_KEY && env.DO_SPACES_SECRET && ENDPOINT;
 };
 
 const assertConfigured = () => {
-    if (!BUCKET || !env.DO_SPACES_KEY || !env.DO_SPACES_SECRET || !ENDPOINT) {
+    if (!isConfigured()) {
         throw new Error("DigitalOcean Spaces is not configured. Check DO_SPACE_* environment variables.");
     }
 };
@@ -127,6 +139,21 @@ const extractKeyFromUrl = (urlOrKey) => {
 };
 
 const uploadFile = async ({ buffer, key, contentType, isPublic = true }) => {
+    if (!isConfigured()) {
+        // Local fallback for development
+        const uploadPath = path.join(__dirname, "../../uploads", key);
+        const dir = path.dirname(uploadPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(uploadPath, buffer);
+        
+        return {
+            key,
+            url: `http://localhost:${env.PORT || 5000}/uploads/${key}`,
+        };
+    }
+
     assertConfigured();
 
     const command = new PutObjectCommand({
@@ -166,6 +193,16 @@ const uploadMulterFiles = async (files, folder, societyId) => {
 
 const deleteFile = async (key) => {
     if (!key) return;
+
+    if (!isConfigured()) {
+        // Local fallback for development
+        const uploadPath = path.join(__dirname, "../../uploads", key);
+        if (fs.existsSync(uploadPath)) {
+            fs.unlinkSync(uploadPath);
+        }
+        return;
+    }
+
     assertConfigured();
 
     const command = new DeleteObjectCommand({
@@ -191,6 +228,10 @@ const deleteStoredFiles = async (urlsOrKeys = []) => {
 };
 
 const getFileUrl = async (key, expiresIn = 3600) => {
+    if (!isConfigured()) {
+        return `http://localhost:${env.PORT || 5000}/uploads/${key}`;
+    }
+    
     assertConfigured();
 
     const command = new GetObjectCommand({

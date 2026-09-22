@@ -45,10 +45,18 @@ const documentSchema = new mongoose.Schema(
             ref: "User",
             required: [true, "uploadedBy is required"],
         },
-        isPublic: {
-            type: Boolean,
-            default: false,
-            // true = visible to all society residents; false = committee-only
+        visibilityScope: {
+            type: String,
+            enum: ['All Residents', 'Committee Only', 'Specific Block'],
+            default: 'All Residents',
+            required: [true, "visibilityScope is required"]
+        },
+        blockId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Block",
+            required: function() {
+                return this.visibilityScope === 'Specific Block';
+            }
         },
         tags: [String],
     },
@@ -56,6 +64,7 @@ const documentSchema = new mongoose.Schema(
 );
 
 documentSchema.index({ societyId: 1, category: 1 });
-documentSchema.index({ societyId: 1, isPublic: 1 });
+documentSchema.index({ societyId: 1, visibilityScope: 1 });
+documentSchema.index({ societyId: 1, blockId: 1 });
 
 module.exports = documentSchema;

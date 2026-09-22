@@ -44,5 +44,6 @@ router.use("/sos", require("../../modules/sos/sos.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
 router.use("/billing", require("../../modules/billing/billing.routes"));
+router.use("/documents", require("../../modules/document/document.routes"));
 
 module.exports = router;
