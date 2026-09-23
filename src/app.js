@@ -46,6 +46,10 @@ app.use(
 // API Versioning - mount v1 routes
 app.use("/api/v1", v1Routes);
 
+app.get("/", (req, res) => {
+    res.send("Hello World!");
+});
+
 // Handle undefined routes
 app.use(notFound);
 
