@@ -289,7 +289,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.SOCIETY_FLAT_SETUP]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.BILLING_ACCOUNTS]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.VISITOR_MANAGEMENT]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
-        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.VIEW, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.COMPLAINTS_HELPDESK]: { level: PERMISSION_LEVELS.MANAGE, scope: PERMISSION_SCOPE.ASSIGNED },
         [MODULES.NOTICE_BOARD_POLLS]: { level: PERMISSION_LEVELS.VIEW, scope: PERMISSION_SCOPE.SOCIETY },
         [MODULES.AMENITY_BOOKING]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.PARKING_MANAGEMENT]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
@@ -398,6 +398,7 @@ const SOS_STATUS = Object.freeze({
 // ─── Complaint Status ──────────────────────────────────────────────────────────
 const COMPLAINT_STATUS = Object.freeze({
     OPEN: "open",
+    ASSIGNED: "assigned",
     IN_PROGRESS: "in_progress",
     RESOLVED: "resolved",
     CLOSED: "closed",
@@ -410,6 +411,108 @@ const COMPLAINT_PRIORITY = Object.freeze({
     HIGH: "high",
     URGENT: "urgent",
 });
+
+const COMPLAINT_AREA_TYPES = Object.freeze({
+    COMMON_AREA: "Common Area",
+    INDIVIDUAL_AREA: "Individual Area",
+});
+
+const COMMON_AREAS_CATEGORIZED = Object.freeze({
+    Building: [
+        "Lobby",
+        "Lift",
+        "Staircase",
+        "Corridor",
+        "Entrance Lobby",
+        "Lifts / Lift Lobby",
+        "Terrace",
+        "Corridors / Passage"
+    ],
+    Parking: [
+        "Resident Parking",
+        "Visitor Parking",
+        "Parking Area"
+    ],
+    Recreation: [
+        "Garden",
+        "Gym",
+        "Clubhouse",
+        "Pool",
+        "Play Area",
+        "Garden / Green Area",
+        "Children’s Play Area",
+        "Swimming Pool",
+        "Community Hall",
+        "Indoor Games Area",
+        "Walking / Jogging Track"
+    ],
+    Administration: [
+        "Society Office",
+        "Reception",
+        "Reception Area",
+        "Visitor Waiting Area",
+        "Seating Area"
+    ],
+    Utilities: [
+        "Electrical Room",
+        "Pump Room",
+        "Generator Room",
+        "Water Tank",
+        "Water Tank Area",
+        "Meter Room"
+    ],
+    Security: [
+        "Main Gate",
+        "Main Entrance / Gate",
+        "Security Cabin",
+        "CCTV Area",
+        "Fire Safety Area",
+        "Fire Safety Equipment Area"
+    ],
+    Maintenance: [
+        "Garbage Area",
+        "Garbage Collection Area",
+        "Maintenance Room",
+        "Open Common Area"
+    ]
+});
+
+const COMMON_AREAS_FLAT = Object.freeze(
+    Array.from(new Set(Object.values(COMMON_AREAS_CATEGORIZED).flat()))
+);
+
+const INDIVIDUAL_AREAS_FLAT = Object.freeze([
+    "Flat / Apartment",
+    "Private Balcony",
+    "Private Terrace",
+    "Private Garden",
+    "Private Parking Slot",
+    "Covered Parking",
+    "Open Parking",
+    "Basement Parking Slot",
+    "Garage",
+    "Store Room",
+    "Servant Room",
+    "Utility Area",
+    "Dry Balcony",
+    "Attached Terrace",
+    "Private Courtyard",
+    "Private Lobby",
+    "Private Entrance Area",
+    "Visitor Parking Slot Assigned to Flat",
+    "EV Charging Slot",
+    "Bike / Two-Wheeler Parking Slot",
+    "Bicycle Parking Slot",
+    "Additional Storage Area",
+    "Meter Space Assigned to Unit",
+    "AC Outdoor Unit Space",
+    "Washing / Laundry Area",
+    "Kitchen Utility Area",
+    "Garden Patch Assigned to Flat",
+    "Terrace Garden Area",
+    "Pet Area Assigned to Unit"
+]);
+
 
 const MAINTENANCE_STATUS = Object.freeze({
     PENDING: "pending",
@@ -651,6 +754,10 @@ module.exports = {
     SOS_STATUS,
     COMPLAINT_STATUS,
     COMPLAINT_PRIORITY,
+    COMPLAINT_AREA_TYPES,
+    COMMON_AREAS_CATEGORIZED,
+    COMMON_AREAS_FLAT,
+    INDIVIDUAL_AREAS_FLAT,
     MAINTENANCE_STATUS,
     PAYMENT_METHOD,
     PAYMENT_STATUS,

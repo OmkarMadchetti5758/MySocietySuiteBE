@@ -6,6 +6,7 @@ const { sendSuccess }  = require("../../utils/response.utils");
 const { MODULES, PERMISSION_LEVELS, ROLES, COMPLAINT_STATUS } = require("../../common/constants");
 const AppError         = require("../../common/AppError");
 const { uploadMulterFiles, STORAGE_FOLDERS } = require("../../services/storage.service");
+const { getOperationsConnection } = require("../../config/operationsDb");
 
 class ComplaintController {
 
@@ -20,7 +21,7 @@ class ComplaintController {
      */
     async createComplaint(req, res, next) {
         try {
-            const { category, description, priority, attachments } = req.body;
+            const { category, areaType, areaLocation, description, priority, attachments } = req.body;
 
             let fileAttachments = attachments || [];
             if (req.files && req.files.length > 0) {
@@ -33,6 +34,8 @@ class ComplaintController {
                 userId:      req.user.id,
                 role:        req.user.role,
                 category,
+                areaType,
+                areaLocation,
                 description,
                 priority,
                 attachments: fileAttachments,
@@ -57,9 +60,6 @@ class ComplaintController {
     async listComplaints(req, res, next) {
         try {
             const { status, category, priority, sort, page, limit, slaBreached } = req.query;
-            const residentRoles = [ROLES.RESIDENT_OWNER, ROLES.RESIDENT_TENANT, ROLES.RESIDENT];
-            const isResident = residentRoles.includes(req.user.role);
-
             const filter = {};
 
             // Status filter — validated against enum
@@ -67,14 +67,35 @@ class ComplaintController {
                 filter.status = status;
             }
 
-            // Role-based filtering
-            if (isResident) {
-                // Residents only see their own complaints
+            // Scope-based filtering derived from resolved permissions (handles multi-role users)
+            const scope = req.permission?.scope || "own";
+
+            if (scope === "own") {
+                // Resident scope — only see own complaints
                 filter.raisedBy = req.user.id;
-            } else if (![ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.FACILITY_MANAGER, ROLES.COMMITTEE_MEMBER].includes(req.user.role)) {
-                // General staff, guards, etc. only see tickets assigned to them
-                filter.assignedStaffId = req.user.id;
+            } else if (scope === "assigned" || scope === "restricted" || req.user.role === "general_staff") {
+                // Staff / Vendor assigned scope — only see tickets assigned to them
+                const opsDb = getOperationsConnection();
+                const Staff = opsDb.model("Staff");
+                const Vendor = opsDb.model("Vendor");
+                
+                const [staffProfile, vendorProfile] = await Promise.all([
+                    Staff.findOne({ societyId: req.societyId, userId: req.user.id }).select("_id").lean(),
+                    Vendor.findOne({ societyId: req.societyId, userId: req.user.id }).select("_id").lean(),
+                ]);
+
+                const possibleStaffIds = [req.user.id];
+                if (staffProfile) possibleStaffIds.push(staffProfile._id);
+
+                const possibleVendorIds = [req.user.id];
+                if (vendorProfile) possibleVendorIds.push(vendorProfile._id);
+
+                filter.$or = [
+                    { assignedStaffId: { $in: possibleStaffIds } },
+                    { assignedVendorId: { $in: possibleVendorIds } },
+                ];
             }
+            // For society, facility, all, or platform scope: show all complaints for the society
 
             if (category) {
                 filter.category = category;
@@ -106,8 +127,8 @@ class ComplaintController {
      */
     async getComplaintById(req, res, next) {
         try {
-            const residentRoles = [ROLES.RESIDENT_OWNER, ROLES.RESIDENT_TENANT, ROLES.RESIDENT];
-            const isResident = residentRoles.includes(req.user.role);
+            const scope = req.permission?.scope || "own";
+            const isResident = scope === "own";
 
             const complaint = await ComplaintService.getComplaintById({
                 societyId:   req.societyId,
@@ -262,6 +283,32 @@ class ComplaintController {
         try {
             const summary = await ComplaintService.getComplaintSummary(req.societyId);
             return sendSuccess(res, 200, "Complaint summary retrieved.", summary);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * GET /complaints/assignable-staff
+     * Returns active staff members eligible to be assigned to helpdesk tickets.
+     * Requires COMPLAINTS_HELPDESK → MANAGE so facility managers can fetch
+     * staff without needing STAFF_MANAGEMENT → VIEW permission.
+     */
+    async getAssignableStaff(req, res, next) {
+        try {
+            const opsDb = getOperationsConnection();
+            const Staff = opsDb.model("Staff");
+
+            const staffList = await Staff.find({
+                societyId: req.societyId,
+                isActive: true,
+                status: { $nin: ["deactivated", "invited"] },
+            })
+                .select("_id name role phone")
+                .sort({ name: 1 })
+                .lean();
+
+            return sendSuccess(res, 200, "Assignable staff retrieved.", staffList);
         } catch (error) {
             next(error);
         }

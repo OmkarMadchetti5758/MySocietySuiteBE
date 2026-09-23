@@ -37,6 +37,18 @@ router.get(
     controller.getComplaintSummary
 );
 
+/**
+ * GET /complaints/assignable-staff
+ * Returns active staff eligible for ticket assignment.
+ * Guarded by COMPLAINTS_HELPDESK → MANAGE so facility managers and admins
+ * can fetch staff without needing STAFF_MANAGEMENT → VIEW permission.
+ */
+router.get(
+    "/assignable-staff",
+    checkPermission(MODULES.COMPLAINTS_HELPDESK, PERMISSION_LEVELS.MANAGE),
+    controller.getAssignableStaff
+);
+
 // ── Vendor Portal Routes ───────────────────────────────────────────────────────
 // Must come BEFORE /:id to avoid Express treating "vendor" as the :id param.
 
