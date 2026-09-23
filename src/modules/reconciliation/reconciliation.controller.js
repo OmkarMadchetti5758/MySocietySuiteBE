@@ -363,48 +363,67 @@ const importBankStatement = async (req, res, next) => {
         const stmtTxDocs = validRows.map(r => ({ ...r, statementId: statement._id }));
         const insertedStmtTxs = await models.BankStatementTransaction.insertMany(stmtTxDocs);
 
-        // Perform Automatic Matching Logic
+        // Perform Enhanced Automatic Matching Logic
         let autoMatchCount = 0;
-        const systemTransactions = await models.AccountTransaction.find({
+        const candidateTxs = await models.AccountTransaction.find({
             societyId,
             accountId,
             reconciliationStatus: "UNRECONCILED"
         });
 
+        const cleanRef = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
         for (const stmtTx of insertedStmtTxs) {
-            // Match Criteria: Reference Number OR (Amount + Date within 2 days)
             let matched = null;
             let matchReason = "";
             let score = 0;
+            let matchedIdx = -1;
 
-            if (stmtTx.referenceNumber) {
-                matched = systemTransactions.find(
-                    tx => tx.externalReference && tx.externalReference.trim() === stmtTx.referenceNumber.trim()
-                );
-                if (matched) {
-                    matchReason = "Exact Reference Number Match";
-                    score = 100;
+            const stmtRefClean = cleanRef(stmtTx.referenceNumber);
+            const stmtDescClean = cleanRef(stmtTx.description);
+            const stmtAmount = stmtTx.credit > 0 ? stmtTx.credit : stmtTx.debit;
+            const stmtDirection = stmtTx.credit > 0 ? "CREDIT" : "DEBIT";
+
+            // Pass 1: Reference Number / Substring Match
+            if (stmtRefClean.length >= 3) {
+                matchedIdx = candidateTxs.findIndex(tx => {
+                    const extRefClean = cleanRef(tx.externalReference);
+                    const txDescClean = cleanRef(tx.description);
+                    const txNumClean = cleanRef(tx.transactionNumber);
+                    return (
+                        (extRefClean && (extRefClean === stmtRefClean || extRefClean.includes(stmtRefClean) || stmtRefClean.includes(extRefClean))) ||
+                        (txDescClean && txDescClean.includes(stmtRefClean)) ||
+                        (txNumClean && txNumClean.includes(stmtRefClean))
+                    );
+                });
+                if (matchedIdx !== -1) {
+                    matched = candidateTxs[matchedIdx];
+                    matchReason = "Reference Number Match";
+                    score = 95;
                 }
             }
 
-            if (!matched) {
-                const stmtAmount = stmtTx.credit > 0 ? stmtTx.credit : stmtTx.debit;
-                const stmtDirection = stmtTx.credit > 0 ? "CREDIT" : "DEBIT";
-
-                matched = systemTransactions.find(tx => {
+            // Pass 2: Amount + Direction + Date Proximity (within 3 days)
+            if (!matched && stmtAmount > 0) {
+                matchedIdx = candidateTxs.findIndex(tx => {
                     const amountMatch = Math.abs(tx.amount - stmtAmount) < 0.01;
                     const directionMatch = tx.direction === stmtDirection;
-                    const dateDiffDays = Math.abs(new Date(tx.transactionDate) - new Date(stmtTx.transactionDate)) / (1000 * 60 * 60 * 24);
-                    return amountMatch && directionMatch && dateDiffDays <= 2;
+                    const txTime = new Date(tx.transactionDate).getTime();
+                    const stmtTime = new Date(stmtTx.transactionDate).getTime();
+                    const dateDiffDays = Math.abs(txTime - stmtTime) / (1000 * 60 * 60 * 24);
+                    return amountMatch && directionMatch && dateDiffDays <= 3;
                 });
-
-                if (matched) {
+                if (matchedIdx !== -1) {
+                    matched = candidateTxs[matchedIdx];
                     matchReason = "Amount and Date Proximity Match";
                     score = 85;
                 }
             }
 
-            if (matched) {
+            if (matched && matchedIdx !== -1) {
+                // Remove matched candidate from pool so it's not matched twice
+                candidateTxs.splice(matchedIdx, 1);
+
                 stmtTx.matchingStatus = "AUTO_MATCHED";
                 stmtTx.matchedTransactionId = matched._id;
                 stmtTx.confidenceScore = score;
