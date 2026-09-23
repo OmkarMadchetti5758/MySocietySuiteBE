@@ -2,13 +2,21 @@
 
 const { getOperationsConnection } = require("../../config/operationsDb");
 const AppError = require("../../common/AppError");
-const { COMPLAINT_STATUS, COMPLAINT_PRIORITY, ROLES } = require("../../common/constants");
+const {
+    COMPLAINT_STATUS,
+    COMPLAINT_PRIORITY,
+    ROLES,
+    COMPLAINT_AREA_TYPES,
+    COMMON_AREAS_FLAT,
+    INDIVIDUAL_AREAS_FLAT,
+} = require("../../common/constants");
 
 // ── Valid status transition map ───────────────────────────────────────────────
 // Defines exactly which transitions are legal from each state.
 // This is the single source of truth — enforced in _assertValidTransition().
 const VALID_TRANSITIONS = {
-    [COMPLAINT_STATUS.OPEN]: [COMPLAINT_STATUS.IN_PROGRESS],
+    [COMPLAINT_STATUS.OPEN]: [COMPLAINT_STATUS.ASSIGNED, COMPLAINT_STATUS.IN_PROGRESS],
+    [COMPLAINT_STATUS.ASSIGNED]: [COMPLAINT_STATUS.IN_PROGRESS, COMPLAINT_STATUS.RESOLVED],
     [COMPLAINT_STATUS.IN_PROGRESS]: [COMPLAINT_STATUS.RESOLVED],
     [COMPLAINT_STATUS.RESOLVED]: [COMPLAINT_STATUS.CLOSED, COMPLAINT_STATUS.OPEN], // CLOSED=confirm, OPEN=reopen
 };
@@ -177,7 +185,7 @@ class ComplaintService {
         }
         return resident;
     }
-    async createComplaint({ societyId, userId, role, category, description, priority, attachments = [] }) {
+    async createComplaint({ societyId, userId, role, category, areaType, areaLocation, description, priority, attachments = [] }) {
         const opsDb = getOperationsConnection();
 
         const trimmedCategory = (category || "").trim();
@@ -190,6 +198,21 @@ class ComplaintService {
                 400,
                 "INVALID_CATEGORY"
             );
+        }
+
+        let validatedAreaType = null;
+        let validatedAreaLocation = null;
+        if (areaType) {
+            if (!Object.values(COMPLAINT_AREA_TYPES).includes(areaType)) {
+                throw new AppError("Invalid area type. Must be Common Area or Individual Area.", 400, "INVALID_AREA_TYPE");
+            }
+            validatedAreaType = areaType;
+
+            const trimmedLocation = (areaLocation || "").trim();
+            if (!trimmedLocation) {
+                throw new AppError("Area location is required when area type is specified.", 400, "INVALID_AREA_LOCATION");
+            }
+            validatedAreaLocation = trimmedLocation;
         }
 
         const trimmedDescription = (description || "").trim();
@@ -233,6 +256,8 @@ class ComplaintService {
                         flatId: resident.flatId,
                         raisedBy: userId,
                         category: trimmedCategory,
+                        areaType: validatedAreaType,
+                        areaLocation: validatedAreaLocation,
                         description: trimmedDescription,
                         priority: resolvedPriority,
                         attachments: validAttachments,
@@ -399,7 +424,7 @@ class ComplaintService {
                 // Idempotency: same assignment already in place
                 const isSameStaff = assignedToType === "internal_staff" && current.assignedStaffId?.toString() === assigneeId.toString();
                 const isSameVendor = assignedToType === "vendor" && current.assignedVendorId?.toString() === assigneeId.toString();
-                if (isSameStaff || isSameVendor) {
+                if ((isSameStaff || isSameVendor) && current.status !== COMPLAINT_STATUS.OPEN) {
                     throw new AppError("Complaint is already assigned to this assignee.", 400, "ALREADY_ASSIGNED");
                 }
 
@@ -431,6 +456,7 @@ class ComplaintService {
                             assignedVendorId: updateFields.assignedVendorId,
                             assignedBy: updateFields.assignedBy,
                             assignedAt: updateFields.assignedAt,
+                            status: COMPLAINT_STATUS.ASSIGNED,
                         }, $inc: { version: 1 }
                     },
                     { new: true, session }
@@ -706,7 +732,9 @@ class ComplaintService {
                             reopenedBy: userId,
                             reopeningRemarks: trimmedRemarks,
                             sla: newSla,
-                            // Reset assignment so admin can reassign
+                            assignedToType: null,
+                            assignedStaffId: null,
+                            assignedVendorId: null,
                         },
                         $inc: { version: 1, reopenCount: 1 },
                     },
@@ -775,17 +803,22 @@ class ComplaintService {
                 { $match: { societyId: require("mongoose").Types.ObjectId.createFromHexString(societyId.toString()) } },
                 { $group: { _id: "$status", count: { $sum: 1 } } },
             ]),
-            // Average resolution time (only for tickets that have resolvedAt AND createdAt)
+            // Average resolution time (for resolved and closed tickets)
             Complaint.aggregate([
                 {
                     $match: {
                         societyId: require("mongoose").Types.ObjectId.createFromHexString(societyId.toString()),
-                        resolvedAt: { $ne: null },
+                        status: { $in: [COMPLAINT_STATUS.RESOLVED, COMPLAINT_STATUS.CLOSED] },
                     },
                 },
                 {
                     $project: {
-                        resolutionTimeMs: { $subtract: ["$resolvedAt", "$createdAt"] },
+                        resolutionTimeMs: {
+                            $subtract: [
+                                { $ifNull: ["$resolvedAt", { $ifNull: ["$closedAt", "$updatedAt"] }] },
+                                "$createdAt",
+                            ],
+                        },
                     },
                 },
                 {
@@ -798,21 +831,23 @@ class ComplaintService {
             ]),
         ]);
 
-        const counts = { open: 0, in_progress: 0, resolved: 0, closed: 0 };
+        const counts = { open: 0, assigned: 0, in_progress: 0, resolved: 0, closed: 0 };
         statusCounts.forEach(({ _id, count }) => {
             counts[_id] = count;
         });
 
         const resData = resolutionTimeAgg[0] || {};
         const avgResolutionTimeHours = resData.avgResolutionTimeMs
-            ? Math.round(resData.avgResolutionTimeMs / (1000 * 60 * 60) * 10) / 10
+            ? Math.round((resData.avgResolutionTimeMs / (1000 * 60 * 60)) * 10) / 10
             : null;
 
         return {
-            open: counts.open,
-            inProgress: counts.in_progress,
-            resolved: counts.resolved,
-            closed: counts.closed,
+            open: (counts.open || 0) + (counts.assigned || 0),
+            unassigned: counts.open || 0,
+            assigned: counts.assigned || 0,
+            inProgress: counts.in_progress || 0,
+            resolved: counts.resolved || 0,
+            closed: counts.closed || 0,
             totalResolved: resData.totalResolved ?? 0,
             avgResolutionTimeHours,
         };
