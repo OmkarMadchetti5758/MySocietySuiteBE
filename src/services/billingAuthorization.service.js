@@ -7,21 +7,33 @@ const { ROLES } = require("../common/constants");
 // Default approval threshold for Accountant financial actions (Credit Note, Discount, Vendor Payment)
 const DEFAULT_ACCOUNTANT_APPROVAL_THRESHOLD = 5000;
 
-function getUserRoleKeys(user) {
+function getUserRoleKeys(user, activeContext = null) {
     if (!user) return [];
+    let keys = [];
     if (Array.isArray(user.roleKeys) && user.roleKeys.length > 0) {
-        return user.roleKeys.map(resolveRoleKey);
+        keys = user.roleKeys.map(resolveRoleKey);
+    } else if (user.role) {
+        keys = [resolveRoleKey(user.role)];
     }
-    if (user.role) {
-        return [resolveRoleKey(user.role)];
+
+    if (activeContext) {
+        const ctx = String(activeContext).toLowerCase().trim();
+        if (ctx === "resident") {
+            return keys.filter(k => k === ROLES.RESIDENT_OWNER || k === ROLES.RESIDENT_TENANT || k === "resident");
+        } else if (ctx === "accountant") {
+            return keys.filter(k => k === ROLES.ACCOUNTANT);
+        } else if (ctx === "admin") {
+            return keys.filter(k => k === ROLES.ADMIN || k === "committee_member" || k === "committee_admin");
+        }
     }
-    return [];
+
+    return keys;
 }
 
-function hasBillingPermission(user, permissionKey) {
+function hasBillingPermission(user, permissionKey, activeContext = null) {
     if (!user) return false;
 
-    const roleKeys = getUserRoleKeys(user);
+    const roleKeys = getUserRoleKeys(user, activeContext);
     if (roleKeys.includes(ROLES.SUPER_ADMIN)) {
         return false;
     }
