@@ -9,8 +9,10 @@ const paymentSchema = new mongoose.Schema(
         flatId: { type: mongoose.Schema.Types.ObjectId, ref: "Flat", required: true, index: true },
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
         invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: "BillingInvoice", default: null, index: true },
+        festivalCollectionId: { type: mongoose.Schema.Types.ObjectId, ref: "FestivalCollection", default: null, index: true },
         paymentAccountId: { type: String, required: true, index: true }, // e.g. "HDFC_COLLECTION_ACC" or BankAccount ID
         paymentAccountName: { type: String, default: "Collection Account" },
+        paymentCategory: { type: String, enum: ["MAINTENANCE", "FESTIVAL", "OTHER"], default: "MAINTENANCE", index: true },
 
         paymentNumber: { type: String, required: true, unique: true, index: true }, // PAY-2026-XXXXX
         amount: { type: Number, required: true, min: 0.01 },
@@ -78,7 +80,9 @@ const receiptSchema = new mongoose.Schema(
         societyId: { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
         receiptNumber: { type: String, required: true, unique: true, index: true }, // REC/2026-27/000001
         paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", required: true, index: true },
+        receiptCategory: { type: String, enum: ["MAINTENANCE", "FESTIVAL", "OTHER"], default: "MAINTENANCE" },
         invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: "BillingInvoice", default: null, index: true },
+        festivalCollectionId: { type: mongoose.Schema.Types.ObjectId, ref: "FestivalCollection", default: null, index: true },
         invoiceNumber: { type: String, default: "" },
         flatId: { type: mongoose.Schema.Types.ObjectId, ref: "Flat", required: true, index: true },
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
