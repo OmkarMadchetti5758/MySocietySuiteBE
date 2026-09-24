@@ -35,6 +35,7 @@ router.use("/amenity-bookings", require("../../modules/booking/amenityBooking.ro
 router.use("/vendors", require("../../modules/vendor/vendor.routes"));
 router.use("/complaints", require("../../modules/complaint/complaint.routes"));
 router.use("/festivals", require("../../modules/festival/festival.routes"));
+router.use("/festival-collections", require("../../modules/festival/festivalCollection.routes"));
 router.use("/flats", require("../../modules/flat/flat.routes"));
 router.use("/parking", require("../../modules/parking/parking.routes"));
 router.use("/guard", require("../../modules/guard/guard.routes"));
