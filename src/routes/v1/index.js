@@ -45,6 +45,7 @@ router.use("/sos", require("../../modules/sos/sos.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
 router.use("/billing", require("../../modules/billing/billing.routes"));
+router.use("/advance-deposits", require("../../modules/advanceAccountsDeposits/advanceAccountsDeposits.routes"));
 router.use("/documents", require("../../modules/document/document.routes"));
 router.use("/payments", require("../../modules/payment/payment.routes"));
 router.use("/reconciliation", require("../../modules/reconciliation/reconciliation.routes"));

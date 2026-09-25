@@ -67,6 +67,16 @@ const connectOperationsDB = async () => {
         opsConnection.model("ChargeHead",           billingModels.chargeHeadSchema);
         opsConnection.model("BillingConfiguration", billingModels.billingConfigurationSchema);
 
+        // Advance Accounts & Security Deposits
+        const advanceDepositModels = require("../modules/advanceAccountsDeposits/advanceAccountsDeposits.model");
+        opsConnection.model("ResidentAdvanceAccount",    advanceDepositModels.residentAdvanceAccountSchema);
+        opsConnection.model("AdvanceTransaction",        advanceDepositModels.advanceTransactionSchema);
+        opsConnection.model("AdvanceAllocation",         advanceDepositModels.advanceAllocationSchema);
+        opsConnection.model("SecurityDepositType",       advanceDepositModels.securityDepositTypeSchema);
+        opsConnection.model("SecurityDeposit",           advanceDepositModels.securityDepositSchema);
+        opsConnection.model("SecurityDepositTransaction",advanceDepositModels.securityDepositTransactionSchema);
+        opsConnection.model("DepositRefundRequest",      advanceDepositModels.depositRefundRequestSchema);
+
         await syncFlatIndexes(opsConnection);
 
         console.log(`✅ Operations DB connected: ${opsConnection.name}`);
