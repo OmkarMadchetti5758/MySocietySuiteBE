@@ -50,4 +50,10 @@ router.use("/documents", require("../../modules/document/document.routes"));
 router.use("/payments", require("../../modules/payment/payment.routes"));
 router.use("/reconciliation", require("../../modules/reconciliation/reconciliation.routes"));
 
+// ── Ledger Management ──────────────────────────────────────────────────────────
+router.use("/ledger", require("../../modules/ledger/ledger.routes"));
+router.use("/ledger/accounts", require("../../modules/ledger/accounts.routes"));
+router.use("/ledger/journal-entries", require("../../modules/ledger/journalEntries.routes"));
+router.use("/ledger/periods", require("../../modules/ledger/accountingPeriods.routes"));
+
 module.exports = router;
