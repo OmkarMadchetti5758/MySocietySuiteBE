@@ -37,6 +37,7 @@ module.exports = {
     JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
 
     // CORS
+    // FRONTEND_URL: process.env.FRONTEND_URL || "https://mysocietysuite.com",
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:5173",
 
     // SMTP

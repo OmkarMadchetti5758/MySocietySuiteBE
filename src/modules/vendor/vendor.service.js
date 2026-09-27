@@ -5,6 +5,7 @@ const { getMasterConnection } = require("../../config/masterDb");
 const AppError = require("../../common/AppError");
 const { COMPLAINT_STATUS } = require("../../common/constants");
 const emailService = require("../../services/email.service");
+const { FRONTEND_URL } = require("../../config/env");
 
 // Valid status transitions for vendor task updates
 const ALLOWED_VENDOR_TRANSITIONS = {
@@ -148,7 +149,7 @@ class VendorService {
             await session.endSession();
         }
 
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = FRONTEND_URL;
         const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
         await emailService.sendInviteEmail({
@@ -234,7 +235,7 @@ class VendorService {
     async deleteVendor(societyId, vendorId) {
         const opsDb = getOperationsConnection();
         const masterDb = getMasterConnection();
-        
+
         const Vendor = opsDb.model("Vendor");
         const User = opsDb.model("User");
         const Mapping = masterDb.model("UserSocietyMapping");

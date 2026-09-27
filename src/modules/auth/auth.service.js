@@ -10,6 +10,7 @@ const { ROLES, SOCIETY_STATUS, getRolePermissions } = require("../../common/cons
 const { getMasterConnection } = require("../../config/masterDb");
 const emailService = require("../../services/email.service");
 const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+const { FRONTEND_URL } = require("../../config/env");
 
 class AuthService {
     async _buildUserAuthContext(user) {
@@ -161,13 +162,13 @@ class AuthService {
             throw new AppError("No account found with this mobile number.", 404);
         }
 
-        const isGuard = mappings.some(m => 
-            (m.roleKeys && m.roleKeys.includes(ROLES.SECURITY_GUARD)) || 
+        const isGuard = mappings.some(m =>
+            (m.roleKeys && m.roleKeys.includes(ROLES.SECURITY_GUARD)) ||
             (m.role === ROLES.SECURITY_GUARD)
         );
 
         if (!isGuard) {
-             throw new AppError("Access denied. Not a security guard.", 403);
+            throw new AppError("Access denied. Not a security guard.", 403);
         }
 
         const societyId = mappings[0].societyId;
@@ -197,12 +198,12 @@ class AuthService {
             user.isActive = true;
             user.status = "active";
             await user.save();
-            
+
             // Activate their Staff profile
             const opsDb = require("../../config/operationsDb").getOperationsConnection();
             const Staff = opsDb.model("Staff");
             await Staff.updateOne({ userId: user._id }, { isActive: true, status: "active" });
-            
+
             // Activate UserSocietyMapping
             const masterDb = require("../../config/masterDb").getMasterConnection();
             const UserSocietyMapping = masterDb.model("UserSocietyMapping");
@@ -212,7 +213,7 @@ class AuthService {
         const authContext = await this._buildUserAuthContext(user);
         const payload = this._buildTokenPayload(user, authContext);
 
-        const accessToken  = generateAccessToken(payload);
+        const accessToken = generateAccessToken(payload);
         const refreshToken = generateRefreshToken(payload);
 
         await AuthRepository.saveRefreshToken(user._id, refreshToken);
@@ -534,7 +535,7 @@ class AuthService {
             expiresAt
         });
 
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = FRONTEND_URL;
         const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
         await emailService.sendInviteEmail({

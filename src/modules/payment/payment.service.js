@@ -5,6 +5,7 @@ const https = require("https");
 const { getPaymentModels } = require("./payment.model");
 const { getBillingModels } = require("../billing/billing.model");
 const { getBillingAuditModel, logBillingAction } = require("../../services/billingAudit.service");
+const { generateAutomaticPosting } = require("../ledger/ledger.service");
 
 // Helper: Convert number to English currency words
 function numberToWords(amount) {
@@ -346,6 +347,32 @@ class PaymentService {
             details: { paymentNumber: payment.paymentNumber, receiptNumber: receipt?.receiptNumber },
         });
 
+        // ── AUTO-POST TO LEDGER ──
+        // Debit: HDFC Bank (Default Code: 1012)
+        // Credit: Accounts Receivable (Default Code: 1021)
+        if (payment.amount > 0) {
+            try {
+                await generateAutomaticPosting({
+                    societyId,
+                    userId,
+                    userRole: "system",
+                    eventType: "ONLINE_PAYMENT",
+                    amount: payment.amount,
+                    transactionDate: payment.paymentDate || new Date(),
+                    debitAccountCode: "1012", // Default Main Bank Account
+                    creditAccountCode: "1021", // Default Accounts Receivable
+                    description: `Online payment received for ${payment.paymentNumber} ${invoice ? 'against ' + invoice.invoiceNumber : ''}`,
+                    referenceId: payment._id,
+                    referenceNumber: payment.paymentNumber,
+                    residentId: invoice ? invoice.userId : null,
+                    flatId: invoice ? invoice.flatId : payment.flatId,
+                }, db);
+            } catch (err) {
+                console.error("Failed to auto-post online payment to ledger:", err.message);
+                // We swallow the error here to not fail the gateway verification, but it should be alerted
+            }
+        }
+
         return { payment, receipt };
     }
 
@@ -538,6 +565,33 @@ class PaymentService {
             amount: payment.amount,
             details: { paymentNumber, paymentMode, receiptNumber: receipt?.receiptNumber },
         });
+
+        // ── AUTO-POST TO LEDGER ──
+        // Debit: Cash (1011) or Bank (1012) based on mode
+        // Credit: Accounts Receivable (1021)
+        if (payment.amount > 0) {
+            try {
+                const debitCode = paymentMode === "CASH" ? "1011" : "1012";
+                await generateAutomaticPosting({
+                    societyId,
+                    userId: recordedBy,
+                    userRole: "admin",
+                    eventType: "OFFLINE_PAYMENT",
+                    amount: payment.amount,
+                    transactionDate: payDate,
+                    debitAccountCode: debitCode, 
+                    creditAccountCode: "1021", 
+                    description: `Offline ${paymentMode} payment received for ${payment.paymentNumber}`,
+                    referenceId: payment._id,
+                    referenceNumber: payment.paymentNumber,
+                    residentId: userId,
+                    flatId: flatId,
+                }, db);
+            } catch (err) {
+                console.error("Failed to auto-post offline payment to ledger:", err.message);
+                // Swallowed so UI still reports successful payment save
+            }
+        }
 
         return { payment, receipt };
     }

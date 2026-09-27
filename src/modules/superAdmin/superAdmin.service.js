@@ -2,6 +2,7 @@
 
 const SuperAdminRepository = require("./superAdmin.repository");
 const emailService = require("../../services/email.service");
+const { FRONTEND_URL } = require("../../config/env");
 
 class SuperAdminService {
     async getDashboardStats() {
@@ -12,7 +13,7 @@ class SuperAdminService {
         // Parse and validate pagination
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
-        
+
         return SuperAdminRepository.getPaginatedSocieties(p, l, search);
     }
 
@@ -22,11 +23,11 @@ class SuperAdminService {
 
     async createSociety(data) {
         const { societyDetails, adminDetails } = data;
-        
+
         const result = await SuperAdminRepository.createSocietyWithAdmin(societyDetails, adminDetails);
-        
+
         // Construct the activation link
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = FRONTEND_URL;
         const inviteLink = `${frontendUrl}/activate-account?token=${result.plainToken}`;
 
         await emailService.sendInviteEmail({
