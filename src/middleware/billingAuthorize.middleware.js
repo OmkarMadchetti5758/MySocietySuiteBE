@@ -1,7 +1,7 @@
 "use strict";
 
 const AppError = require("../common/AppError");
-const { hasBillingPermissionAsync } = require("../services/billingAuthorization.service");
+const { hasBillingPermission, hasBillingPermissionAsync } = require("../services/billingAuthorization.service");
 const { logBillingAction } = require("../services/billingAudit.service");
 
 const requireBillingPermission = (permissionKey) => {
