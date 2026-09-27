@@ -13,6 +13,9 @@ const ALLOWED_VENDOR_TRANSITIONS = {
     // Vendors cannot reopen resolved/closed/rejected tasks
 };
 
+// Statuses a task must still be in for a vendor update to be valid at write time
+const OPEN_TASK_STATUSES = [COMPLAINT_STATUS.OPEN, COMPLAINT_STATUS.IN_PROGRESS];
+
 class VendorService {
 
     async getVendorIdForUser(societyId, userId) {
@@ -80,6 +83,11 @@ class VendorService {
         }
 
         // Society-scoped uniqueness: same name + serviceCategory within a society
+        // NOTE: this is a check-then-act guard only. The real guarantee comes from
+        // the unique compound index defined in vendor.model.js — under concurrent
+        // requests this findOne can race, but the index will reject the duplicate
+        // insert and surface as a Mongo E11000 error (handle that in your global
+        // error middleware / map it to VENDOR_ALREADY_EXISTS there too).
         const duplicate = await Vendor.findOne({
             societyId,
             name: { $regex: new RegExp(`^${name}$`, "i") },
@@ -96,6 +104,10 @@ class VendorService {
         try {
             await session.withTransaction(async () => {
                 // Create the User record with status=invited
+                // NOTE: verify this literal "vendor" matches ROLES.VENDOR exactly
+                // (case-sensitivity) — the vendor-portal routes gate on
+                // authorize(ROLES.VENDOR), and a mismatch here will silently lock
+                // every invited vendor out of their own portal after activation.
                 const newUser = await User.create([{
                     societyId,
                     name,
@@ -148,15 +160,25 @@ class VendorService {
             await session.endSession();
         }
 
+        // Vendor + User + Mapping + InviteToken are already committed at this
+        // point. Email delivery is best-effort: a transport failure must NOT
+        // make the caller think vendor creation itself failed.
         const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
         const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
+        let emailSent = true;
 
-        await emailService.sendInviteEmail({
-            to: email,
-            recipientName: name,
-            roleLabel: "Vendor",
-            inviteLink,
-        });
+        try {
+            await emailService.sendInviteEmail({
+                to: email,
+                recipientName: name,
+                roleLabel: "Vendor",
+                inviteLink,
+            });
+        } catch (emailError) {
+            emailSent = false;
+            // eslint-disable-next-line no-console
+            console.error(`Failed to send vendor invite email to ${email}:`, emailError);
+        }
 
         if (process.env.NODE_ENV === "development") {
             console.log("\n=============================================");
@@ -168,6 +190,7 @@ class VendorService {
 
         return {
             vendor: newVendor,
+            emailSent,
             ...(process.env.NODE_ENV === "development" ? { devInviteLink: inviteLink } : {}),
         };
     }
@@ -193,7 +216,10 @@ class VendorService {
 
     async updateVendor(societyId, vendorId, updateData, userId) {
         const opsDb = getOperationsConnection();
+        const masterDb = getMasterConnection();
         const Vendor = opsDb.model("Vendor");
+        const User = opsDb.model("User");
+        const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
         // Strip fields that must never be updated by a client
         const { societyId: _sid, createdBy: _cb, userId: _uid, ...safeData } = updateData;
@@ -217,31 +243,131 @@ class VendorService {
             throw new AppError("contractEndDate cannot be before contractStartDate.", 400, "INVALID_VENDOR_DATA");
         }
 
-        safeData.updatedBy = userId;
+        // Normalize email/phone if present
+        if (typeof safeData.email === "string") {
+            safeData.email = safeData.email.toLowerCase().trim();
+        }
+        if (typeof safeData.phone === "string") {
+            safeData.phone = safeData.phone.trim();
+        }
 
-        const vendor = await Vendor.findOneAndUpdate(
-            { _id: vendorId, societyId },
-            { $set: safeData },
-            { new: true, runValidators: true }
-        );
-
-        if (!vendor) {
+        const existingVendor = await Vendor.findOne({ _id: vendorId, societyId }).lean();
+        if (!existingVendor) {
             throw new AppError("Vendor not found.", 404, "VENDOR_NOT_FOUND");
         }
+
+        const emailChanged = safeData.email && safeData.email !== existingVendor.email;
+        const phoneChanged = safeData.phone && safeData.phone !== existingVendor.phone;
+
+        // Uniqueness check when email/phone actually changes (mirrors createVendor)
+        if (emailChanged || phoneChanged) {
+            const [emailUserExists, phoneUserExists, emailMapped, phoneMapped] = await Promise.all([
+                emailChanged
+                    ? User.findOne({ societyId, email: safeData.email, _id: { $ne: existingVendor.userId } }).lean()
+                    : Promise.resolve(null),
+                phoneChanged
+                    ? User.findOne({ societyId, mobile: safeData.phone, _id: { $ne: existingVendor.userId } }).lean()
+                    : Promise.resolve(null),
+                emailChanged
+                    ? UserSocietyMapping.findOne({ identifier: safeData.email, societyId, userId: { $ne: existingVendor.userId } }).lean()
+                    : Promise.resolve(null),
+                phoneChanged
+                    ? UserSocietyMapping.findOne({ identifier: safeData.phone, societyId, userId: { $ne: existingVendor.userId } }).lean()
+                    : Promise.resolve(null),
+            ]);
+
+            if (emailUserExists || emailMapped) {
+                throw new AppError("This email is already in use in this society.", 409, "EMAIL_EXISTS");
+            }
+            if (phoneUserExists || phoneMapped) {
+                throw new AppError("This phone number is already in use in this society.", 409, "PHONE_EXISTS");
+            }
+        }
+
+        safeData.updatedBy = userId;
+
+        const session = await opsDb.startSession();
+        let vendor;
+
+        try {
+            await session.withTransaction(async () => {
+                vendor = await Vendor.findOneAndUpdate(
+                    { _id: vendorId, societyId },
+                    { $set: safeData },
+                    { new: true, runValidators: true, session }
+                );
+
+                if (!vendor) {
+                    throw new AppError("Vendor not found.", 404, "VENDOR_NOT_FOUND");
+                }
+
+                // Keep the linked User record's login-relevant fields in sync so
+                // the vendor's credentials never silently diverge from their profile.
+                if (existingVendor.userId && (emailChanged || phoneChanged || "name" in safeData)) {
+                    const userUpdate = {};
+                    if (emailChanged) userUpdate.email = safeData.email;
+                    if (phoneChanged) userUpdate.mobile = safeData.phone;
+                    if ("name" in safeData) userUpdate.name = safeData.name;
+
+                    await User.findOneAndUpdate(
+                        { _id: existingVendor.userId, societyId },
+                        { $set: userUpdate },
+                        { session }
+                    );
+
+                    // Mapping identifiers must follow the new email/phone too
+                    if (emailChanged) {
+                        await UserSocietyMapping.updateMany(
+                            { userId: existingVendor.userId, societyId, identifier: existingVendor.email },
+                            { $set: { identifier: safeData.email } },
+                            { session }
+                        );
+                    }
+                    if (phoneChanged) {
+                        await UserSocietyMapping.updateMany(
+                            { userId: existingVendor.userId, societyId, identifier: existingVendor.phone },
+                            { $set: { identifier: safeData.phone } },
+                            { session }
+                        );
+                    }
+                }
+            });
+        } finally {
+            await session.endSession();
+        }
+
         return vendor;
     }
 
     async deleteVendor(societyId, vendorId) {
         const opsDb = getOperationsConnection();
         const masterDb = getMasterConnection();
-        
+
         const Vendor = opsDb.model("Vendor");
         const User = opsDb.model("User");
+        const Complaint = opsDb.model("Complaint");
         const Mapping = masterDb.model("UserSocietyMapping");
 
         const vendor = await Vendor.findOne({ _id: vendorId, societyId });
         if (!vendor) {
             throw new AppError("Vendor not found.", 404, "VENDOR_NOT_FOUND");
+        }
+
+        // Block deletion while the vendor still has open/in-progress tasks —
+        // otherwise those Complaints are left with a dangling assignedVendorId
+        // pointing at a vendor that no longer exists.
+        const activeAssignmentCount = await Complaint.countDocuments({
+            societyId,
+            assignedVendorId: vendorId,
+            status: { $in: OPEN_TASK_STATUSES },
+        });
+
+        if (activeAssignmentCount > 0) {
+            throw new AppError(
+                `Cannot delete vendor: ${activeAssignmentCount} active task(s) are still assigned. Reassign or resolve them first.`,
+                409,
+                "VENDOR_HAS_ACTIVE_ASSIGNMENTS"
+            );
         }
 
         if (vendor.userId) {
@@ -470,20 +596,25 @@ class VendorService {
             allowedUpdates.remarks = updateData.remarks;
         }
 
+        // FIX: the original filter only re-checked societyId + assignedVendorId,
+        // so a task closed/rejected by an admin between the read above and this
+        // write could still be silently updated by the vendor. Re-assert the
+        // task is still in an open status at write time too.
         const updated = await Complaint.findOneAndUpdate(
             {
                 _id: taskId,
                 societyId,
                 assignedVendorId: vendorId,
+                status: { $in: OPEN_TASK_STATUSES },
             },
             { $set: allowedUpdates },
             { new: true, runValidators: true }
         );
 
         if (!updated) {
-            // Task was reassigned between the read and write — race condition caught
+            // Task was reassigned or closed between the read and write — race condition caught
             throw new AppError(
-                "This task is no longer assigned to you.",
+                "This task is no longer assigned to you or is no longer open.",
                 403,
                 "TASK_NO_LONGER_ASSIGNED"
             );

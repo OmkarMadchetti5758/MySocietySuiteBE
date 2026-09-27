@@ -77,4 +77,16 @@ vendorSchema.index({ societyId: 1, status: 1 });
 vendorSchema.index({ societyId: 1, serviceCategory: 1 });
 vendorSchema.index({ societyId: 1, contractEndDate: 1 });
 
+// FIX: the service layer only did a check-then-act findOne() for
+// "same name + serviceCategory in this society", which can race under
+// concurrent requests. This unique index is the real guarantee — case
+// insensitive via collation strength 2. A violation surfaces as a Mongo
+// E11000 error; map that to your VENDOR_ALREADY_EXISTS AppError in
+// vendor.service.js's createVendor error handling (or a global duplicate-key
+// error middleware) so the API still returns a clean 409.
+vendorSchema.index(
+    { societyId: 1, name: 1, serviceCategory: 1 },
+    { unique: true, collation: { locale: "en", strength: 2 } }
+);
+
 module.exports = vendorSchema;

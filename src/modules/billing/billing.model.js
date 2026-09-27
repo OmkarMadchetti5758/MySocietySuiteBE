@@ -84,6 +84,7 @@ const billingConfigurationSchema = new mongoose.Schema(
             taxRate: { type: Number, default: 18 },
         },
         currency:          { type: String, default: "INR" },
+        accountantApprovalThreshold: { type: Number, default: 5000, min: 0 },
         isActive:          { type: Boolean, default: true },
         createdBy:         { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
         updatedBy:         { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
@@ -290,19 +291,54 @@ const journalVoucherSchema = new mongoose.Schema(
 // ── 6. Vendor Payment Schema ───────────────────────────────────────────────
 const vendorPaymentSchema = new mongoose.Schema(
     {
-        societyId:    { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
-        paymentNumber:{ type: String, required: true },
-        vendorId:     { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", default: null },
-        vendorName:   { type: String, required: true },
-        billReference:{ type: String, required: true },
-        amount:       { type: Number, required: true, min: 0.01 },
-        paymentMode:  { type: String, enum: ["bank_transfer", "cheque", "cash", "upi"], default: "bank_transfer" },
-        status:       { type: String, enum: ["draft", "pending_approval", "approved", "rejected"], default: "pending_approval", index: true },
-        createdBy:    { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-        approvedBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        societyId:         { type: mongoose.Schema.Types.ObjectId, ref: "Society", required: true, index: true },
+        paymentNumber:     { type: String, required: true },
+        vendorId:          { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", default: null, index: true },
+        vendorName:        { type: String, required: true },
+        billReference:     { type: String, default: "" },
+        workOrderId:       { type: mongoose.Schema.Types.ObjectId, ref: "WorkOrder", default: null, index: true },
+        purchaseId:        { type: mongoose.Schema.Types.ObjectId, ref: "Purchase", default: null, index: true },
+        description:       { type: String, default: "" },
+        amount:            { type: Number, required: true, min: 0.01 },
+        paymentMode:       { type: String, enum: ["bank_transfer", "cheque", "cash", "upi"], default: "bank_transfer" },
+        status: {
+            type: String,
+            enum: [
+                "draft", "pending", "pending_approval", "approved", "paid", "rejected",
+                "DRAFT", "PENDING", "PENDING_APPROVAL", "APPROVED", "PAID", "REJECTED"
+            ],
+            default: "pending_approval",
+            index: true
+        },
+        requestedBy:       { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        approvalRequired:  { type: Boolean, default: false },
+        approvedBy:        { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        approvedAt:        { type: Date, default: null },
+        approvalComment:   { type: String, default: "" },
+        rejectedBy:        { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        rejectedAt:        { type: Date, default: null },
+        rejectionComment:  { type: String, default: "" },
+        financialAccountId:{ type: mongoose.Schema.Types.ObjectId, ref: "FinancialAccount", default: null },
+        paidBy:            { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        paidAt:            { type: Date, default: null },
+        createdBy:         { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     },
     { timestamps: true }
 );
+
+vendorPaymentSchema.pre("save", function () {
+    if (!this.requestedBy && this.createdBy) {
+        this.requestedBy = this.createdBy;
+    }
+    if (!this.createdBy && this.requestedBy) {
+        this.createdBy = this.requestedBy;
+    }
+});
+
+vendorPaymentSchema.index({ societyId: 1, vendorId: 1, status: 1 });
+vendorPaymentSchema.index({ societyId: 1, createdAt: -1 });
+vendorPaymentSchema.index({ societyId: 1, workOrderId: 1 });
+vendorPaymentSchema.index({ societyId: 1, purchaseId: 1 });
 
 // ── 7. Annual Budget Schema ────────────────────────────────────────────────
 const annualBudgetSchema = new mongoose.Schema(

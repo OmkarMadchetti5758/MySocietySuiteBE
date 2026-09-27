@@ -46,5 +46,8 @@ router.use("/sos", require("../../modules/sos/sos.routes"));
 router.use("/billing", require("../../modules/billing/billing.routes"));
 router.use("/payments", require("../../modules/payment/payment.routes"));
 router.use("/reconciliation", require("../../modules/reconciliation/reconciliation.routes"));
+router.use("/ai-assistant", require("../../modules/aiAssistant/aiAssistant.routes"));
+
+
 
 module.exports = router;

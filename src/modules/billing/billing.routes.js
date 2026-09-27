@@ -210,6 +210,16 @@ router.post(
     requireBillingPermission(BILLING_PERMISSIONS.JOURNAL_VOUCHER_APPROVE),
     BillingController.approveJournalVoucher
 );
+router.get(
+    "/vendor-payments",
+    requireBillingPermission(BILLING_PERMISSIONS.VENDOR_PAYMENT_VIEW),
+    BillingController.getVendorPayments
+);
+router.get(
+    "/vendor-payments/:id",
+    requireBillingPermission(BILLING_PERMISSIONS.VENDOR_PAYMENT_VIEW),
+    BillingController.getVendorPaymentById
+);
 router.post(
     "/vendor-payments",
     requireBillingPermission(BILLING_PERMISSIONS.VENDOR_PAYMENT_CREATE),
@@ -219,6 +229,16 @@ router.post(
     "/vendor-payments/:id/approve",
     requireBillingPermission(BILLING_PERMISSIONS.VENDOR_PAYMENT_APPROVE),
     BillingController.approveVendorPayment
+);
+router.post(
+    "/vendor-payments/:id/reject",
+    requireBillingPermission(BILLING_PERMISSIONS.VENDOR_PAYMENT_APPROVE),
+    BillingController.rejectVendorPayment
+);
+router.post(
+    "/vendor-payments/:id/mark-paid",
+    requireBillingPermission(BILLING_PERMISSIONS.VENDOR_PAYMENT_MARK_PAID),
+    BillingController.markVendorPaymentPaid
 );
 
 // ── 6. Budgets, Reconciliation & Financial Reports ────────────────────────

@@ -1,7 +1,7 @@
 "use strict";
 
 const AppError = require("../common/AppError");
-const { hasBillingPermission } = require("../services/billingAuthorization.service");
+const { hasBillingPermissionAsync } = require("../services/billingAuthorization.service");
 const { logBillingAction } = require("../services/billingAudit.service");
 
 const requireBillingPermission = (permissionKey) => {
@@ -12,9 +12,16 @@ const requireBillingPermission = (permissionKey) => {
             }
 
             const keys = Array.isArray(permissionKey) ? permissionKey : [permissionKey];
-            const isPermitted = keys.some(pk => hasBillingPermission(req.user, pk));
 
-            if (!isPermitted) {
+            let matchedKey = null;
+            for (const pk of keys) {
+                if (await hasBillingPermissionAsync(req.user, pk)) {
+                    matchedKey = pk;
+                    break;
+                }
+            }
+
+            if (!matchedKey) {
                 // Log denied attempt for sensitive operations
                 await logBillingAction({
                     req,
@@ -27,7 +34,7 @@ const requireBillingPermission = (permissionKey) => {
                 return next(new AppError(`Access denied. Insufficient permission for ${keys.join(", ")}`, 403));
             }
 
-            req.billingPermission = keys.find(pk => hasBillingPermission(req.user, pk));
+            req.billingPermission = matchedKey;
             next();
         } catch (error) {
             next(error);
