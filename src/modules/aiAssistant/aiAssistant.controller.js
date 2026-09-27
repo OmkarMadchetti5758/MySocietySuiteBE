@@ -26,6 +26,7 @@ async function logAssistantQuery(opsDb, data) {
     }
 }
 
+
 class AIAssistantController {
     async askAssistant(req, res, next) {
         const startedAt = Date.now();
