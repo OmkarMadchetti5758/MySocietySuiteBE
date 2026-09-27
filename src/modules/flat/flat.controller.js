@@ -5,6 +5,8 @@ const { getOperationsConnection } = require("../../config/operationsDb");
 const { sendSuccess, sendError } = require("../../utils/response.utils");
 const { FLAT_STATUS } = require("../../common/constants");
 
+
+
 class FlatController {
     async getFlats(req, res, next) {
         try {

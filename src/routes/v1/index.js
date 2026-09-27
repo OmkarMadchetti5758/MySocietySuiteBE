@@ -21,20 +21,21 @@ router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/societies", societyRoutes);
 router.use("/super-admin", require("../../modules/superAdmin/superAdmin.routes"));
-router.use("/societies/:societyId/roles",    require("../../modules/role/role.routes"));
+router.use("/societies/:societyId/roles", require("../../modules/role/role.routes"));
 router.use("/societies/:societyId/managers", require("../../modules/managerAssignment/managerAssignment.routes"));
-router.use("/blocks",    require("../../modules/block/block.routes"));
+router.use("/blocks", require("../../modules/block/block.routes"));
 router.use("/residents", require("../../modules/resident/resident.routes"));
-router.use("/otp",       require("../../modules/otp/otp.routes"));
-router.use("/staff",     require("../../modules/staff/staff.routes"));
-router.use("/attendance",require("../../modules/attendance/attendance.routes"));
-router.use("/notices",   require("../../modules/notice/notice.routes"));
-router.use("/polls",     require("../../modules/poll/poll.routes"));
+router.use("/otp", require("../../modules/otp/otp.routes"));
+router.use("/staff", require("../../modules/staff/staff.routes"));
+router.use("/attendance", require("../../modules/attendance/attendance.routes"));
+router.use("/notices", require("../../modules/notice/notice.routes"));
+router.use("/polls", require("../../modules/poll/poll.routes"));
 router.use("/amenities", require("../../modules/amenity/amenity.routes"));
 router.use("/amenity-bookings", require("../../modules/booking/amenityBooking.routes"));
 router.use("/vendors", require("../../modules/vendor/vendor.routes"));
 router.use("/complaints", require("../../modules/complaint/complaint.routes"));
 router.use("/festivals", require("../../modules/festival/festival.routes"));
+router.use("/festival-collections", require("../../modules/festival/festivalCollection.routes"));
 router.use("/flats", require("../../modules/flat/flat.routes"));
 router.use("/parking", require("../../modules/parking/parking.routes"));
 router.use("/guard", require("../../modules/guard/guard.routes"));
@@ -44,10 +45,18 @@ router.use("/sos", require("../../modules/sos/sos.routes"));
 // Mount other module routes here as they are developed
 // router.use("/societies", societyRoutes);
 router.use("/billing", require("../../modules/billing/billing.routes"));
+router.use("/advance-deposits", require("../../modules/advanceAccountsDeposits/advanceAccountsDeposits.routes"));
+router.use("/documents", require("../../modules/document/document.routes"));
 router.use("/payments", require("../../modules/payment/payment.routes"));
 router.use("/reconciliation", require("../../modules/reconciliation/reconciliation.routes"));
 router.use("/ai-assistant", require("../../modules/aiAssistant/aiAssistant.routes"));
 
 
+
+// ── Ledger Management ──────────────────────────────────────────────────────────
+router.use("/ledger", require("../../modules/ledger/ledger.routes"));
+router.use("/ledger/accounts", require("../../modules/ledger/accounts.routes"));
+router.use("/ledger/journal-entries", require("../../modules/ledger/journalEntries.routes"));
+router.use("/ledger/periods", require("../../modules/ledger/accountingPeriods.routes"));
 
 module.exports = router;

@@ -49,6 +49,16 @@ const complaintSchema = new mongoose.Schema(
             required: [true, "Category is required"],
             trim: true, // e.g. "Plumbing", "Electrical", "Common Area"
         },
+        areaType: {
+            type: String,
+            enum: ["Common Area", "Individual Area", null],
+            default: null,
+        },
+        areaLocation: {
+            type: String,
+            trim: true,
+            default: null,
+        },
         description: {
             type: String,
             required: [true, "Description is required"],

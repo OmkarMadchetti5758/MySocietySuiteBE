@@ -5,6 +5,7 @@ const SocietyRepository = require("../society/society.repository");
 const AppError = require("../../common/AppError");
 const { RESIDENT_ERRORS } = require("./resident.constants");
 const emailService = require("../../services/email.service");
+const { FRONTEND_URL } = require("../../config/env");
 
 class ResidentService {
     async getResidents(societyId, page, limit, search) {
@@ -50,7 +51,7 @@ class ResidentService {
             throw error;
         }
 
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = FRONTEND_URL;
         const inviteLink = `${frontendUrl}/activate-account?token=${result.plainToken}`;
 
         const mail = await emailService.sendInviteEmail({

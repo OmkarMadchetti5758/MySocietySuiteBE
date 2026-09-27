@@ -5,6 +5,7 @@ const { getMasterConnection } = require("../../config/masterDb");
 const AppError = require("../../common/AppError");
 const { COMPLAINT_STATUS } = require("../../common/constants");
 const emailService = require("../../services/email.service");
+const { FRONTEND_URL } = require("../../config/env");
 
 // Valid status transitions for vendor task updates
 const ALLOWED_VENDOR_TRANSITIONS = {
@@ -160,10 +161,7 @@ class VendorService {
             await session.endSession();
         }
 
-        // Vendor + User + Mapping + InviteToken are already committed at this
-        // point. Email delivery is best-effort: a transport failure must NOT
-        // make the caller think vendor creation itself failed.
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = FRONTEND_URL;
         const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
         let emailSent = true;
 

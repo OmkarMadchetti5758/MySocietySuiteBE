@@ -41,6 +41,7 @@ module.exports = {
     OPEN_ROUTER_MODEL: process.env.OPEN_ROUTER_MODEL || "openrouter/free",
 
     // CORS
+    // FRONTEND_URL: process.env.FRONTEND_URL || "https://mysocietysuite.com",
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:5173",
 
     // SMTP
