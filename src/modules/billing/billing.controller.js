@@ -303,6 +303,24 @@ class BillingController {
         }
     }
 
+    static async getVendorPayments(req, res, next) {
+        try {
+            const result = await BillingService.getVendorPayments(req, req.query);
+            return sendSuccess(res, 200, "Vendor payments fetched successfully", result);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async getVendorPaymentById(req, res, next) {
+        try {
+            const payment = await BillingService.getVendorPaymentById(req, req.params.id);
+            return sendSuccess(res, 200, "Vendor payment details fetched successfully", payment);
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async createVendorPayment(req, res, next) {
         try {
             const payment = await BillingService.createVendorPayment(req, req.body);
@@ -314,9 +332,29 @@ class BillingController {
 
     static async approveVendorPayment(req, res, next) {
         try {
-            const { action } = req.body;
-            const payment = await BillingService.approveVendorPayment(req, req.params.id, action);
+            const action = req.body?.action === "reject" ? "reject" : "approve";
+            const comment = req.body?.comment;
+            const payment = await BillingService.approveVendorPayment(req, req.params.id, action, comment);
             return sendSuccess(res, 200, `Vendor payment ${action === "reject" ? "rejected" : "approved"} successfully`, payment);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async rejectVendorPayment(req, res, next) {
+        try {
+            const comment = req.body?.comment;
+            const payment = await BillingService.approveVendorPayment(req, req.params.id, "reject", comment);
+            return sendSuccess(res, 200, "Vendor payment rejected successfully", payment);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async markVendorPaymentPaid(req, res, next) {
+        try {
+            const payment = await BillingService.markVendorPaymentPaid(req, req.params.id, req.body);
+            return sendSuccess(res, 200, "Vendor payment marked as paid successfully", payment);
         } catch (err) {
             next(err);
         }

@@ -36,6 +36,10 @@ module.exports = {
     JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
     JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
 
+    // AI provider
+    OPEN_ROUTER_API_KEY: process.env.OPEN_ROUTER_API_KEY || "",
+    OPEN_ROUTER_MODEL: process.env.OPEN_ROUTER_MODEL || "openrouter/free",
+
     // CORS
     // FRONTEND_URL: process.env.FRONTEND_URL || "https://mysocietysuite.com",
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:5173",
