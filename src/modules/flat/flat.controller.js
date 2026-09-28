@@ -19,7 +19,10 @@ class FlatController {
             const filter = { societyId: req.user.societyId };
             if (blockId) filter.blockId = blockId;
 
-            let flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 }).lean();
+            let flats = await Flat.find(filter)
+                .populate("primaryOwner", "name fullName email phone mobile")
+                .sort({ floor: 1, flatNumber: 1 })
+                .lean();
 
             const activeResidents = await Resident.find({
                 societyId: req.user.societyId,
@@ -43,7 +46,10 @@ class FlatController {
                         ResidentRepository.syncFlatOccupancy(req.user.societyId, flat._id)
                     )
                 );
-                flats = await Flat.find(filter).sort({ floor: 1, flatNumber: 1 }).lean();
+                flats = await Flat.find(filter)
+                    .populate("primaryOwner", "name fullName email phone mobile")
+                    .sort({ floor: 1, flatNumber: 1 })
+                    .lean();
             }
 
             const blockDoc = await Block.findOne({ societyId: req.user.societyId }).lean();
@@ -55,10 +61,14 @@ class FlatController {
                 }
             }
 
-            const populatedFlats = flats.map((flat) => ({
-                ...flat,
-                blockId: wingMap.get(String(flat.blockId)) || flat.blockId,
-            }));
+            const populatedFlats = flats.map((flat) => {
+                const ownerName = flat.ownerName || flat.primaryOwner?.name || flat.primaryOwner?.fullName || '';
+                return {
+                    ...flat,
+                    ownerName: ownerName || flat.ownerName || '',
+                    blockId: wingMap.get(String(flat.blockId)) || flat.blockId,
+                };
+            });
 
             return sendSuccess(res, 200, "Flats retrieved successfully", { flats: populatedFlats });
         } catch (error) {

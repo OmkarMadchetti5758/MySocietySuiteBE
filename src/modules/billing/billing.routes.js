@@ -178,6 +178,16 @@ router.post(
 );
 
 // ── 4. Credit Notes & Discounts ───────────────────────────────────────────
+router.get(
+    "/credit-notes",
+    requireBillingPermission(BILLING_PERMISSIONS.CREDIT_NOTE_VIEW),
+    BillingController.getCreditNotes
+);
+router.get(
+    "/credit-notes/past-invoices",
+    requireBillingPermission(BILLING_PERMISSIONS.CREDIT_NOTE_CREATE),
+    BillingController.getPastInvoicesForCreditNote
+);
 router.post(
     "/credit-notes",
     requireBillingPermission(BILLING_PERMISSIONS.CREDIT_NOTE_CREATE),
@@ -188,6 +198,11 @@ router.post(
     requireBillingPermission(BILLING_PERMISSIONS.CREDIT_NOTE_APPROVE),
     BillingController.approveCreditNote
 );
+router.get(
+    "/discounts",
+    requireBillingPermission(BILLING_PERMISSIONS.DISCOUNT_VIEW),
+    BillingController.getDiscounts
+);
 router.post(
     "/discounts",
     requireBillingPermission(BILLING_PERMISSIONS.DISCOUNT_CREATE),
@@ -197,6 +212,10 @@ router.post(
     "/discounts/:id/approve",
     requireBillingPermission(BILLING_PERMISSIONS.DISCOUNT_APPROVE),
     BillingController.approveDiscount
+);
+router.get(
+    "/flats/:flatId/billing-history",
+    BillingController.getFlatBillingHistory
 );
 
 // ── 5. Journal Vouchers & Vendor Payments ──────────────────────────────────

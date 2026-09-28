@@ -228,19 +228,22 @@ async function _calculateFines(societyId, flatId, db) {
 }
 
 async function _fetchApprovedAdjustments(societyId, flatId, db) {
-    const { CreditNote, Discount } = getBillingModels(db);
+    const { Discount } = getBillingModels(db);
 
-    const [creditNotes, discounts] = await Promise.all([
-        CreditNote.find({ societyId, flatId, status: "approved" }).lean(),
-        Discount.find({ societyId, flatId, status: "approved" }).lean(),
-    ]);
+    // Discounts reduce upcoming invoices (approved and not yet applied)
+    const discounts = await Discount.find({
+        societyId,
+        flatId,
+        status: "approved",
+        isApplied: { $ne: true }
+    }).lean();
 
-    const creditNoteAmount = creditNotes.reduce((s, cn) => s + (cn.amount || 0), 0);
     const discountAmount = discounts.reduce((s, d) => s + (d.amount || 0), 0);
 
     return {
-        creditNoteAmount: Math.round(creditNoteAmount * 100) / 100,
+        creditNoteAmount: 0,
         discountAmount: Math.round(discountAmount * 100) / 100,
+        pendingDiscountIds: discounts.map(d => d._id),
     };
 }
 
@@ -565,6 +568,14 @@ class InvoiceService {
             await OneTimeCharge.updateMany(
                 { _id: { $in: oneTimeChargeIds } },
                 { $set: { status: "INCLUDED", invoiceId: invoice._id } }
+            );
+        }
+
+        if (adjustmentsResult.pendingDiscountIds?.length > 0) {
+            const { Discount } = getBillingModels(db);
+            await Discount.updateMany(
+                { _id: { $in: adjustmentsResult.pendingDiscountIds } },
+                { $set: { isApplied: true, appliedInvoiceId: invoice._id } }
             );
         }
 
