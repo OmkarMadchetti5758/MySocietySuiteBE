@@ -1,12 +1,13 @@
 "use strict";
 
 const ManagerAssignmentRepository = require("./managerAssignment.repository");
-const OtpService                  = require("../otp/otp.service");
-const AppError                    = require("../../common/AppError");
-const { DEPARTMENT_HEAD_ROLES }   = require("../../common/constants");
+const OtpService = require("../otp/otp.service");
+const AppError = require("../../common/AppError");
+const { DEPARTMENT_HEAD_ROLES } = require("../../common/constants");
 const { getOperationsConnection } = require("../../config/operationsDb");
-const { getMasterConnection }     = require("../../config/masterDb");
-const emailService                = require("../../services/email.service");
+const { getMasterConnection } = require("../../config/masterDb");
+const emailService = require("../../services/email.service");
+const { FRONTEND_URL } = require("../../config/env");
 
 class ManagerAssignmentService {
 
@@ -31,9 +32,9 @@ class ManagerAssignmentService {
         }
 
         return roleConfigs.map((config) => ({
-            roleKey:     config.roleKey,
-            roleName:    config.roleName,
-            department:  config.department,
+            roleKey: config.roleKey,
+            roleName: config.roleName,
+            department: config.department,
             allowMultiple: config.allowMultiple,
             assignments: (assignedByRole.get(config.roleKey) || []).map(this._formatAssignment),
         }));
@@ -48,7 +49,7 @@ class ManagerAssignmentService {
 
     async assignExistingResident(societyId, data, adminId) {
         const opsDb = getOperationsConnection();
-        const User  = opsDb.model("User");
+        const User = opsDb.model("User");
 
         // 1. Fetch the resident user
         const user = await User.findOne({ _id: data.userId, societyId }).lean();
@@ -87,17 +88,17 @@ class ManagerAssignmentService {
         const now = new Date();
         const assignment = await ManagerAssignmentRepository.createAssignment({
             societyId,
-            roleKey:    data.roleKey,
-            roleName:   data.roleName,
+            roleKey: data.roleKey,
+            roleName: data.roleName,
             department: data.department,
-            userId:     data.userId,
-            managerName:  user.name,
+            userId: data.userId,
+            managerName: user.name,
             managerEmail: user.email,
             managerPhone: user.mobile,
-            joiningDate:  data.joiningDate || now,
-            status:       "active",
+            joiningDate: data.joiningDate || now,
+            status: "active",
             isResidentPromoted: true,
-            assignedBy:  adminId,
+            assignedBy: adminId,
             activatedAt: now,
         });
 
@@ -118,9 +119,9 @@ class ManagerAssignmentService {
     }
 
     async inviteNewManager(societyId, data, adminId) {
-        const opsDb    = getOperationsConnection();
+        const opsDb = getOperationsConnection();
         const masterDb = getMasterConnection();
-        const User     = opsDb.model("User");
+        const User = opsDb.model("User");
         const UserSocietyMapping = masterDb.model("UserSocietyMapping");
 
         const email = data.email?.toLowerCase().trim();
@@ -171,10 +172,10 @@ class ManagerAssignmentService {
         try {
             newUser = await User.create({
                 societyId,
-                name:   data.name,
+                name: data.name,
                 email,
                 mobile: phone,
-                role:   data.roleKey,
+                role: data.roleKey,
                 status: "invited",
             });
         } catch (err) {
@@ -187,18 +188,18 @@ class ManagerAssignmentService {
         // 4. Create ManagerAssignment record
         const assignment = await ManagerAssignmentRepository.createAssignment({
             societyId,
-            roleKey:    data.roleKey,
-            roleName:   data.roleName,
+            roleKey: data.roleKey,
+            roleName: data.roleName,
             department: data.department,
-            userId:     newUser._id,
-            managerName:  newUser.name,
+            userId: newUser._id,
+            managerName: newUser.name,
             managerEmail: email,
             managerPhone: phone,
-            joiningDate:  data.joiningDate || new Date(),
-            status:       "invite_pending",
+            joiningDate: data.joiningDate || new Date(),
+            status: "invite_pending",
             isResidentPromoted: false,
-            assignedBy:  adminId,
-            invitedAt:   new Date(),
+            assignedBy: adminId,
+            invitedAt: new Date(),
         });
 
         // 5. Create UserSocietyMapping entries
@@ -212,8 +213,8 @@ class ManagerAssignmentService {
         );
 
         // 7. Email invite link (console copy kept in development)
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-        const inviteLink  = `${frontendUrl}/activate-account?token=${plainToken}`;
+        const frontendUrl = FRONTEND_URL;
+        const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
         await emailService.sendInviteEmail({
             to: email,
@@ -311,15 +312,15 @@ class ManagerAssignmentService {
         await ManagerAssignmentRepository.updateAssignment(
             societyId, assignmentId,
             {
-                status:       "invite_pending",
-                invitedAt:    new Date(),
+                status: "invite_pending",
+                invitedAt: new Date(),
                 emailOtpVerified: false,
                 phoneOtpVerified: false,
             }
         );
 
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-        const inviteLink  = `${frontendUrl}/activate-account?token=${plainToken}`;
+        const frontendUrl = FRONTEND_URL;
+        const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
         await emailService.sendInviteEmail({
             to: assignment.managerEmail,
@@ -353,20 +354,20 @@ class ManagerAssignmentService {
 
     _formatAssignment(a) {
         return {
-            _id:              a._id,
-            userId:           a.userId,
-            managerName:      a.managerName,
-            managerEmail:     a.managerEmail,
-            managerPhone:     a.managerPhone,
-            joiningDate:      a.joiningDate,
-            status:           a.status,
+            _id: a._id,
+            userId: a.userId,
+            managerName: a.managerName,
+            managerEmail: a.managerEmail,
+            managerPhone: a.managerPhone,
+            joiningDate: a.joiningDate,
+            status: a.status,
             isResidentPromoted: a.isResidentPromoted,
-            invitedAt:        a.invitedAt,
-            activatedAt:      a.activatedAt,
-            deactivatedAt:    a.deactivatedAt,
+            invitedAt: a.invitedAt,
+            activatedAt: a.activatedAt,
+            deactivatedAt: a.deactivatedAt,
             emailOtpVerified: a.emailOtpVerified,
             phoneOtpVerified: a.phoneOtpVerified,
-            createdAt:        a.createdAt,
+            createdAt: a.createdAt,
         };
     }
 

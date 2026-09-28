@@ -71,6 +71,50 @@ async function seedBillingPermissions() {
         console.log(`[SEED] Successfully updated GLOBAL role template for '${item.roleKey}' (${rolePermissionsList.length} billing actions configured).`);
     }
 
+    // 3. Seed billing sub-permission defaults into GLOBAL Role.permissions Map
+    //    These use namespaced keys like "billing.vendorPayment.create" so that
+    //    hasBillingPermissionAsync() can resolve them from DB before falling
+    //    back to the hardcoded BILLING_ROLE_MATRIX.
+    const BILLING_SUB_PERMISSIONS = {
+        [ROLES.ADMIN]: {
+            "billing.vendorPayment.view":     { access: "full", enabled: true },
+            "billing.vendorPayment.create":   { access: "full", enabled: true },
+            "billing.vendorPayment.approve":  { access: "full", enabled: true },
+            "billing.vendorPayment.markPaid": { access: "full", enabled: true },
+        },
+        [ROLES.ACCOUNTANT]: {
+            "billing.vendorPayment.view":     { access: "full", enabled: true },
+            "billing.vendorPayment.create":   { access: "full", enabled: true },
+            "billing.vendorPayment.approve":  { access: "none", enabled: false },
+            "billing.vendorPayment.markPaid": { access: "full", enabled: true },
+        },
+    };
+
+    for (const [roleKey, subPerms] of Object.entries(BILLING_SUB_PERMISSIONS)) {
+        let globalRoleDoc = await RoleModel.findOne({ societyId: "GLOBAL", roleKey });
+        if (!globalRoleDoc) continue; // Role template must already exist from step 2
+
+        const permsMap = globalRoleDoc.permissions || new Map();
+        let changed = false;
+
+        for (const [subKey, value] of Object.entries(subPerms)) {
+            if (!permsMap.has(subKey)) {
+                permsMap.set(subKey, value);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            globalRoleDoc.permissions = permsMap;
+            globalRoleDoc.updatedAt = new Date();
+            globalRoleDoc.markModified("permissions");
+            await globalRoleDoc.save();
+            console.log(`[SEED] Seeded billing sub-permissions for GLOBAL '${roleKey}'`);
+        } else {
+            console.log(`[SEED] Billing sub-permissions for GLOBAL '${roleKey}' already seeded.`);
+        }
+    }
+
     console.log("[SEED] Billing Permissions Seed Completed Idempotently.");
 }
 

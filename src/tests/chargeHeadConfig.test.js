@@ -76,11 +76,15 @@ async function runChargeHeadConfigTests() {
     };
 
     const mockBillingConfigModel = {
-        async findOne(query) {
-            if (mockBillingConfig && String(mockBillingConfig.societyId) === String(query.societyId)) {
-                return { ...mockBillingConfig, lean: async () => mockBillingConfig };
-            }
-            return null;
+        findOne(query) {
+            return {
+                lean: async () => {
+                    if (mockBillingConfig && String(mockBillingConfig.societyId) === String(query.societyId)) {
+                        return mockBillingConfig;
+                    }
+                    return null;
+                }
+            };
         },
         async findOneAndUpdate(query, update, options) {
             if (!mockBillingConfig) {
@@ -223,11 +227,16 @@ async function runChargeHeadConfigTests() {
         dueDays: 15,
         arrearsDisplayMode: "LINE_BY_LINE",
         defaultTaxSettings: { taxName: "GST", taxRate: 18 },
+        accountantApprovalThreshold: 7500,
     });
     assert.strictEqual(config.billingFrequency, "MONTHLY");
     assert.strictEqual(config.dueDays, 15);
     assert.strictEqual(config.arrearsDisplayMode, "LINE_BY_LINE");
-    console.log("✅ 8. Billing Configuration upsert passed.");
+    assert.strictEqual(config.accountantApprovalThreshold, 7500);
+
+    const fetchedConfig = await BillingService.getBillingConfig(reqAdmin);
+    assert.strictEqual(fetchedConfig.accountantApprovalThreshold, 7500);
+    console.log("✅ 8. Billing Configuration upsert & dynamic threshold passed.");
 
     console.log("\n🎉 ALL CHARGE HEAD & BILLING CONFIG TESTS PASSED SUCCESSFULY!\n");
 }

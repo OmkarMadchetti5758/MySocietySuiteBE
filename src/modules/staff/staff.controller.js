@@ -8,6 +8,8 @@ const { sendSuccess } = require("../../utils/response.utils");
 const emailService = require("../../services/email.service");
 const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
 const { canonicalPhone, canonicalIdentifier } = require("../../common/loginIdentifier");
+const { FRONTEND_URL } = require("../../config/env");
+
 exports.addStaff = async (req, res, next) => {
     try {
         const { name, mobile, email, designation, shiftTiming, gateOrArea, address } = req.body;
@@ -95,14 +97,14 @@ exports.addStaff = async (req, res, next) => {
             // Rollback on failure
             if (user?._id) {
                 const Mapping = masterDb.model("UserSocietyMapping");
-                await Mapping.deleteMany({ userId: user._id, societyId }).catch(() => {});
-                await Staff.deleteOne({ userId: user._id, societyId }).catch(() => {});
-                await User.deleteOne({ _id: user._id }).catch(() => {});
+                await Mapping.deleteMany({ userId: user._id, societyId }).catch(() => { });
+                await Staff.deleteOne({ userId: user._id, societyId }).catch(() => { });
+                await User.deleteOne({ _id: user._id }).catch(() => { });
             }
             throw err;
         }
 
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = FRONTEND_URL;
         const inviteLink = `${frontendUrl}/activate-account?token=${plainToken}`;
 
         await emailService.sendInviteEmail({

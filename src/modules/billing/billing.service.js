@@ -1,12 +1,18 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const AppError = require("../../common/AppError");
 const { BILLING_PERMISSIONS } = require("../../common/billingPermissions");
 const {
     getBillingModels,
 } = require("./billing.model");
 const {
+    getReconciliationModels,
+} = require("../reconciliation/reconciliation.model");
+const {
     requiresCommitteeApproval,
+    requiresCommitteeApprovalAsync,
+    getAccountantApprovalThreshold,
     checkSelfApproval,
     canAccessBillingResource,
 } = require("../../services/billingAuthorization.service");
@@ -463,8 +469,11 @@ class BillingService {
                 arrearsDisplayMode: "SINGLE_TOTAL",
                 defaultTaxSettings: { taxName: "GST", taxRate: 18 },
                 currency: "INR",
+                accountantApprovalThreshold: 5000,
                 isActive: true,
             };
+        } else if (config.accountantApprovalThreshold === undefined) {
+            config.accountantApprovalThreshold = 5000;
         }
 
         return config;
@@ -479,6 +488,7 @@ class BillingService {
             arrearsDisplayMode = "SINGLE_TOTAL",
             defaultTaxSettings,
             currency = "INR",
+            accountantApprovalThreshold,
         } = data;
 
         if (!["MONTHLY", "QUARTERLY"].includes(billingFrequency.toUpperCase())) {
@@ -499,21 +509,31 @@ class BillingService {
             throw new AppError("Arrears display mode must be SINGLE_TOTAL or LINE_BY_LINE.", 400);
         }
 
+        const updateSet = {
+            billingFrequency: billingFrequency.toUpperCase(),
+            billingDay: bDay,
+            dueDays: dDays,
+            arrearsDisplayMode: arrearsDisplayMode.toUpperCase(),
+            defaultTaxSettings: {
+                taxName: defaultTaxSettings?.taxName || "GST",
+                taxRate: defaultTaxSettings?.taxRate !== undefined ? Number(defaultTaxSettings.taxRate) : 18,
+            },
+            currency: currency || "INR",
+            updatedBy: req.user.id,
+        };
+
+        if (accountantApprovalThreshold !== undefined) {
+            const threshold = Number(accountantApprovalThreshold);
+            if (isNaN(threshold) || threshold < 0) {
+                throw new AppError("Accountant approval threshold must be a non-negative number.", 400);
+            }
+            updateSet.accountantApprovalThreshold = threshold;
+        }
+
         const config = await BillingConfiguration.findOneAndUpdate(
             { societyId: req.user.societyId },
             {
-                $set: {
-                    billingFrequency: billingFrequency.toUpperCase(),
-                    billingDay: bDay,
-                    dueDays: dDays,
-                    arrearsDisplayMode: arrearsDisplayMode.toUpperCase(),
-                    defaultTaxSettings: {
-                        taxName: defaultTaxSettings?.taxName || "GST",
-                        taxRate: defaultTaxSettings?.taxRate !== undefined ? Number(defaultTaxSettings.taxRate) : 18,
-                    },
-                    currency: currency || "INR",
-                    updatedBy: req.user.id,
-                },
+                $set: updateSet,
                 $setOnInsert: {
                     createdBy: req.user.id,
                     isActive: true,
@@ -527,7 +547,7 @@ class BillingService {
             action: BILLING_PERMISSIONS.CONFIG_UPDATE,
             resource: "BillingConfiguration",
             resourceId: config._id,
-            details: { billingFrequency, billingDay: bDay, dueDays: dDays, arrearsDisplayMode },
+            details: { billingFrequency, billingDay: bDay, dueDays: dDays, arrearsDisplayMode, accountantApprovalThreshold: updateSet.accountantApprovalThreshold },
         });
 
         return config;
@@ -669,11 +689,17 @@ class BillingService {
             throw new AppError("Invoice not found.", 404);
         }
 
-        // Approval Threshold check
+        // Approval Threshold check (dynamic per society)
+        const threshold = await getAccountantApprovalThreshold({
+            db: req.opsDb,
+            societyId: req.user.societyId,
+        });
+
         const needsApproval = requiresCommitteeApproval({
             user: req.user,
             action: BILLING_PERMISSIONS.CREDIT_NOTE_CREATE,
             amount,
+            thresholdOverride: threshold,
         });
 
         const status = needsApproval ? "pending_approval" : "approved";
@@ -757,10 +783,16 @@ class BillingService {
             throw new AppError("Invoice not found.", 404);
         }
 
+        const threshold = await getAccountantApprovalThreshold({
+            db: req.opsDb,
+            societyId: req.user.societyId,
+        });
+
         const needsApproval = requiresCommitteeApproval({
             user: req.user,
             action: BILLING_PERMISSIONS.DISCOUNT_CREATE,
             amount,
+            thresholdOverride: threshold,
         });
 
         const status = needsApproval ? "pending_approval" : "approved";
@@ -903,68 +935,368 @@ class BillingService {
 
     static async createVendorPayment(req, data) {
         const { VendorPayment } = getBillingModels(req.opsDb);
-        const { vendorName, billReference, amount, paymentMode } = data;
+        const societyId = req.user?.societyId;
+        const userId = req.user?.id || req.user?._id;
+
+        if (!societyId) {
+            throw new AppError("User is not associated with any society.", 400);
+        }
+
+        const {
+            vendorId,
+            vendorName,
+            billReference,
+            workOrderId,
+            purchaseId,
+            description,
+            amount,
+            paymentMode = "bank_transfer",
+        } = data;
+
+        // 1. Amount validation
+        if (amount === undefined || amount === null || amount === "") {
+            throw new AppError("Payment amount is required.", 400);
+        }
+        const numAmount = Number(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            throw new AppError("Payment amount must be a positive number.", 400);
+        }
+
+        // 2. Vendor validation
+        if (!vendorId) {
+            throw new AppError("Vendor ID is required.", 400);
+        }
+        if (!mongoose.Types.ObjectId.isValid(vendorId)) {
+            throw new AppError("Invalid vendor ID format.", 400);
+        }
+
+        const Vendor = req.opsDb?.models?.Vendor || (req.opsDb?.model ? req.opsDb.model("Vendor") : null);
+        let resolvedVendorName = (vendorName || "").trim();
+
+        if (Vendor) {
+            const vendorInDb = await Vendor.findById(vendorId).lean();
+            if (!vendorInDb) {
+                throw new AppError("Vendor not found.", 404);
+            }
+            if (String(vendorInDb.societyId) !== String(societyId)) {
+                throw new AppError("Vendor does not belong to your society.", 403);
+            }
+            resolvedVendorName = vendorInDb.name || resolvedVendorName || "Unknown Vendor";
+        } else if (!resolvedVendorName) {
+            resolvedVendorName = "Vendor";
+        }
+
+        // 3. Work Order / Purchase validation (if provided)
+        let resolvedWorkOrderId = null;
+        if (workOrderId) {
+            if (!mongoose.Types.ObjectId.isValid(workOrderId)) {
+                throw new AppError("Invalid work order ID format.", 400);
+            }
+            const WorkOrder = req.opsDb?.models?.WorkOrder;
+            if (WorkOrder) {
+                const wo = await WorkOrder.findOne({ _id: workOrderId, societyId }).lean();
+                if (!wo) {
+                    throw new AppError("Work Order not found or does not belong to your society.", 404);
+                }
+            }
+            resolvedWorkOrderId = workOrderId;
+        }
+
+        let resolvedPurchaseId = null;
+        if (purchaseId) {
+            if (!mongoose.Types.ObjectId.isValid(purchaseId)) {
+                throw new AppError("Invalid purchase ID format.", 400);
+            }
+            const Purchase = req.opsDb?.models?.Purchase;
+            if (Purchase) {
+                const po = await Purchase.findOne({ _id: purchaseId, societyId }).lean();
+                if (!po) {
+                    throw new AppError("Purchase not found or does not belong to your society.", 404);
+                }
+            }
+            resolvedPurchaseId = purchaseId;
+        }
+
+        let resolvedFinancialAccountId = null;
+        if (data.financialAccountId) {
+            if (!mongoose.Types.ObjectId.isValid(data.financialAccountId)) {
+                throw new AppError("Invalid financial account ID format.", 400);
+            }
+            const reconciliationModels = req.opsDb?.models?.FinancialAccount
+                ? req.opsDb.models
+                : getReconciliationModels(req.opsDb);
+            const FinancialAccount = reconciliationModels.FinancialAccount;
+            if (FinancialAccount) {
+                const fa = await FinancialAccount.findOne({ _id: data.financialAccountId, societyId }).lean();
+                if (!fa) {
+                    throw new AppError("Financial account not found or does not belong to your society.", 404);
+                }
+            }
+            resolvedFinancialAccountId = data.financialAccountId;
+        }
+
+        // 4. Payment Mode validation
+        const ALLOWED_PAYMENT_MODES = ["bank_transfer", "cheque", "cash", "upi"];
+        const normalizedPaymentMode = String(paymentMode).toLowerCase();
+        if (!ALLOWED_PAYMENT_MODES.includes(normalizedPaymentMode)) {
+            throw new AppError(`Invalid payment mode. Must be one of: ${ALLOWED_PAYMENT_MODES.join(", ")}`, 400);
+        }
+
+        // 5. Dynamic Approval Threshold check
+        const threshold = await getAccountantApprovalThreshold({
+            db: req.opsDb,
+            societyId,
+        });
 
         const needsApproval = requiresCommitteeApproval({
             user: req.user,
             action: BILLING_PERMISSIONS.VENDOR_PAYMENT_CREATE,
-            amount,
+            amount: numAmount,
+            thresholdOverride: threshold,
         });
 
         const status = needsApproval ? "pending_approval" : "approved";
-        const count = await VendorPayment.countDocuments({ societyId: req.user.societyId });
+        const count = await VendorPayment.countDocuments({ societyId });
         const paymentNumber = `VP-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
 
+        // 6. Create payment without trusting user-supplied security/state fields
         const payment = await VendorPayment.create({
-            societyId: req.user.societyId,
+            societyId,
             paymentNumber,
-            vendorName,
-            billReference,
-            amount,
-            paymentMode,
+            vendorId,
+            vendorName: resolvedVendorName,
+            billReference: billReference ? String(billReference).trim() : "",
+            workOrderId: resolvedWorkOrderId,
+            purchaseId: resolvedPurchaseId,
+            financialAccountId: resolvedFinancialAccountId,
+            description: description ? String(description).trim() : "",
+            amount: numAmount,
+            paymentMode: normalizedPaymentMode,
             status,
-            createdBy: req.user.id,
-            approvedBy: status === "approved" ? req.user.id : null,
+            requestedBy: userId,
+            createdBy: userId,
+            approvalRequired: needsApproval,
+            approvedBy: status === "approved" ? userId : null,
+            approvedAt: status === "approved" ? new Date() : null,
         });
 
+        // 7. Audit logging
         await logBillingAction({
             req,
             action: BILLING_PERMISSIONS.VENDOR_PAYMENT_CREATE,
             resource: "VendorPayment",
             resourceId: payment._id,
-            amount,
-            details: { paymentNumber, status, thresholdTriggered: needsApproval },
+            amount: numAmount,
+            details: {
+                paymentNumber,
+                status,
+                approvalRequired: needsApproval,
+                thresholdTriggered: needsApproval,
+                threshold,
+                vendorId,
+                vendorName: resolvedVendorName,
+            },
         });
 
         return payment;
     }
 
-    static async approveVendorPayment(req, paymentId, action = "approve") {
+    static async getVendorPayments(req, query = {}) {
         const { VendorPayment } = getBillingModels(req.opsDb);
-        const targetStatus = action === "approve" ? "approved" : "rejected";
+        const societyId = req.user?.societyId;
+        if (!societyId) {
+            throw new AppError("User is not associated with any society.", 400);
+        }
 
+        const filter = { societyId };
+
+        // 1. Status filter
+        if (query.status && query.status !== "ALL") {
+            const statuses = query.status
+                .split(",")
+                .map((s) => s.trim().toLowerCase())
+                .filter(Boolean);
+            if (statuses.length === 1) {
+                filter.status = { $in: [statuses[0], statuses[0].toUpperCase()] };
+            } else if (statuses.length > 1) {
+                const combined = [
+                    ...statuses,
+                    ...statuses.map((s) => s.toUpperCase()),
+                ];
+                filter.status = { $in: combined };
+            }
+        }
+
+        // 2. Vendor filter
+        if (query.vendorId) {
+            if (!mongoose.Types.ObjectId.isValid(query.vendorId)) {
+                throw new AppError("Invalid vendor ID filter format.", 400);
+            }
+            filter.vendorId = query.vendorId;
+        }
+
+        // 3. Date range filter
+        const startDate = query.startDate || query.from;
+        const endDate = query.endDate || query.to;
+        if (startDate || endDate) {
+            filter.createdAt = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                if (isNaN(start.getTime())) {
+                    throw new AppError("Invalid startDate format.", 400);
+                }
+                filter.createdAt.$gte = start;
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                if (isNaN(end.getTime())) {
+                    throw new AppError("Invalid endDate format.", 400);
+                }
+                filter.createdAt.$lte = end;
+            }
+        }
+
+        // 4. Search filter (paymentNumber, vendorName, billReference)
+        if (query.search && query.search.trim()) {
+            const regex = new RegExp(query.search.trim(), "i");
+            filter.$or = [
+                { paymentNumber: regex },
+                { vendorName: regex },
+                { billReference: regex },
+            ];
+        }
+
+        // 5. Pagination
+        const page = Math.max(1, parseInt(query.page, 10) || 1);
+        const limit = Math.max(1, Math.min(100, parseInt(query.limit, 10) || 20));
+        const skip = (page - 1) * limit;
+
+        const [payments, total] = await Promise.all([
+            VendorPayment.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            VendorPayment.countDocuments(filter),
+        ]);
+
+        return {
+            payments,
+            pagination: {
+                total,
+                page,
+                limit,
+                pages: Math.ceil(total / limit) || 1,
+            },
+        };
+    }
+
+    static async getVendorPaymentById(req, paymentId) {
+        const { VendorPayment } = getBillingModels(req.opsDb);
+        const societyId = req.user?.societyId;
+
+        if (!societyId) {
+            throw new AppError("User is not associated with any society.", 400);
+        }
+
+        if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
+            throw new AppError("Invalid vendor payment ID format.", 400);
+        }
+
+        const payment = await VendorPayment.findOne({
+            _id: paymentId,
+            societyId,
+        }).lean();
+
+        if (!payment) {
+            throw new AppError("Vendor payment not found.", 404);
+        }
+
+        return payment;
+    }
+
+    static async approveVendorPayment(req, paymentId, action = "approve", comment = "") {
+        const { VendorPayment } = getBillingModels(req.opsDb);
+        const societyId = req.user?.societyId;
+        const userId = req.user?.id || req.user?._id;
+
+        if (!societyId) {
+            throw new AppError("User is not associated with any society.", 400);
+        }
+
+        if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
+            throw new AppError("Invalid vendor payment ID format.", 400);
+        }
+
+        const normalizedAction = String(action || "approve").toLowerCase();
+        if (!["approve", "reject"].includes(normalizedAction)) {
+            throw new AppError("Invalid approval action. Must be 'approve' or 'reject'.", 400);
+        }
+
+        const targetStatus = normalizedAction === "approve" ? "approved" : "rejected";
+        const cleanComment = typeof comment === "string" ? comment.trim() : (typeof req.body?.comment === "string" ? req.body.comment.trim() : "");
+        const now = new Date();
+
+        const updateFields = normalizedAction === "approve"
+            ? {
+                status: "approved",
+                approvedBy: userId,
+                approvedAt: now,
+                approvalComment: cleanComment,
+            }
+            : {
+                status: "rejected",
+                rejectedBy: userId,
+                rejectedAt: now,
+                rejectionComment: cleanComment,
+            };
+
+        // Atomic lock transition: only pending_approval can transition
         const payment = await VendorPayment.findOneAndUpdate(
             {
                 _id: paymentId,
-                societyId: req.user.societyId,
-                status: "pending_approval",
+                societyId,
+                status: { $in: ["pending_approval", "PENDING_APPROVAL"] },
             },
             {
-                $set: {
-                    status: targetStatus,
-                    approvedBy: req.user.id,
-                },
+                $set: updateFields,
             },
             { new: true }
         );
 
         if (!payment) {
-            throw new AppError("Vendor payment not found or already processed.", 409);
+            const existing = await VendorPayment.findOne({
+                _id: paymentId,
+                societyId,
+            }).lean();
+
+            if (!existing) {
+                throw new AppError("Vendor payment not found.", 404);
+            }
+
+            throw new AppError(
+                `Vendor payment is in '${existing.status}' status and cannot be ${normalizedAction === "reject" ? "rejected" : "approved"}.`,
+                409
+            );
         }
 
+        // Self-approval protection
         if (checkSelfApproval(req.user, payment)) {
-            await VendorPayment.updateOne({ _id: paymentId }, { $set: { status: "pending_approval", approvedBy: null } });
-            throw new AppError("Self-approval is forbidden.", 403);
+            await VendorPayment.updateOne(
+                { _id: paymentId },
+                {
+                    $set: {
+                        status: "pending_approval",
+                        approvedBy: null,
+                        approvedAt: null,
+                        approvalComment: "",
+                        rejectedBy: null,
+                        rejectedAt: null,
+                        rejectionComment: "",
+                    },
+                }
+            );
+            throw new AppError("Self-approval is forbidden. Another Committee Admin must approve.", 403);
         }
 
         await logBillingAction({
@@ -973,10 +1305,181 @@ class BillingService {
             resource: "VendorPayment",
             resourceId: payment._id,
             amount: payment.amount,
-            details: { action, targetStatus },
+            details: {
+                paymentNumber: payment.paymentNumber,
+                action: normalizedAction,
+                targetStatus,
+                comment: cleanComment,
+            },
         });
 
         return payment;
+    }
+
+    static async markVendorPaymentPaid(req, paymentId, data = {}) {
+        const { VendorPayment } = getBillingModels(req.opsDb);
+        const reconciliationModels = (req.opsDb?.models?.FinancialAccount && req.opsDb?.models?.AccountTransaction)
+            ? req.opsDb.models
+            : getReconciliationModels(req.opsDb);
+        const FinancialAccount = reconciliationModels.FinancialAccount;
+        const AccountTransaction = reconciliationModels.AccountTransaction;
+
+        const societyId = req.user?.societyId;
+        const userId = req.user?.id || req.user?._id;
+
+        if (!societyId) {
+            throw new AppError("User is not associated with any society.", 400);
+        }
+
+        if (!paymentId || !mongoose.Types.ObjectId.isValid(paymentId)) {
+            throw new AppError("Invalid vendor payment ID format.", 400);
+        }
+
+        // 1. Initial lookup to verify payment and check status/society
+        const existingPayment = await VendorPayment.findOne({
+            _id: paymentId,
+            societyId,
+        });
+
+        if (!existingPayment) {
+            throw new AppError("Vendor payment not found.", 404);
+        }
+
+        // Status rule validation: Only approved can be marked paid
+        const currentStatus = String(existingPayment.status || "").toLowerCase();
+        if (currentStatus === "paid") {
+            throw new AppError("Vendor payment is already paid.", 409);
+        }
+        if (currentStatus === "pending_approval" || currentStatus === "pending") {
+            throw new AppError("Vendor payment is pending approval and cannot be marked paid. Only approved payments can be marked paid.", 409);
+        }
+        if (currentStatus === "rejected") {
+            throw new AppError("Rejected vendor payment cannot be marked paid.", 409);
+        }
+        if (currentStatus !== "approved") {
+            throw new AppError(`Vendor payment cannot be marked paid in '${existingPayment.status}' status. Only approved payments can be marked paid.`, 409);
+        }
+
+        // 2. Resolve & validate FinancialAccount
+        // Per BRD & specs: If the payment record already contains financialAccountId, that account is used.
+        // If not set on record, it can fall back to data.financialAccountId.
+        const targetAccountId = existingPayment.financialAccountId || data?.financialAccountId;
+        if (!targetAccountId) {
+            throw new AppError("Financial account is required to mark payment as paid.", 400);
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(targetAccountId)) {
+            throw new AppError("Invalid financial account ID format.", 400);
+        }
+
+        const account = await (typeof FinancialAccount.findById === "function"
+            ? FinancialAccount.findById(targetAccountId)
+            : FinancialAccount.findOne({ _id: targetAccountId }));
+
+        if (!account) {
+            throw new AppError("Financial account not found.", 404);
+        }
+
+        if (String(account.societyId) !== String(societyId)) {
+            throw new AppError("Financial account belongs to another society.", 403);
+        }
+
+        if (account.status !== "ACTIVE") {
+            throw new AppError("Financial account is not active.", 400);
+        }
+
+        // 3. Concurrency Protection & Atomic State Transition
+        // Only payments matching status 'approved' (case-insensitive) transition to 'paid'.
+        // If two simultaneous requests arrive, exactly ONE will match and succeed.
+        const now = new Date();
+        const updatedPayment = await VendorPayment.findOneAndUpdate(
+            {
+                _id: paymentId,
+                societyId,
+                status: { $in: ["approved", "APPROVED"] },
+            },
+            {
+                $set: {
+                    status: "paid",
+                    paidBy: userId,
+                    paidAt: now,
+                    financialAccountId: account._id,
+                },
+            },
+            { new: true }
+        );
+
+        if (!updatedPayment) {
+            const recheck = await VendorPayment.findOne({ _id: paymentId, societyId }).lean();
+            if (!recheck) {
+                throw new AppError("Vendor payment not found.", 404);
+            }
+            if (String(recheck.status).toLowerCase() === "paid") {
+                throw new AppError("Vendor payment is already paid.", 409);
+            }
+            throw new AppError(`Vendor payment cannot be marked paid in '${recheck.status}' status.`, 409);
+        }
+
+        // 4. Update FinancialAccount Balance
+        // Deduct payment.amount from account.currentBalance
+        const newBalance = Math.round(((account.currentBalance || 0) - updatedPayment.amount) * 100) / 100;
+        account.currentBalance = newBalance;
+        if (typeof account.save === "function") {
+            await account.save();
+        } else if (typeof FinancialAccount.updateOne === "function") {
+            await FinancialAccount.updateOne({ _id: account._id }, { $set: { currentBalance: newBalance } });
+        }
+
+        // 5. Create AccountTransaction using existing accounting architecture
+        const PAYMENT_METHOD_MAP = {
+            bank_transfer: "BANK_TRANSFER",
+            cheque: "CHEQUE",
+            cash: "CASH",
+            upi: "UPI",
+        };
+        const paymentMethod = PAYMENT_METHOD_MAP[updatedPayment.paymentMode] || "BANK_TRANSFER";
+        const txNumber = `TX-VP-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const accountTx = await AccountTransaction.create({
+            societyId,
+            accountId: account._id,
+            transactionNumber: txNumber,
+            transactionType: "EXPENSE",
+            direction: "DEBIT",
+            transactionDate: now,
+            amount: updatedPayment.amount,
+            balanceAfterTransaction: newBalance,
+            paymentMethod,
+            referenceType: "EXPENSE",
+            referenceId: updatedPayment._id,
+            referenceModel: "VendorPayment",
+            externalReference: updatedPayment.paymentNumber,
+            residentVendorName: updatedPayment.vendorName || "Vendor",
+            invoiceExpenseRef: updatedPayment.billReference || updatedPayment.paymentNumber,
+            description: updatedPayment.description || `Vendor payment ${updatedPayment.paymentNumber} to ${updatedPayment.vendorName || "Vendor"}`,
+            reconciliationStatus: "UNRECONCILED",
+            createdBy: userId,
+        });
+
+        // 6. Audit Trail Logging
+        await logBillingAction({
+            req,
+            action: BILLING_PERMISSIONS.VENDOR_PAYMENT_MARK_PAID,
+            resource: "VendorPayment",
+            resourceId: updatedPayment._id,
+            amount: updatedPayment.amount,
+            details: {
+                paymentNumber: updatedPayment.paymentNumber,
+                status: "paid",
+                financialAccountId: account._id,
+                accountName: account.accountName,
+                transactionNumber: accountTx.transactionNumber,
+                paidBy: userId,
+                paidAt: now,
+            },
+        });
+
+        return updatedPayment;
     }
 
     // ── 6. Budgets & Reports ───────────────────────────────────────────────────

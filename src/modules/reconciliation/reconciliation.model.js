@@ -164,7 +164,7 @@ const accountTransactionSchema = new mongoose.Schema(
         },
         referenceModel: {
             type: String,
-            enum: ["Payment", "Expense", "AccountTransfer", "ReconciliationAdjustment"]
+            enum: ["Payment", "Expense", "AccountTransfer", "ReconciliationAdjustment", "VendorPayment"]
         },
         externalReference: {
             type: String,
