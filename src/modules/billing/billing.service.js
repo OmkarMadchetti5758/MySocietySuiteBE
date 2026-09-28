@@ -159,7 +159,7 @@ class BillingService {
             const newVersionNumber = (existing.version || 1) + 1;
             const updatedName = (data.name || existing.name).trim();
             const updatedCategory = (data.category || existing.category).toUpperCase();
-            const updatedCalcType = (data.calculationType || existing.calculationType).toUpperCase();
+            const updatedCamalcType = (data.calculationType || existing.calculationType).toUpperCase();
 
             let parsedDefaultAmount = data.defaultAmount !== undefined ? Number(data.defaultAmount) : existing.defaultAmount;
             let parsedRatePerSqFt = data.ratePerSqFt !== undefined ? Number(data.ratePerSqFt) : existing.ratePerSqFt;
@@ -682,14 +682,48 @@ class BillingService {
     // ── 4. Credit Notes & Discounts ───────────────────────────────────────────
     static async createCreditNote(req, data) {
         const { CreditNote, BillingInvoice } = getBillingModels(req.opsDb);
-        const { invoiceId, amount, reason } = data;
+        const { invoiceId, flatId, amount, reason } = data;
 
-        const invoice = await BillingInvoice.findOne({ _id: invoiceId, societyId: req.user.societyId });
-        if (!invoice) {
-            throw new AppError("Invoice not found.", 404);
+        // FR-B6.1: Mandatory reason check
+        if (!reason || typeof reason !== "string" || !reason.trim()) {
+            throw new AppError("A mandatory reason must be provided to issue a credit note.", 400);
         }
 
-        // Approval Threshold check (dynamic per society)
+        const numAmount = Number(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            throw new AppError("A valid positive amount is required for a credit note.", 400);
+        }
+
+        let targetInvoice = null;
+        let targetFlatId = flatId;
+        let targetUserId = null;
+
+        if (invoiceId && invoiceId !== "GENERAL" && invoiceId !== "null" && invoiceId !== "") {
+            targetInvoice = await BillingInvoice.findOne({ _id: invoiceId, societyId: req.user.societyId });
+            if (!targetInvoice) {
+                throw new AppError("Target past invoice not found.", 404);
+            }
+            if (numAmount > (targetInvoice.totalAmount || 0)) {
+                throw new AppError(
+                    `Credit note amount (₹${numAmount}) cannot exceed invoice total payable (₹${targetInvoice.totalAmount}).`,
+                    400
+                );
+            }
+            targetFlatId = targetInvoice.flatId;
+            targetUserId = targetInvoice.userId;
+        }
+
+        if (!targetFlatId) {
+            throw new AppError("Target flat is required to issue a credit note.", 400);
+        }
+
+        if (!targetUserId) {
+            const Flat = req.opsDb.model("Flat");
+            const flat = await Flat.findOne({ _id: targetFlatId, societyId: req.user.societyId }).lean();
+            targetUserId = flat?.primaryOwner || flat?.activeTenant || req.user.id;
+        }
+
+        // Approval Threshold check (dynamic per society) - FR-B6.3
         const threshold = await getAccountantApprovalThreshold({
             db: req.opsDb,
             societyId: req.user.societyId,
@@ -698,7 +732,7 @@ class BillingService {
         const needsApproval = requiresCommitteeApproval({
             user: req.user,
             action: BILLING_PERMISSIONS.CREDIT_NOTE_CREATE,
-            amount,
+            amount: numAmount,
             thresholdOverride: threshold,
         });
 
@@ -709,30 +743,40 @@ class BillingService {
         const creditNote = await CreditNote.create({
             societyId: req.user.societyId,
             noteNumber,
-            invoiceId: invoice._id,
-            flatId: invoice.flatId,
-            userId: invoice.userId,
-            amount,
-            reason,
+            invoiceId: targetInvoice ? targetInvoice._id : null,
+            flatId: targetFlatId,
+            userId: targetUserId,
+            amount: numAmount,
+            reason: reason.trim(),
             status,
             createdBy: req.user.id,
             approvedBy: status === "approved" ? req.user.id : null,
         });
+
+        // If auto-approved (within threshold) and linked to an invoice, apply balance reduction immediately
+        if (status === "approved" && targetInvoice) {
+            targetInvoice.creditNoteAmount = Math.round(((targetInvoice.creditNoteAmount || 0) + numAmount) * 100) / 100;
+            targetInvoice.totalAmount = Math.max(0, Math.round(((targetInvoice.totalAmount || 0) - numAmount) * 100) / 100);
+            if ((targetInvoice.paidAmount || 0) >= targetInvoice.totalAmount) {
+                targetInvoice.status = "PAID";
+            }
+            await targetInvoice.save();
+        }
 
         await logBillingAction({
             req,
             action: BILLING_PERMISSIONS.CREDIT_NOTE_CREATE,
             resource: "CreditNote",
             resourceId: creditNote._id,
-            amount,
-            details: { noteNumber, status, thresholdTriggered: needsApproval },
+            amount: numAmount,
+            details: { noteNumber, status, thresholdTriggered: needsApproval, invoiceId: targetInvoice ? targetInvoice._id : null },
         });
 
         return creditNote;
     }
 
-    static async approveCreditNote(req, creditNoteId, action = "approve") {
-        const { CreditNote } = getBillingModels(req.opsDb);
+    static async approveCreditNote(req, creditNoteId, action = "approve", rejectionReason = null) {
+        const { CreditNote, BillingInvoice } = getBillingModels(req.opsDb);
 
         const targetStatus = action === "approve" ? "approved" : "rejected";
 
@@ -747,6 +791,7 @@ class BillingService {
                 $set: {
                     status: targetStatus,
                     approvedBy: req.user.id,
+                    rejectionReason: action === "reject" ? (rejectionReason || "Rejected by Committee Admin") : null,
                 },
             },
             { new: true }
@@ -762,25 +807,113 @@ class BillingService {
             throw new AppError("Self-approval is forbidden. Another Committee Admin must approve.", 403);
         }
 
+        // On Committee Admin approval, reduce what resident owes on the past invoice
+        if (targetStatus === "approved") {
+            const invoice = await BillingInvoice.findOne({ _id: creditNote.invoiceId, societyId: req.user.societyId });
+            if (invoice) {
+                invoice.creditNoteAmount = Math.round(((invoice.creditNoteAmount || 0) + creditNote.amount) * 100) / 100;
+                invoice.totalAmount = Math.max(0, Math.round(((invoice.totalAmount || 0) - creditNote.amount) * 100) / 100);
+                if ((invoice.paidAmount || 0) >= invoice.totalAmount) {
+                    invoice.status = "PAID";
+                }
+                await invoice.save();
+            }
+        }
+
         await logBillingAction({
             req,
             action: BILLING_PERMISSIONS.CREDIT_NOTE_APPROVE,
             resource: "CreditNote",
             resourceId: creditNote._id,
             amount: creditNote.amount,
-            details: { action, targetStatus },
+            details: { action, targetStatus, rejectionReason },
         });
 
         return creditNote;
     }
 
-    static async createDiscount(req, data) {
-        const { Discount, BillingInvoice } = getBillingModels(req.opsDb);
-        const { invoiceId, amount, reason, discountCode } = data;
+    static async getCreditNotes(req) {
+        const { CreditNote } = getBillingModels(req.opsDb);
+        const { flatId, status, search, page = 1, limit = 20 } = req.query;
 
-        const invoice = await BillingInvoice.findOne({ _id: invoiceId, societyId: req.user.societyId });
-        if (!invoice) {
-            throw new AppError("Invoice not found.", 404);
+        const filter = { societyId: req.user.societyId };
+        if (flatId) filter.flatId = flatId;
+        if (status && status !== "ALL") filter.status = status.toLowerCase();
+        if (search && search.trim()) {
+            filter.$or = [
+                { noteNumber: { $regex: search.trim(), $options: "i" } },
+                { reason: { $regex: search.trim(), $options: "i" } },
+            ];
+        }
+
+        const skip = (Math.max(1, parseInt(page, 10)) - 1) * Math.max(1, parseInt(limit, 10));
+        const limitNum = Math.max(1, parseInt(limit, 10));
+
+        const [creditNotes, total] = await Promise.all([
+            CreditNote.find(filter)
+                .populate("invoiceId", "invoiceNumber billingPeriod totalAmount paidAmount status")
+                .populate("flatId", "flatNumber blockName wing")
+                .populate("createdBy", "name email")
+                .populate("approvedBy", "name email")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            CreditNote.countDocuments(filter),
+        ]);
+
+        return {
+            creditNotes,
+            total,
+            page: parseInt(page, 10),
+            totalPages: Math.ceil(total / limitNum) || 1,
+        };
+    }
+
+    static async getPastInvoicesForCreditNote(req) {
+        const { BillingInvoice } = getBillingModels(req.opsDb);
+        const { flatId } = req.query;
+
+        const filter = {
+            societyId: req.user.societyId,
+            status: { $ne: "CANCELLED" },
+        };
+        if (flatId) filter.flatId = flatId;
+
+        const invoices = await BillingInvoice.find(filter)
+            .select("invoiceNumber billingPeriod invoiceDate dueDate totalAmount paidAmount creditNoteAmount discountAmount status flatId residentName flatNumber blockName")
+            .populate("flatId", "flatNumber blockName wing")
+            .sort({ invoiceDate: -1 })
+            .limit(100)
+            .lean();
+
+        return invoices;
+    }
+
+    static async createDiscount(req, data) {
+        const { Discount, ChargeHead } = getBillingModels(req.opsDb);
+        const { flatId, chargeHeadId, amount, reason, discountCode } = data;
+
+        // FR-B6.2: Mandatory reason check
+        if (!reason || typeof reason !== "string" || !reason.trim()) {
+            throw new AppError("A mandatory reason must be provided to apply a discount.", 400);
+        }
+
+        const numAmount = Number(amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            throw new AppError("A valid positive amount is required for a discount.", 400);
+        }
+
+        if (!flatId) {
+            throw new AppError("Target flat is required to apply a discount to an upcoming invoice.", 400);
+        }
+
+        // Verify charge head if specified (FR-B6.2)
+        if (chargeHeadId) {
+            const head = await ChargeHead.findOne({ _id: chargeHeadId, societyId: req.user.societyId });
+            if (!head) {
+                throw new AppError("Selected charge head not found.", 404);
+            }
         }
 
         const threshold = await getAccountantApprovalThreshold({
@@ -791,20 +924,27 @@ class BillingService {
         const needsApproval = requiresCommitteeApproval({
             user: req.user,
             action: BILLING_PERMISSIONS.DISCOUNT_CREATE,
-            amount,
+            amount: numAmount,
             thresholdOverride: threshold,
         });
 
         const status = needsApproval ? "pending_approval" : "approved";
+        const count = await Discount.countDocuments({ societyId: req.user.societyId });
+        const generatedCode = (discountCode && discountCode.trim())
+            ? discountCode.trim()
+            : `DISC-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
 
         const discount = await Discount.create({
             societyId: req.user.societyId,
-            discountCode: discountCode || "DISC-PROMO",
-            invoiceId: invoice._id,
-            flatId: invoice.flatId,
-            userId: invoice.userId,
-            amount,
-            reason,
+            discountCode: generatedCode,
+            flatId,
+            userId: req.user.id,
+            chargeHeadId: chargeHeadId || null,
+            invoiceId: null,
+            appliedInvoiceId: null,
+            isApplied: false,
+            amount: numAmount,
+            reason: reason.trim(),
             status,
             createdBy: req.user.id,
             approvedBy: status === "approved" ? req.user.id : null,
@@ -815,14 +955,14 @@ class BillingService {
             action: BILLING_PERMISSIONS.DISCOUNT_CREATE,
             resource: "Discount",
             resourceId: discount._id,
-            amount,
-            details: { status, thresholdTriggered: needsApproval },
+            amount: numAmount,
+            details: { discountCode: generatedCode, status, thresholdTriggered: needsApproval, flatId, chargeHeadId },
         });
 
         return discount;
     }
 
-    static async approveDiscount(req, discountId, action = "approve") {
+    static async approveDiscount(req, discountId, action = "approve", rejectionReason = null) {
         const { Discount } = getBillingModels(req.opsDb);
 
         const targetStatus = action === "approve" ? "approved" : "rejected";
@@ -837,6 +977,7 @@ class BillingService {
                 $set: {
                     status: targetStatus,
                     approvedBy: req.user.id,
+                    rejectionReason: action === "reject" ? (rejectionReason || "Rejected by Committee Admin") : null,
                 },
             },
             { new: true }
@@ -857,10 +998,91 @@ class BillingService {
             resource: "Discount",
             resourceId: discount._id,
             amount: discount.amount,
-            details: { action, targetStatus },
+            details: { action, targetStatus, rejectionReason },
         });
 
         return discount;
+    }
+
+    static async getDiscounts(req) {
+        const { Discount } = getBillingModels(req.opsDb);
+        const { flatId, chargeHeadId, status, isApplied, search, page = 1, limit = 20 } = req.query;
+
+        const filter = { societyId: req.user.societyId };
+        if (flatId) filter.flatId = flatId;
+        if (chargeHeadId) filter.chargeHeadId = chargeHeadId;
+        if (status && status !== "ALL") filter.status = status.toLowerCase();
+        if (isApplied !== undefined && isApplied !== "") filter.isApplied = isApplied === "true";
+        if (search && search.trim()) {
+            filter.$or = [
+                { discountCode: { $regex: search.trim(), $options: "i" } },
+                { reason: { $regex: search.trim(), $options: "i" } },
+            ];
+        }
+
+        const skip = (Math.max(1, parseInt(page, 10)) - 1) * Math.max(1, parseInt(limit, 10));
+        const limitNum = Math.max(1, parseInt(limit, 10));
+
+        const [discounts, total] = await Promise.all([
+            Discount.find(filter)
+                .populate("flatId", "flatNumber blockName wing")
+                .populate("chargeHeadId", "name code category")
+                .populate("appliedInvoiceId", "invoiceNumber billingPeriod")
+                .populate("createdBy", "name email")
+                .populate("approvedBy", "name email")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            Discount.countDocuments(filter),
+        ]);
+
+        return {
+            discounts,
+            total,
+            page: parseInt(page, 10),
+            totalPages: Math.ceil(total / limitNum) || 1,
+        };
+    }
+
+    // FR-B6.4: Every credit note and discount is visible in that flat's billing history with reason attached
+    static async getFlatBillingHistory(req, flatId) {
+        const { BillingInvoice, CreditNote, Discount } = getBillingModels(req.opsDb);
+        const { Payment } = require("../payment/payment.model").getPaymentModels(req.opsDb);
+        const societyId = req.user.societyId;
+
+        const [invoices, creditNotes, discounts, payments] = await Promise.all([
+            BillingInvoice.find({ societyId, flatId })
+                .select("invoiceNumber billingPeriod invoiceDate dueDate subTotal totalGst arrearsAmount fineAmount creditNoteAmount discountAmount advanceAdjustment totalAmount paidAmount status")
+                .sort({ invoiceDate: -1 })
+                .lean(),
+            CreditNote.find({ societyId, flatId })
+                .populate("invoiceId", "invoiceNumber billingPeriod")
+                .populate("approvedBy", "name")
+                .populate("createdBy", "name")
+                .sort({ createdAt: -1 })
+                .lean(),
+            Discount.find({ societyId, flatId })
+                .populate("chargeHeadId", "name code")
+                .populate("appliedInvoiceId", "invoiceNumber billingPeriod")
+                .populate("approvedBy", "name")
+                .populate("createdBy", "name")
+                .sort({ createdAt: -1 })
+                .lean(),
+            Payment.find({ societyId, flatId })
+                .select("receiptNumber paymentDate amount paymentMethod status transactionReference invoiceId")
+                .populate("invoiceId", "invoiceNumber billingPeriod")
+                .sort({ paymentDate: -1 })
+                .lean(),
+        ]);
+
+        return {
+            flatId,
+            invoices,
+            creditNotes, // Includes reason, amount, noteNumber, status, approvedBy
+            discounts,   // Includes reason, amount, discountCode, status, chargeHead, appliedInvoiceId
+            payments,
+        };
     }
 
     // ── 5. Journal Vouchers & Vendor Payments ──────────────────────────────────

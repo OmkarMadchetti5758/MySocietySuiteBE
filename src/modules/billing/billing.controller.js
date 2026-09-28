@@ -246,6 +246,24 @@ class BillingController {
         }
     }
 
+    static async getCreditNotes(req, res, next) {
+        try {
+            const data = await BillingService.getCreditNotes(req);
+            return sendSuccess(res, 200, "Credit notes retrieved successfully", data);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async getPastInvoicesForCreditNote(req, res, next) {
+        try {
+            const data = await BillingService.getPastInvoicesForCreditNote(req);
+            return sendSuccess(res, 200, "Past invoices retrieved successfully", data);
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async createCreditNote(req, res, next) {
         try {
             const creditNote = await BillingService.createCreditNote(req, req.body);
@@ -257,9 +275,18 @@ class BillingController {
 
     static async approveCreditNote(req, res, next) {
         try {
-            const { action } = req.body;
-            const creditNote = await BillingService.approveCreditNote(req, req.params.id, action);
+            const { action, rejectionReason } = req.body;
+            const creditNote = await BillingService.approveCreditNote(req, req.params.id, action, rejectionReason);
             return sendSuccess(res, 200, `Credit note ${action === "reject" ? "rejected" : "approved"} successfully`, creditNote);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async getDiscounts(req, res, next) {
+        try {
+            const data = await BillingService.getDiscounts(req);
+            return sendSuccess(res, 200, "Discounts retrieved successfully", data);
         } catch (err) {
             next(err);
         }
@@ -276,9 +303,18 @@ class BillingController {
 
     static async approveDiscount(req, res, next) {
         try {
-            const { action } = req.body;
-            const discount = await BillingService.approveDiscount(req, req.params.id, action);
+            const { action, rejectionReason } = req.body;
+            const discount = await BillingService.approveDiscount(req, req.params.id, action, rejectionReason);
             return sendSuccess(res, 200, `Discount ${action === "reject" ? "rejected" : "approved"} successfully`, discount);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async getFlatBillingHistory(req, res, next) {
+        try {
+            const data = await BillingService.getFlatBillingHistory(req, req.params.flatId);
+            return sendSuccess(res, 200, "Flat billing history retrieved successfully", data);
         } catch (err) {
             next(err);
         }
