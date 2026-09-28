@@ -49,9 +49,8 @@ router.use("/advance-deposits", require("../../modules/advanceAccountsDeposits/a
 router.use("/documents", require("../../modules/document/document.routes"));
 router.use("/payments", require("../../modules/payment/payment.routes"));
 router.use("/reconciliation", require("../../modules/reconciliation/reconciliation.routes"));
+router.use("/dashboard", require("../../modules/dashboard/dashboard.routes"));
 router.use("/ai-assistant", require("../../modules/aiAssistant/aiAssistant.routes"));
-
-
 
 // ── Ledger Management ──────────────────────────────────────────────────────────
 router.use("/ledger", require("../../modules/ledger/ledger.routes"));

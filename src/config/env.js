@@ -1,5 +1,14 @@
 "use strict";
 
+// const dns = require("dns");
+
+// // Fix for Windows/ISP DNS blocking MongoDB Atlas SRV record resolution (querySrv ECONNREFUSED)
+// try {
+//     dns.setServers(["8.8.8.8", "1.1.1.1", "8.8.4.4"]);
+// } catch (e) {
+//     // Ignore fallback if custom DNS setting is not permitted
+// }
+
 require("dotenv").config();
 
 const required = [
