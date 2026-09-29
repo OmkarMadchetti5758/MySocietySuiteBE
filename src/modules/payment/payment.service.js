@@ -5,7 +5,21 @@ const https = require("https");
 const { getPaymentModels } = require("./payment.model");
 const { getBillingModels } = require("../billing/billing.model");
 const { getBillingAuditModel, logBillingAction } = require("../../services/billingAudit.service");
-const { generateAutomaticPosting } = require("../ledger/ledger.service");
+const LedgerPostingService = require("../ledger/ledgerPosting.service");
+const { getReconciliationModels } = require("../reconciliation/reconciliation.model");
+
+async function resolveDefaultCollectionAccount(db, societyId) {
+    try {
+        const { FinancialAccount } = getReconciliationModels(db);
+        const bank = await FinancialAccount.findOne({ societyId, status: "ACTIVE", accountType: "BANK" }).sort({ createdAt: 1 }).lean();
+        if (bank) return { id: String(bank._id), name: bank.accountName };
+        const cash = await FinancialAccount.findOne({ societyId, status: "ACTIVE", accountType: "CASH" }).sort({ createdAt: 1 }).lean();
+        if (cash) return { id: String(cash._id), name: cash.accountName };
+    } catch (err) {
+        console.error("[PAYMENT] Could not resolve collection account:", err.message);
+    }
+    return { id: "HDFC_COLLECTION_ACC", name: "HDFC Online Collection Account" };
+}
 
 // Helper: Convert number to English currency words
 function numberToWords(amount) {
@@ -150,13 +164,15 @@ class PaymentService {
             razorpayOrder = { id: `order_mock_${Date.now()}` };
         }
 
+        const collectionAcc = await resolveDefaultCollectionAccount(db, societyId);
+
         const payment = await Payment.create({
             societyId,
             flatId: invoice.flatId,
             userId,
             invoiceId,
-            paymentAccountId: "HDFC_COLLECTION_ACC",
-            paymentAccountName: "HDFC Online Collection Account",
+            paymentAccountId: collectionAcc.id,
+            paymentAccountName: collectionAcc.name,
             paymentNumber,
             amount: payAmount,
             paymentMode: paymentMode || "UPI",
@@ -347,31 +363,12 @@ class PaymentService {
             details: { paymentNumber: payment.paymentNumber, receiptNumber: receipt?.receiptNumber },
         });
 
-        // ── AUTO-POST TO LEDGER ──
-        // Debit: HDFC Bank (Default Code: 1012)
-        // Credit: Accounts Receivable (Default Code: 1021)
-        if (payment.amount > 0) {
-            try {
-                await generateAutomaticPosting({
-                    societyId,
-                    userId,
-                    userRole: "system",
-                    eventType: "ONLINE_PAYMENT",
-                    amount: payment.amount,
-                    transactionDate: payment.paymentDate || new Date(),
-                    debitAccountCode: "1012", // Default Main Bank Account
-                    creditAccountCode: "1021", // Default Accounts Receivable
-                    description: `Online payment received for ${payment.paymentNumber} ${invoice ? 'against ' + invoice.invoiceNumber : ''}`,
-                    referenceId: payment._id,
-                    referenceNumber: payment.paymentNumber,
-                    residentId: invoice ? invoice.userId : null,
-                    flatId: invoice ? invoice.flatId : payment.flatId,
-                }, db);
-            } catch (err) {
-                console.error("Failed to auto-post online payment to ledger:", err.message);
-                // We swallow the error here to not fail the gateway verification, but it should be alerted
-            }
-        }
+        await LedgerPostingService.autoPost("online-payment", () =>
+            LedgerPostingService.postConfirmedCollection({
+                societyId, userId, payment,
+                financialAccountId: payment.paymentAccountId, db
+            })
+        );
 
         return { payment, receipt };
     }
@@ -566,32 +563,12 @@ class PaymentService {
             details: { paymentNumber, paymentMode, receiptNumber: receipt?.receiptNumber },
         });
 
-        // ── AUTO-POST TO LEDGER ──
-        // Debit: Cash (1011) or Bank (1012) based on mode
-        // Credit: Accounts Receivable (1021)
-        if (payment.amount > 0) {
-            try {
-                const debitCode = paymentMode === "CASH" ? "1011" : "1012";
-                await generateAutomaticPosting({
-                    societyId,
-                    userId: recordedBy,
-                    userRole: "admin",
-                    eventType: "OFFLINE_PAYMENT",
-                    amount: payment.amount,
-                    transactionDate: payDate,
-                    debitAccountCode: debitCode, 
-                    creditAccountCode: "1021", 
-                    description: `Offline ${paymentMode} payment received for ${payment.paymentNumber}`,
-                    referenceId: payment._id,
-                    referenceNumber: payment.paymentNumber,
-                    residentId: userId,
-                    flatId: flatId,
-                }, db);
-            } catch (err) {
-                console.error("Failed to auto-post offline payment to ledger:", err.message);
-                // Swallowed so UI still reports successful payment save
-            }
-        }
+        await LedgerPostingService.autoPost("offline-payment", () =>
+            LedgerPostingService.postConfirmedCollection({
+                societyId, userId: recordedBy, payment,
+                financialAccountId: paymentAccountId, db
+            })
+        );
 
         return { payment, receipt };
     }
@@ -903,6 +880,19 @@ class PaymentService {
             amount: payment.amount,
             details: { paymentNumber: payment.paymentNumber, invoiceId, receiptNumber: receiptNum },
         });
+
+        await LedgerPostingService.autoPost("manual-reconcile-reverse-unallocated", () =>
+            LedgerPostingService.postPaymentReversal({
+                societyId, userId, paymentId: payment._id,
+                reason: "Allocated to invoice on manual reconciliation", db
+            })
+        );
+        await LedgerPostingService.autoPost("manual-reconcile-payment", () =>
+            LedgerPostingService.postConfirmedCollection({
+                societyId, userId, payment,
+                financialAccountId: payment.paymentAccountId, db
+            })
+        );
 
         return { payment, receipt };
     }

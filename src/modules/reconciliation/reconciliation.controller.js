@@ -4,6 +4,7 @@ const { getOperationsConnection } = require("../../config/operationsDb");
 const { sendSuccess, sendError } = require("../../utils/response.utils");
 const createAuditLog = require("../../utils/auditLog");
 const { getReconciliationModels } = require("./reconciliation.model");
+const LedgerPostingService = require("../ledger/ledgerPosting.service");
 
 // Helper to generate unique codes
 const generateCode = (prefix) => `${prefix}-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -679,6 +680,17 @@ const createTransfer = async (req, res, next, _skipSession = false) => {
             req
         });
 
+        await LedgerPostingService.autoPost("internal-transfer", () =>
+            LedgerPostingService.postInternalTransfer({
+                societyId,
+                userId,
+                transfer,
+                fromFinancialAccountId: fromAccount._id,
+                toFinancialAccountId: toAccount._id,
+                db: getOperationsConnection(),
+            })
+        );
+
         return sendSuccess(res, 201, "Account transfer executed successfully", transfer);
     } catch (err) {
         // Standalone MongoDB: startTransaction() doesn't throw eagerly —
@@ -823,6 +835,16 @@ const createAdjustment = async (req, res, next) => {
             newValue: { adjNum, adjustmentType, amount: adjAmount, direction },
             req
         });
+
+        await LedgerPostingService.autoPost("reconciliation-adjustment", () =>
+            LedgerPostingService.postReconciliationAdjustment({
+                societyId,
+                userId,
+                adjustment,
+                financialAccountId: account._id,
+                db: getOperationsConnection(),
+            })
+        );
 
         return sendSuccess(res, 201, "Adjustment posted successfully", adjustment);
     } catch (err) {

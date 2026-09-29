@@ -3,6 +3,7 @@
 const { getDunningModels } = require("./dunning.model");
 const { getBillingModels } = require("./billing.model");
 const mongoose = require("mongoose");
+const LedgerPostingService = require("../ledger/ledgerPosting.service");
 
 class DunningService {
     static getSocietyId(req) {
@@ -630,6 +631,22 @@ class DunningService {
             await inv.save();
         }
 
+        await LedgerPostingService.autoPost("fine-waived", () =>
+            LedgerPostingService.postFineWaived({
+                societyId,
+                userId,
+                fine: {
+                    _id: waiver._id,
+                    amount: Number(waivedAmount) || 0,
+                    reason: reason.trim(),
+                    waiveReason: reason.trim(),
+                    userId: inv?.userId,
+                    flatId: inv?.flatId,
+                },
+                db,
+            })
+        );
+
         return waiver;
     }
 
@@ -683,7 +700,7 @@ class DunningService {
             }
 
             if (fineCalculated > 0) {
-                await FineApplication.create({
+                const application = await FineApplication.create({
                     societyId,
                     invoiceId: inv._id,
                     flatId: inv.flatId,
@@ -696,6 +713,21 @@ class DunningService {
                 inv.fineAmount = (inv.fineAmount || 0) + fineCalculated;
                 inv.status = "OVERDUE";
                 await inv.save();
+
+                await LedgerPostingService.autoPost("fine-applied", () =>
+                    LedgerPostingService.postFineApplied({
+                        societyId,
+                        userId: this.getUserId(req),
+                        fine: {
+                            _id: application._id,
+                            amount: fineCalculated,
+                            reason: activeRule.ruleName,
+                            userId: inv.userId,
+                            flatId: inv.flatId,
+                        },
+                        db,
+                    })
+                );
 
                 appliedCount++;
             }

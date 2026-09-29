@@ -8,6 +8,7 @@ const { getAdvanceDepositModels } = require("./advanceAccountsDeposits.model");
 const { logBillingAction } = require("../../services/billingAudit.service");
 const { BILLING_PERMISSIONS } = require("../../common/billingPermissions");
 const { hasBillingPermission } = require("../../services/billingAuthorization.service");
+const LedgerPostingService = require("../ledger/ledgerPosting.service");
 
 // ─── Razorpay Helper ─────────────────────────────────────────────────────────
 async function createRazorpayOrder({ amount, receipt, notes }) {
@@ -508,6 +509,16 @@ class AdvanceAccountsService {
             }], { session });
 
             await session.commitTransaction();
+
+            await LedgerPostingService.autoPost("advance-settlement", () =>
+                LedgerPostingService.postAdvanceSettlement({
+                    societyId,
+                    userId: req.user.id,
+                    invoice,
+                    advanceAmount: numAmount,
+                    db: req.opsDb,
+                })
+            );
 
             await logBillingAction({
                 req,
@@ -1057,6 +1068,17 @@ class SecurityDepositService {
             });
 
             await session.commitTransaction();
+
+            await LedgerPostingService.autoPost("security-deposit-received", () =>
+                LedgerPostingService.postSecurityDepositReceived({
+                    societyId,
+                    userId: req.user.id,
+                    deposit,
+                    financialAccountId: paymentAccountId,
+                    db: req.opsDb,
+                })
+            );
+
             return deposit;
         } catch (err) {
             if (session.inTransaction()) {
@@ -1341,6 +1363,16 @@ class SecurityDepositService {
             });
 
             await session.commitTransaction();
+
+            await LedgerPostingService.autoPost("security-deposit-refund", () =>
+                LedgerPostingService.postSecurityDepositRefund({
+                    societyId,
+                    userId: req.user.id,
+                    deposit: { ...deposit.toObject(), amount: processAmount },
+                    financialAccountId: null,
+                    db: req.opsDb,
+                })
+            );
 
             return { refundRequest: refundReq.toObject(), deposit: deposit.toObject() };
         } catch (err) {

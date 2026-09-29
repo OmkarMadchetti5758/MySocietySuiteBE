@@ -1,7 +1,7 @@
 "use strict";
 
 const AppError = require("../../common/AppError");
-const { LedgerService, generateAutomaticPosting } = require("./ledger.service");
+const { LedgerService } = require("./ledger.service");
 const { hasBillingPermission } = require("../../services/billingAuthorization.service");
 const { BILLING_PERMISSIONS } = require("../../common/billingPermissions");
 const { sendSuccess, sendError, sendPaginated } = require("../../utils/response.utils");

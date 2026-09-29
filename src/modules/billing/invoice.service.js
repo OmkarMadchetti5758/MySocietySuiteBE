@@ -5,6 +5,9 @@ const { BILLING_PERMISSIONS } = require("../../common/billingPermissions");
 const { getBillingModels } = require("./billing.model");
 const { logBillingAction } = require("../../services/billingAudit.service");
 const { canAccessBillingResource } = require("../../services/billingAuthorization.service");
+const LedgerPostingService = require("../ledger/ledgerPosting.service");
+const { getAdvanceDepositModels } = require("../advanceAccountsDeposits/advanceAccountsDeposits.model");
+const { getPaymentModels } = require("../payment/payment.model");
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -39,6 +42,101 @@ async function generateReceiptNumber(societyId, db) {
     const { InvoicePayment } = getBillingModels(db);
     const count = await InvoicePayment.countDocuments({ societyId });
     return `RCP/${getFinancialYear()}/${String(count + 1).padStart(6, "0")}`;
+}
+
+async function _getAvailableAdvance(societyId, flatId, residentUserId, db) {
+    let residentAdvance = 0;
+    let paymentAdvance = 0;
+    try {
+        const { ResidentAdvanceAccount } = getAdvanceDepositModels(db);
+        const raa = await ResidentAdvanceAccount.findOne({
+            societyId,
+            flatId,
+            status: { $in: ["ACTIVE", "ZERO_BALANCE"] },
+        }).lean();
+        residentAdvance = Math.max(0, Number(raa?.currentBalance || 0));
+    } catch (_) { /* model may be unregistered in some test DBs */ }
+
+    try {
+        const { AdvanceAccount } = getPaymentModels(db);
+        const paa = await AdvanceAccount.findOne({ societyId, flatId }).lean();
+        paymentAdvance = Math.max(0, Number(paa?.advanceBalance || 0));
+    } catch (_) { /* optional */ }
+
+    return {
+        available: Math.round((residentAdvance + paymentAdvance) * 100) / 100,
+        residentAdvance,
+        paymentAdvance,
+    };
+}
+
+async function _consumeAdvance({ societyId, flatId, residentUserId, userId, invoice, amount, db }) {
+    let remaining = Math.round(Number(amount) * 100) / 100;
+    if (remaining <= 0) return 0;
+
+    const { ResidentAdvanceAccount, AdvanceTransaction, AdvanceAllocation } = getAdvanceDepositModels(db);
+    const raa = await ResidentAdvanceAccount.findOne({
+        societyId,
+        flatId,
+        status: { $in: ["ACTIVE", "ZERO_BALANCE"] },
+    });
+    if (raa && raa.currentBalance > 0 && remaining > 0) {
+        const take = Math.min(remaining, raa.currentBalance);
+        raa.currentBalance = Math.round((raa.currentBalance - take) * 100) / 100;
+        raa.status = raa.currentBalance > 0 ? "ACTIVE" : "ZERO_BALANCE";
+        raa.updatedBy = userId;
+        await raa.save();
+
+        await AdvanceAllocation.create({
+            societyId,
+            advanceAccountId: raa._id,
+            residentId: raa.residentId,
+            flatId: raa.flatId,
+            invoiceId: invoice._id,
+            amount: take,
+            allocationDate: new Date(),
+            status: "ACTIVE",
+            idempotencyKey: `GEN-ADV-${invoice._id}`,
+            createdBy: userId,
+        });
+        await AdvanceTransaction.create({
+            societyId,
+            advanceAccountId: raa._id,
+            residentId: raa.residentId,
+            flatId: raa.flatId,
+            transactionType: "INVOICE_ALLOCATION",
+            direction: "DEBIT",
+            amount: take,
+            balanceAfterTransaction: raa.currentBalance,
+            referenceType: "Invoice",
+            referenceId: String(invoice._id),
+            description: `Auto-applied to invoice ${invoice.invoiceNumber}`,
+            createdBy: userId,
+        });
+        remaining = Math.round((remaining - take) * 100) / 100;
+    }
+
+    if (remaining > 0) {
+        const { AdvanceAccount } = getPaymentModels(db);
+        const paa = await AdvanceAccount.findOne({ societyId, flatId });
+        if (paa && paa.advanceBalance > 0) {
+            const take = Math.min(remaining, paa.advanceBalance);
+            paa.advanceBalance = Math.round((paa.advanceBalance - take) * 100) / 100;
+            paa.transactions.push({
+                type: "DEBIT",
+                accountType: "ADVANCE",
+                amount: take,
+                referenceInvoiceId: invoice._id,
+                description: `Auto-applied to invoice ${invoice.invoiceNumber}`,
+                date: new Date(),
+                recordedBy: userId,
+            });
+            await paa.save();
+            remaining = Math.round((remaining - take) * 100) / 100;
+        }
+    }
+
+    return Math.round((Number(amount) - remaining) * 100) / 100;
 }
 
 async function _getWingsMap(db, societyId) {
@@ -145,8 +243,9 @@ async function _calculateCharges(societyId, flatId, billingDate, db) {
             baseAmount: Math.round(baseAmount * 100) / 100,
             gstApplicable: ch.gstApplicable,
             gstRate: ch.gstRate,
-            gstAmount: Math.round(gstAmount * 100) / 100,
-            totalAmount: Math.round(totalAmount * 100) / 100,
+                gstAmount: Math.round(gstAmount * 100) / 100,
+                totalAmount: Math.round(totalAmount * 100) / 100,
+                ledgerAccountId: ch.ledgerAccountId || null,
         });
     }
 
@@ -303,7 +402,10 @@ class InvoiceService {
                 GENERATED: ["GENERATED"],
                 CANCELLED: ["CANCELLED"],
             };
-            filter.status = { $in: statusMap[status.toUpperCase()] || [status] };
+            // Support comma-separated multiple statuses (e.g. "GENERATED,PARTIALLY_PAID,OVERDUE")
+            const statusValues = status.split(",").map(s => s.trim().toUpperCase());
+            const resolvedStatuses = statusValues.flatMap(s => statusMap[s] || [s]);
+            filter.status = { $in: resolvedStatuses };
         }
 
         if (billingPeriod) filter.billingPeriod = billingPeriod;
@@ -428,11 +530,18 @@ class InvoiceService {
         const { fineAmount } = finesResult;
         const { creditNoteAmount, discountAmount } = adjustmentsResult;
 
-        const advance = Math.min(Number(advanceAdjustment) || 0, subTotal + totalGst);
-        const totalPayable = Math.max(
+        const chargesBeforeAdvance = Math.max(
             0,
-            Math.round((subTotal + totalGst + arrearsAmount + fineAmount - creditNoteAmount - discountAmount - advance) * 100) / 100
+            Math.round((subTotal + totalGst + arrearsAmount + fineAmount - creditNoteAmount - discountAmount) * 100) / 100
         );
+        const { available: availableAdvance } = await _getAvailableAdvance(societyId, flatId, null, db);
+        const requestedAdvance = Number(advanceAdjustment) || 0;
+        const advance = Math.min(
+            requestedAdvance > 0 ? requestedAdvance : availableAdvance,
+            chargesBeforeAdvance,
+            availableAdvance
+        );
+        const totalPayable = Math.max(0, Math.round((chargesBeforeAdvance - advance) * 100) / 100);
 
         return {
             alreadyGenerated: false,
@@ -448,6 +557,7 @@ class InvoiceService {
             creditNoteAmount,
             discountAmount,
             advanceAdjustment: advance,
+            availableAdvance,
             totalPayable,
         };
     }
@@ -511,11 +621,18 @@ class InvoiceService {
         const { fineAmount } = finesResult;
         const { creditNoteAmount, discountAmount } = adjustmentsResult;
 
-        const advance = Math.min(Number(advanceAdjustment) || 0, subTotal + totalGst);
-        const totalAmount = Math.max(
+        const chargesBeforeAdvance = Math.max(
             0,
-            Math.round((subTotal + totalGst + arrearsAmount + fineAmount - creditNoteAmount - discountAmount - advance) * 100) / 100
+            Math.round((subTotal + totalGst + arrearsAmount + fineAmount - creditNoteAmount - discountAmount) * 100) / 100
         );
+        const { available: availableAdvance } = await _getAvailableAdvance(societyId, flatId, residentUserId, db);
+        const requestedAdvance = Number(advanceAdjustment) || 0;
+        const advance = Math.min(
+            requestedAdvance > 0 ? requestedAdvance : availableAdvance,
+            chargesBeforeAdvance,
+            availableAdvance
+        );
+        const totalAmount = Math.max(0, Math.round((chargesBeforeAdvance - advance) * 100) / 100);
 
         const invoiceNumber = await generateInvoiceNumber(societyId, db);
 
@@ -543,7 +660,7 @@ class InvoiceService {
                 advanceAdjustment: advance,
                 totalAmount,
                 paidAmount: 0,
-                status: "GENERATED",
+                status: totalAmount <= 0 ? "PAID" : "GENERATED",
                 lineItems,
                 arrearsBreakdown,
                 generatedBy: req.user.id,
@@ -576,6 +693,40 @@ class InvoiceService {
             amount: totalAmount,
             details: { invoiceNumber, flatId, billingPeriod, isBulk },
         });
+
+        await LedgerPostingService.autoPost("invoice-finalized", () =>
+            LedgerPostingService.postInvoiceFinalized({
+                societyId,
+                userId: req.user.id,
+                invoice,
+                db,
+            })
+        );
+
+        if (advance > 0) {
+            try {
+                await _consumeAdvance({
+                    societyId,
+                    flatId,
+                    residentUserId,
+                    userId: req.user.id,
+                    invoice,
+                    amount: advance,
+                    db,
+                });
+            } catch (err) {
+                console.error("[INVOICE] Failed to consume advance after generate:", err.message);
+            }
+            await LedgerPostingService.autoPost("advance-settlement-on-invoice", () =>
+                LedgerPostingService.postAdvanceSettlement({
+                    societyId,
+                    userId: req.user.id,
+                    invoice,
+                    advanceAmount: advance,
+                    db,
+                })
+            );
+        }
 
         return invoice;
     }
@@ -662,6 +813,16 @@ class InvoiceService {
             details: { action: "CANCEL", reason: reason.trim() },
         });
 
+        await LedgerPostingService.autoPost("invoice-cancel", () =>
+            LedgerPostingService.postInvoiceReversal({
+                societyId: req.user.societyId,
+                userId: req.user.id,
+                invoiceId: invoice._id,
+                reason: reason.trim(),
+                db: req.opsDb,
+            })
+        );
+
         return invoice;
     }
 
@@ -723,6 +884,27 @@ class InvoiceService {
             amount,
             details: { receiptNumber, paymentMode, paymentAccount, newStatus, excessAmount },
         });
+
+        await LedgerPostingService.autoPost("invoice-offline-payment", () =>
+            LedgerPostingService.postConfirmedCollection({
+                societyId,
+                userId: req.user.id,
+                payment: {
+                    _id: payment._id,
+                    invoiceId: invoice._id,
+                    userId: invoice.userId,
+                    flatId: invoice.flatId,
+                    amount,
+                    excessAmount,
+                    paymentDate: payment.paymentDate,
+                    receiptNumber,
+                    paymentMode,
+                    paymentAccountId: paymentAccount,
+                },
+                financialAccountId: paymentAccount,
+                db: req.opsDb,
+            })
+        );
 
         return { payment, invoice };
     }
