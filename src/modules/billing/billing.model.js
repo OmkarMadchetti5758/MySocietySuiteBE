@@ -150,6 +150,7 @@ const billingInvoiceSchema = new mongoose.Schema(
                 gstRate:         Number,
                 gstAmount:       Number,
                 totalAmount:     Number,
+                ledgerAccountId: String,
             },
         ],
 

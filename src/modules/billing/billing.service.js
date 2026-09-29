@@ -17,6 +17,7 @@ const {
     canAccessBillingResource,
 } = require("../../services/billingAuthorization.service");
 const { logBillingAction } = require("../../services/billingAudit.service");
+const LedgerPostingService = require("../ledger/ledgerPosting.service");
 
 class BillingService {
 
@@ -582,6 +583,16 @@ class BillingService {
             details: { invoiceNumber, flatId, billingPeriod },
         });
 
+        // ── Hook Ledger ──
+        await LedgerPostingService.autoPost("invoice-finalized-legacy", () =>
+            LedgerPostingService.postInvoiceFinalized({
+                societyId: req.user.societyId,
+                userId: req.user.id,
+                invoice,
+                db: req.opsDb
+            })
+        );
+
         return invoice;
     }
 
@@ -651,6 +662,16 @@ class BillingService {
             details: { paymentType: "offline", newStatus },
         });
 
+        await LedgerPostingService.autoPost("offline-payment-legacy", () =>
+            LedgerPostingService.postPaymentReceived({
+            societyId: req.user.societyId,
+            userId: req.user.id,
+            payment: { ...data, _id: new mongoose.Types.ObjectId(), userId: invoice.userId, flatId: invoice.flatId, amount: amountPaid, paymentDate: data.paymentDate || new Date() },
+            financialAccountId: data.financialAccountId,
+            db: req.opsDb
+            })
+        );
+
         return invoice;
     }
 
@@ -675,6 +696,16 @@ class BillingService {
             amount: amountPaid,
             details: { paymentType: "online_resident", newStatus },
         });
+
+        await LedgerPostingService.autoPost("resident-pay-legacy", () =>
+            LedgerPostingService.postPaymentReceived({
+            societyId: req.user.societyId,
+            userId: req.user.id,
+            payment: { _id: new mongoose.Types.ObjectId(), userId: req.user.id, flatId: invoice.flatId, amount: amountPaid, paymentDate: new Date() },
+            financialAccountId: req.body?.financialAccountId,
+            db: req.opsDb
+            })
+        );
 
         return updated;
     }
@@ -772,6 +803,17 @@ class BillingService {
             details: { noteNumber, status, thresholdTriggered: needsApproval, invoiceId: targetInvoice ? targetInvoice._id : null },
         });
 
+        if (status === "approved") {
+            await LedgerPostingService.autoPost("credit-note-create", () =>
+                LedgerPostingService.postCreditNote({
+                    societyId: req.user.societyId,
+                    userId: req.user.id,
+                    creditNote,
+                    db: req.opsDb
+                })
+            );
+        }
+
         return creditNote;
     }
 
@@ -828,6 +870,17 @@ class BillingService {
             amount: creditNote.amount,
             details: { action, targetStatus, rejectionReason },
         });
+
+        if (targetStatus === "approved") {
+            await LedgerPostingService.autoPost("credit-note-approve", () =>
+                LedgerPostingService.postCreditNote({
+                    societyId: req.user.societyId,
+                    userId: req.user.id,
+                    creditNote,
+                    db: req.opsDb
+                })
+            );
+        }
 
         return creditNote;
     }
@@ -959,6 +1012,17 @@ class BillingService {
             details: { discountCode: generatedCode, status, thresholdTriggered: needsApproval, flatId, chargeHeadId },
         });
 
+        if (status === "approved") {
+            await LedgerPostingService.autoPost("discount-create", () =>
+                LedgerPostingService.postDiscount({
+                    societyId: req.user.societyId,
+                    userId: req.user.id,
+                    discount,
+                    db: req.opsDb
+                })
+            );
+        }
+
         return discount;
     }
 
@@ -1000,6 +1064,17 @@ class BillingService {
             amount: discount.amount,
             details: { action, targetStatus, rejectionReason },
         });
+
+        if (targetStatus === "approved") {
+            await LedgerPostingService.autoPost("discount-approve", () =>
+                LedgerPostingService.postDiscount({
+                    societyId: req.user.societyId,
+                    userId: req.user.id,
+                    discount,
+                    db: req.opsDb
+                })
+            );
+        }
 
         return discount;
     }
@@ -1700,6 +1775,15 @@ class BillingService {
                 paidAt: now,
             },
         });
+
+        await LedgerPostingService.autoPost("vendor-payment-disbursed", () =>
+            LedgerPostingService.postVendorPayment({
+                societyId,
+                userId,
+                payment: updatedPayment,
+                db: req.opsDb,
+            })
+        );
 
         return updatedPayment;
     }

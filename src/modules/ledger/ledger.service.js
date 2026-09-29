@@ -102,7 +102,7 @@ class LedgerService {
     /** Seed default chart of accounts for a new society */
     static async seedDefaultChartOfAccounts(societyId, userId, db) {
         const { ChartOfAccount } = getLedgerModels(db);
-        const existing = await ChartOfAccount.countDocuments({ societyId }).lean();
+        const existing = await ChartOfAccount.countDocuments({ societyId });
         if (existing > 0) return { alreadyExists: true };
 
         const sid = new mongoose.Types.ObjectId(societyId);
@@ -112,18 +112,22 @@ class LedgerService {
             // ASSETS
             { accountCode: "1000", accountName: "Assets",                 accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountId: null },
             { accountCode: "1010", accountName: "Bank Accounts",          accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
-            { accountCode: "1011", accountName: "Cash Account",           accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
+            { accountCode: "1011", accountName: "Cash in Hand",           accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
             { accountCode: "1020", accountName: "Receivables",            accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
-            { accountCode: "1021", accountName: "Resident Receivables",   accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1020" },
-            { accountCode: "1030", accountName: "Other Assets",           accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "1000" },
+            { accountCode: "1021", accountName: "Members' Receivable",    accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1020" },
+            { accountCode: "1030", accountName: "GST Input",              accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
+            { accountCode: "1040", accountName: "Other Assets",           accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "1000" },
 
             // LIABILITIES
             { accountCode: "2000", accountName: "Liabilities",            accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountId: null },
-            { accountCode: "2010", accountName: "Resident Advance Liability", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
+            { accountCode: "2010", accountName: "Advance from Members",   accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
             { accountCode: "2020", accountName: "Security Deposit Liability", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
-            { accountCode: "2030", accountName: "Payables",               accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
+            { accountCode: "2030", accountName: "Vendor Payable",         accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
             { accountCode: "2040", accountName: "Payment Gateway Clearing",accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
-            { accountCode: "2050", accountName: "Other Liabilities",      accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "2000" },
+            { accountCode: "2050", accountName: "GST Payable",            accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
+            { accountCode: "2060", accountName: "TDS Payable",            accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
+            { accountCode: "2070", accountName: "Unallocated Receipts",   accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
+            { accountCode: "2080", accountName: "Other Liabilities",      accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "2000" },
 
             // EQUITY
             { accountCode: "3000", accountName: "Equity / Reserve Fund",  accountType: "EQUITY",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountId: null },
@@ -135,9 +139,10 @@ class LedgerService {
             { accountCode: "4010", accountName: "Maintenance Income",     accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
             { accountCode: "4020", accountName: "Parking Income",         accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
             { accountCode: "4030", accountName: "Amenity Income",         accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
-            { accountCode: "4040", accountName: "Fine Income",            accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
+            { accountCode: "4040", accountName: "Late Fee Income",        accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
             { accountCode: "4050", accountName: "Interest Income",        accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
-            { accountCode: "4060", accountName: "Other Income",           accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
+            { accountCode: "4060", accountName: "Sundry Income",          accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
+            { accountCode: "4070", accountName: "Other Income",           accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
 
             // EXPENSES
             { accountCode: "5000", accountName: "Expenses",               accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountId: null },
@@ -146,7 +151,8 @@ class LedgerService {
             { accountCode: "5030", accountName: "Cleaning & Housekeeping",accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
             { accountCode: "5040", accountName: "Repairs & Maintenance",  accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
             { accountCode: "5050", accountName: "Administrative Expenses",accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
-            { accountCode: "5060", accountName: "Other Expenses",         accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
+            { accountCode: "5060", accountName: "Discount Allowed",       accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "5000" },
+            { accountCode: "5070", accountName: "Other Expenses",         accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
         ];
 
         // First pass: create all root accounts
@@ -191,6 +197,63 @@ class LedgerService {
         });
 
         return { seeded: defaults.length, accountMap: createdMap };
+    }
+
+    /** Seed a full chart if empty, otherwise insert any missing default system codes. */
+    static async ensureSystemChartOfAccounts(societyId, userId, db) {
+        const { ChartOfAccount } = getLedgerModels(db);
+        const count = await ChartOfAccount.countDocuments({ societyId });
+        if (count === 0) {
+            return this.seedDefaultChartOfAccounts(societyId, userId, db);
+        }
+
+        const required = [
+            { accountCode: "1000", accountName: "Assets", accountType: "ASSET", normalBalanceType: "DEBIT", parentAccountCode: null },
+            { accountCode: "1010", accountName: "Bank Accounts", accountType: "ASSET", normalBalanceType: "DEBIT", parentAccountCode: "1000" },
+            { accountCode: "1011", accountName: "Cash in Hand", accountType: "ASSET", normalBalanceType: "DEBIT", parentAccountCode: "1000" },
+            { accountCode: "1020", accountName: "Receivables", accountType: "ASSET", normalBalanceType: "DEBIT", parentAccountCode: "1000" },
+            { accountCode: "1021", accountName: "Members' Receivable", accountType: "ASSET", normalBalanceType: "DEBIT", parentAccountCode: "1020" },
+            { accountCode: "2010", accountName: "Advance from Members", accountType: "LIABILITY", normalBalanceType: "CREDIT", parentAccountCode: "2000" },
+            { accountCode: "2000", accountName: "Liabilities", accountType: "LIABILITY", normalBalanceType: "CREDIT", parentAccountCode: null },
+            { accountCode: "2050", accountName: "GST Payable", accountType: "LIABILITY", normalBalanceType: "CREDIT", parentAccountCode: "2000" },
+            { accountCode: "2070", accountName: "Unallocated Receipts", accountType: "LIABILITY", normalBalanceType: "CREDIT", parentAccountCode: "2000" },
+            { accountCode: "4010", accountName: "Maintenance Income", accountType: "INCOME", normalBalanceType: "CREDIT", parentAccountCode: "4000" },
+            { accountCode: "4000", accountName: "Income", accountType: "INCOME", normalBalanceType: "CREDIT", parentAccountCode: null },
+            { accountCode: "4040", accountName: "Late Fee Income", accountType: "INCOME", normalBalanceType: "CREDIT", parentAccountCode: "4000" },
+            { accountCode: "4050", accountName: "Interest Income", accountType: "INCOME", normalBalanceType: "CREDIT", parentAccountCode: "4000" },
+            { accountCode: "4060", accountName: "Sundry Income", accountType: "INCOME", normalBalanceType: "CREDIT", parentAccountCode: "4000" },
+            { accountCode: "5060", accountName: "Discount Allowed", accountType: "EXPENSE", normalBalanceType: "DEBIT", parentAccountCode: "5000" },
+            { accountCode: "5070", accountName: "Other Expenses", accountType: "EXPENSE", normalBalanceType: "DEBIT", parentAccountCode: "5000" },
+            { accountCode: "5000", accountName: "Expenses", accountType: "EXPENSE", normalBalanceType: "DEBIT", parentAccountCode: null },
+            { accountCode: "2020", accountName: "Security Deposit Liability", accountType: "LIABILITY", normalBalanceType: "CREDIT", parentAccountCode: "2000" },
+        ];
+
+        const sid = societyId;
+        const uid = userId;
+        const existing = await ChartOfAccount.find({ societyId, accountCode: { $in: required.map((a) => a.accountCode) } }).lean();
+        const byCode = {};
+        for (const acc of existing) byCode[acc.accountCode] = acc._id;
+
+        const order = [...required.filter((a) => !a.parentAccountCode), ...required.filter((a) => a.parentAccountCode)];
+        for (const acc of order) {
+            if (byCode[acc.accountCode]) continue;
+            const parentId = acc.parentAccountCode ? (byCode[acc.parentAccountCode] || null) : null;
+            const created = await ChartOfAccount.create({
+                societyId: sid,
+                createdBy: uid,
+                updatedBy: uid,
+                accountCode: acc.accountCode,
+                accountName: acc.accountName,
+                accountType: acc.accountType,
+                normalBalanceType: acc.normalBalanceType,
+                isSystemAccount: true,
+                description: `Default ${acc.accountName} account`,
+                status: "ACTIVE",
+                parentAccountId: parentId,
+            });
+            byCode[acc.accountCode] = created._id;
+        }
+        return { ensured: true };
     }
 
     static async syncFinancialAccounts(societyId, db) {
@@ -377,9 +440,10 @@ class LedgerService {
         }
 
         // 3. Validate all accounts belong to this society
-        const accountIds = lines.map(l => l.accountId);
-        const accounts = await ChartOfAccount.find({ _id: { $in: accountIds }, societyId, status: "ACTIVE" }).lean();
-        if (accounts.length !== accountIds.length) {
+        const accountIds = lines.map(l => l.accountId).filter(Boolean);
+        const uniqueAccountIds = [...new Set(accountIds.map((id) => String(id)))];
+        const accounts = await ChartOfAccount.find({ _id: { $in: uniqueAccountIds }, societyId, status: "ACTIVE" }).lean();
+        if (accounts.length !== uniqueAccountIds.length) {
             throw new AppError("One or more accounts are invalid, inactive, or belong to another society.", 400, "INVALID_ACCOUNT");
         }
 
@@ -405,9 +469,11 @@ class LedgerService {
             referenceNumber: referenceNumber || null,
             idempotencyKey: idempotencyKey || null,
             status, totalDebit, totalCredit,
-            isAutomatic, residentId: residentId || null, flatId: flatId || null,
-            createdBy: userId,
-            postedBy:  isAutomatic ? userId : null,
+            isAutomatic,
+            residentId: residentId && /^[a-fA-F0-9]{24}$/.test(String(residentId)) ? residentId : null,
+            flatId: flatId && /^[a-fA-F0-9]{24}$/.test(String(flatId)) ? flatId : null,
+            createdBy: userId && /^[a-fA-F0-9]{24}$/.test(String(userId)) ? userId : societyId,
+            postedBy:  isAutomatic ? (userId && /^[a-fA-F0-9]{24}$/.test(String(userId)) ? userId : societyId) : null,
             postedAt:  isAutomatic ? new Date() : null,
             notes,
         }], opts);
@@ -422,8 +488,8 @@ class LedgerService {
             debit: Number(line.debit || 0),
             credit: Number(line.credit || 0),
             description: line.description || "",
-            residentId: line.residentId || residentId || null,
-            flatId: line.flatId || flatId || null,
+            residentId: (line.residentId || residentId) && /^[a-fA-F0-9]{24}$/.test(String(line.residentId || residentId)) ? (line.residentId || residentId) : null,
+            flatId: (line.flatId || flatId) && /^[a-fA-F0-9]{24}$/.test(String(line.flatId || flatId)) ? (line.flatId || flatId) : null,
             reconciliationStatus: "UNRECONCILED",
         }));
         await JournalEntryLine.insertMany(lineDocuments, opts);
