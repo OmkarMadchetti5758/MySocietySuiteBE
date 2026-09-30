@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * ManagerAssignment — Operational DB
+ * ManagerAssignment - Operational DB
  *
  * Tracks who holds a department-head role in a society, with full
  * assignment metadata (department, joining date, status, audit fields).
@@ -50,7 +50,7 @@ const managerAssignmentSchema = new mongoose.Schema(
             // Set immediately for Path A (existing resident).
             default: null,
         },
-        // Snapshot fields — denormalized for fast display (avoid join on every list)
+        // Snapshot fields - denormalized for fast display (avoid join on every list)
         managerName: {
             type: String,
             trim: true,

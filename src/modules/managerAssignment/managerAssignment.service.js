@@ -227,7 +227,7 @@ class ManagerAssignmentService {
             console.log("\n=============================================");
             console.log("=== DEV MANAGER INVITE LINK ===");
             console.log(`Manager: ${newUser.name} (${email || phone})`);
-            console.log(`Role:    ${data.roleName} — ${data.department}`);
+            console.log(`Role:    ${data.roleName} - ${data.department}`);
             console.log(`Link:    ${inviteLink}`);
             console.log("=============================================\n");
         }

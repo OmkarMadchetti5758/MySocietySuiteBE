@@ -12,7 +12,7 @@ const { USER_ERRORS } = require("./user.constants");
  *
  * After migration: societyId is now the first parameter on every method.
  * It is sourced from the authenticated JWT at the controller layer and
- * passed down — never read from request body or query params.
+ * passed down - never read from request body or query params.
  */
 class UserService {
     async createUser(societyId, userData) {
@@ -107,7 +107,7 @@ class UserService {
 
     /**
      * Assign an additional role to a user (dual-role support).
-     * Does not change user.role — only expands mapping.roleKeys[].
+     * Does not change user.role - only expands mapping.roleKeys[].
      */
     async addUserRole(societyId, userId, roleKey) {
         const user = await UserRepository.findById(societyId, userId);

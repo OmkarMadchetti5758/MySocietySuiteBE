@@ -25,7 +25,7 @@ router.get(
     LedgerController.getGeneralLedger
 );
 
-// ── My Ledger (Resident — own records only) ───────────────────────────────────
+// ── My Ledger (Resident - own records only) ───────────────────────────────────
 router.get(
     "/my",
     requireBillingPermission(BILLING_PERMISSIONS.OWN_LEDGER_VIEW),

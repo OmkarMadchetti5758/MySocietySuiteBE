@@ -4,7 +4,7 @@ const { getMasterConnection } = require("../config/masterDb");
 
 /**
  * In-process cache for Society.permissionsVersion to avoid a DB hit on every request.
- * TTL: 30 seconds — a short delay is acceptable; changes propagate quickly enough.
+ * TTL: 30 seconds - a short delay is acceptable; changes propagate quickly enough.
  */
 const _permVersionCache = new Map();
 const PERM_CACHE_TTL_MS = 30_000;

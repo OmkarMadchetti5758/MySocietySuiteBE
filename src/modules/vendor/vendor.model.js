@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Vendor — external service provider registered with a society.
+ * Vendor - external service provider registered with a society.
  * Lives in mysociety_operations.vendors
  */
 const vendorSchema = new mongoose.Schema(
@@ -79,7 +79,7 @@ vendorSchema.index({ societyId: 1, contractEndDate: 1 });
 
 // FIX: the service layer only did a check-then-act findOne() for
 // "same name + serviceCategory in this society", which can race under
-// concurrent requests. This unique index is the real guarantee — case
+// concurrent requests. This unique index is the real guarantee - case
 // insensitive via collation strength 2. A violation surfaces as a Mongo
 // E11000 error; map that to your VENDOR_ALREADY_EXISTS AppError in
 // vendor.service.js's createVendor error handling (or a global duplicate-key

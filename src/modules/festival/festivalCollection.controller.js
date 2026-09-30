@@ -9,7 +9,7 @@ const AppError = require("../../common/AppError");
 const { sendSuccess, sendPaginated } = require("../../utils/response.utils");
 const { ROLES, PAGINATION, PAYMENT_STATUS, PAYMENT_METHOD } = require("../../common/constants");
 const { getPaymentModels } = require("../payment/payment.model");
-const PaymentService = require("../payment/payment.service"); 
+const PaymentService = require("../payment/payment.service");
 
 const getFestivalCollectionModel = () => getOperationsConnection().model("FestivalCollection");
 const getFestivalContributionModel = () => getOperationsConnection().model("FestivalContribution");
@@ -66,16 +66,16 @@ exports.getCollections = async (req, res, next) => {
 
         const query = { societyId };
         const isResident = [ROLES.RESIDENT_OWNER, ROLES.RESIDENT_TENANT].includes(req.user.role);
-        
+
         let applicableFlats = [];
         let applicableBlocks = [];
-        
+
         if (isResident) {
             query.status = "ACTIVE";
             const UserSocietyMapping = getUserSocietyMappingModel();
             // Schema has single flatId field, not flats array
             const mapping = await UserSocietyMapping.findOne({ userId: req.user.id, societyId }).lean();
-            
+
             if (mapping && mapping.flatId) {
                 applicableFlats = [String(mapping.flatId)];
                 // Get the flat's blockId from Flat model
@@ -85,9 +85,9 @@ exports.getCollections = async (req, res, next) => {
                     if (flat && flat.blockId) {
                         applicableBlocks = [String(flat.blockId)];
                     }
-                } catch (_) {}
+                } catch (_) { }
             }
-            
+
             query.$or = [
                 { applicableType: "ALL" },
                 { applicableType: "SPECIFIC_BLOCK", applicableBlocks: { $in: applicableBlocks } },
@@ -135,7 +135,7 @@ exports.getCollectionById = async (req, res, next) => {
         if (isResident && collection.status !== "ACTIVE") {
             return next(new AppError("UNAUTHORIZED", 403, "Cannot view inactive collections"));
         }
-        
+
         return sendSuccess(res, 200, "Collection fetched successfully", { collection });
     } catch (error) {
         next(error);
@@ -147,7 +147,7 @@ exports.updateCollection = async (req, res, next) => {
         const FestivalCollection = getFestivalCollectionModel();
         const { id } = req.params;
         const updates = req.body;
-        
+
         delete updates.societyId;
         delete updates.createdBy;
 
@@ -172,7 +172,7 @@ exports.initiateOnlinePayment = async (req, res, next) => {
         const Flat = getFlatModel();
         const { id } = req.params;
         const { amount, flatId } = req.body;
-        
+
         if (!amount || amount <= 0) {
             return next(new AppError("INVALID_AMOUNT", 400, "Invalid payment amount"));
         }
@@ -197,7 +197,7 @@ exports.initiateOnlinePayment = async (req, res, next) => {
         if (!keyId || !keySecret) {
             return next(new AppError("GATEWAY_ERROR", 500, "Payment gateway credentials missing."));
         }
-        
+
         const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
         const postData = JSON.stringify({
             amount: Math.round(amount * 100),
@@ -286,9 +286,9 @@ exports.verifyOnlinePayment = async (req, res, next) => {
         const FestivalCollection = getFestivalCollectionModel();
         const { Payment, Receipt } = getPaymentModels();
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature, contributionId } = req.body;
-        
+
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
-        
+
         const generated_signature = crypto
             .createHmac("sha256", keySecret)
             .update(razorpay_order_id + "|" + razorpay_payment_id)
@@ -307,7 +307,7 @@ exports.verifyOnlinePayment = async (req, res, next) => {
 
         const count = await Payment.countDocuments({ societyId: req.societyId });
         const paymentNumber = `PAY-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
-        
+
         const rCount = await Receipt.countDocuments({ societyId: req.societyId });
         const receiptNumber = `REC/${new Date().getFullYear()}/${String(rCount + 1).padStart(6, "0")}`;
 
@@ -402,7 +402,7 @@ exports.recordOfflineContribution = async (req, res, next) => {
         const FestivalCollection = getFestivalCollectionModel();
         const { Payment, Receipt } = getPaymentModels();
         const Flat = getFlatModel();
-        
+
         const { id } = req.params;
         const { flatId, residentId, amount, paymentMode, transactionRef, paymentAccountId, notes } = req.body;
 
@@ -410,13 +410,13 @@ exports.recordOfflineContribution = async (req, res, next) => {
         if (!collection || collection.status !== "ACTIVE") {
             return next(new AppError("INVALID_COLLECTION", 400, "Collection not active or not found"));
         }
-        
+
         const flat = await Flat.findOne({ _id: flatId, societyId: req.societyId });
         if (!flat) return next(new AppError("INVALID_FLAT", 400, "Invalid flat"));
 
         const count = await Payment.countDocuments({ societyId: req.societyId });
         const paymentNumber = `PAY-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
-        
+
         const rCount = await Receipt.countDocuments({ societyId: req.societyId });
         const receiptNumber = `REC/${new Date().getFullYear()}/${String(rCount + 1).padStart(6, "0")}`;
 
@@ -426,7 +426,7 @@ exports.recordOfflineContribution = async (req, res, next) => {
             userId: residentId,
             festivalCollectionId: collection._id,
             paymentCategory: "FESTIVAL",
-            paymentAccountId: paymentAccountId || "OFFLINE_CASH", 
+            paymentAccountId: paymentAccountId || "OFFLINE_CASH",
             paymentAccountName: "Cash/Bank Account",
             paymentNumber,
             amount: amount,
@@ -545,15 +545,15 @@ exports.getResidentStatus = async (req, res, next) => {
     try {
         const FestivalContribution = getFestivalContributionModel();
         const { id } = req.params;
-        
+
         const contributions = await FestivalContribution.find({
             festivalCollectionId: id,
             societyId: req.societyId,
             paidBy: req.user.id,
             status: PAYMENT_STATUS.SUCCESS
         })
-        .populate("receiptId", "receiptNumber generatedAt")
-        .populate("paymentId", "paymentNumber gatewayOrderId gatewayTransactionId");
+            .populate("receiptId", "receiptNumber generatedAt")
+            .populate("paymentId", "paymentNumber gatewayOrderId gatewayTransactionId");
 
         return sendSuccess(res, 200, "Resident status fetched", { contributions });
     } catch (error) {
@@ -633,14 +633,14 @@ exports.downloadContributionReceipt = async (req, res, next) => {
         doc.rect(0, 0, doc.page.width, 110).fill(orange);
 
         doc.fillColor('white')
-           .fontSize(22)
-           .font('Helvetica-Bold')
-           .text('MySocietySuite', 50, 30)
-           .fontSize(11)
-           .font('Helvetica')
-           .text('Festival Contribution Receipt', 50, 58)
-           .fontSize(9)
-           .text('This is a system-generated receipt', 50, 78);
+            .fontSize(22)
+            .font('Helvetica-Bold')
+            .text('MySocietySuite', 50, 30)
+            .fontSize(11)
+            .font('Helvetica')
+            .text('Festival Contribution Receipt', 50, 58)
+            .fontSize(9)
+            .text('This is a system-generated receipt', 50, 78);
 
         // Receipt number box
         const receiptRef = contribution.transactionRef
@@ -648,12 +648,12 @@ exports.downloadContributionReceipt = async (req, res, next) => {
             : `FEST-${String(contributionId).slice(-8).toUpperCase()}`;
 
         doc.fillColor(orange)
-           .fontSize(9)
-           .font('Helvetica-Bold')
-           .text('Receipt No.', 390, 35)
-           .fillColor('white')
-           .fontSize(11)
-           .text(receiptRef, 390, 50, { width: 160 });
+            .fontSize(9)
+            .font('Helvetica-Bold')
+            .text('Receipt No.', 390, 35)
+            .fillColor('white')
+            .fontSize(11)
+            .text(receiptRef, 390, 50, { width: 160 });
 
         // Move below header
         doc.moveDown(4);
@@ -667,7 +667,7 @@ exports.downloadContributionReceipt = async (req, res, next) => {
 
         const addField = (label, value, x, y) => {
             doc.fillColor(grey).fontSize(8).font('Helvetica').text(label, x, y);
-            doc.fillColor(dark).fontSize(10).font('Helvetica-Bold').text(value || '—', x, y + 13);
+            doc.fillColor(dark).fontSize(10).font('Helvetica-Bold').text(value || '-', x, y + 13);
         };
 
         addField('Festival / Event Name', collection?.title || 'N/A', 50, infoY);
@@ -699,10 +699,10 @@ exports.downloadContributionReceipt = async (req, res, next) => {
         const footerY = doc.page.height - 80;
         doc.rect(0, footerY, doc.page.width, 80).fill(lightGrey);
         doc.fillColor(grey)
-           .fontSize(8)
-           .font('Helvetica')
-           .text('This is a computer-generated receipt and does not require a physical signature.', 50, footerY + 15, { align: 'center', width: doc.page.width - 100 })
-           .text(`Generated on ${new Date().toLocaleString('en-IN')} by MySocietySuite`, 50, footerY + 32, { align: 'center', width: doc.page.width - 100 });
+            .fontSize(8)
+            .font('Helvetica')
+            .text('This is a computer-generated receipt and does not require a physical signature.', 50, footerY + 15, { align: 'center', width: doc.page.width - 100 })
+            .text(`Generated on ${new Date().toLocaleString('en-IN')} by MySocietySuite`, 50, footerY + 32, { align: 'center', width: doc.page.width - 100 });
 
         doc.end();
     } catch (error) {

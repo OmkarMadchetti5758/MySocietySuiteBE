@@ -63,7 +63,7 @@ module.exports = {
     // OTP
     OTP_EXPIRES_IN_MINUTES: parseInt(process.env.OTP_EXPIRES_IN_MINUTES, 10) || 10,
 
-    // SMS — SMSGatewayCenter (https://unify.smsgateway.center/SMSApi/send)
+    // SMS - SMSGatewayCenter (https://unify.smsgateway.center/SMSApi/send)
     SMS_USERID: process.env.SMS_USERID || "",
     SMS_PASSWORD: process.env.SMS_PASSWORD || "",
     SMS_SENDERID: process.env.SMS_SENDERID || "",

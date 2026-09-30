@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * AIAssistantQueryLog — logs every query sent to the AI assistant, per user per society.
+ * AIAssistantQueryLog - logs every query sent to the AI assistant, per user per society.
  * Lives in mysociety_operations.aiassistantquerylogs
  */
 const aiAssistantQueryLogSchema = new mongoose.Schema(

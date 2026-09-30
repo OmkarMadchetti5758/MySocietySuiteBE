@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * FestivalCollection — a society-initiated fundraiser for a festival/event.
+ * FestivalCollection - a society-initiated fundraiser for a festival/event.
  * Lives in mysociety_operations.festivalcollections
  */
 const festivalCollectionSchema = new mongoose.Schema(

@@ -1,7 +1,7 @@
 {
   "name": "mysocietysuite-be",
   "version": "1.0.0",
-  "description": "MySocietySuite — Multi-Tenant Society Management SaaS Backend",
+  "description": "MySocietySuite - Multi-Tenant Society Management SaaS Backend",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

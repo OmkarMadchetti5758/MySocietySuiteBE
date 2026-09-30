@@ -1,14 +1,14 @@
 "use strict";
 
-const express    = require("express");
-const router     = express.Router();
+const express = require("express");
+const router = express.Router();
 
-const controller       = require("./complaint.controller");
-const authenticate     = require("../../middleware/authenticate");
-const injectSocietyId  = require("../../middleware/injectSocietyId");
-const checkPermission  = require("../../middleware/checkPermission");
-const authorize        = require("../../middleware/authorize");
-const upload           = require("../../middleware/upload.middleware");
+const controller = require("./complaint.controller");
+const authenticate = require("../../middleware/authenticate");
+const injectSocietyId = require("../../middleware/injectSocietyId");
+const checkPermission = require("../../middleware/checkPermission");
+const authorize = require("../../middleware/authorize");
+const upload = require("../../middleware/upload.middleware");
 
 const { MODULES, PERMISSION_LEVELS, ROLES } = require("../../common/constants");
 
@@ -65,7 +65,7 @@ router.get(
 
 /**
  * GET /complaints/vendor/:id
- * Vendor gets a single complaint — double ownership enforced in service.
+ * Vendor gets a single complaint - double ownership enforced in service.
  */
 router.get(
     "/vendor/:id",
@@ -156,7 +156,7 @@ router.patch(
 
 /**
  * GET /complaints/:id/history
- * Full audit history — Admin and Facility Manager only.
+ * Full audit history - Admin and Facility Manager only.
  */
 router.get(
     "/:id/history",

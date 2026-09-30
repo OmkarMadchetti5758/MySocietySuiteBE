@@ -110,49 +110,49 @@ class LedgerService {
 
         const defaults = [
             // ASSETS
-            { accountCode: "1000", accountName: "Assets",                 accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountId: null },
-            { accountCode: "1010", accountName: "Bank Accounts",          accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
-            { accountCode: "1011", accountName: "Cash in Hand",           accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
-            { accountCode: "1020", accountName: "Receivables",            accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
-            { accountCode: "1021", accountName: "Members' Receivable",    accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1020" },
-            { accountCode: "1030", accountName: "GST Input",              accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "1000" },
-            { accountCode: "1040", accountName: "Other Assets",           accountType: "ASSET",     normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "1000" },
+            { accountCode: "1000", accountName: "Assets", accountType: "ASSET", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountId: null },
+            { accountCode: "1010", accountName: "Bank Accounts", accountType: "ASSET", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountCode: "1000" },
+            { accountCode: "1011", accountName: "Cash in Hand", accountType: "ASSET", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountCode: "1000" },
+            { accountCode: "1020", accountName: "Receivables", accountType: "ASSET", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountCode: "1000" },
+            { accountCode: "1021", accountName: "Members' Receivable", accountType: "ASSET", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountCode: "1020" },
+            { accountCode: "1030", accountName: "GST Input", accountType: "ASSET", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountCode: "1000" },
+            { accountCode: "1040", accountName: "Other Assets", accountType: "ASSET", normalBalanceType: "DEBIT", isSystemAccount: false, parentAccountCode: "1000" },
 
             // LIABILITIES
-            { accountCode: "2000", accountName: "Liabilities",            accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountId: null },
-            { accountCode: "2010", accountName: "Advance from Members",   accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
+            { accountCode: "2000", accountName: "Liabilities", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountId: null },
+            { accountCode: "2010", accountName: "Advance from Members", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
             { accountCode: "2020", accountName: "Security Deposit Liability", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
-            { accountCode: "2030", accountName: "Vendor Payable",         accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
-            { accountCode: "2040", accountName: "Payment Gateway Clearing",accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
-            { accountCode: "2050", accountName: "GST Payable",            accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
-            { accountCode: "2060", accountName: "TDS Payable",            accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
-            { accountCode: "2070", accountName: "Unallocated Receipts",   accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "2000" },
-            { accountCode: "2080", accountName: "Other Liabilities",      accountType: "LIABILITY",  normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "2000" },
+            { accountCode: "2030", accountName: "Vendor Payable", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
+            { accountCode: "2040", accountName: "Payment Gateway Clearing", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
+            { accountCode: "2050", accountName: "GST Payable", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
+            { accountCode: "2060", accountName: "TDS Payable", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
+            { accountCode: "2070", accountName: "Unallocated Receipts", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "2000" },
+            { accountCode: "2080", accountName: "Other Liabilities", accountType: "LIABILITY", normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "2000" },
 
             // EQUITY
-            { accountCode: "3000", accountName: "Equity / Reserve Fund",  accountType: "EQUITY",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountId: null },
-            { accountCode: "3010", accountName: "General Reserve Fund",   accountType: "EQUITY",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "3000" },
-            { accountCode: "3020", accountName: "Sinking Fund",           accountType: "EQUITY",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "3000" },
+            { accountCode: "3000", accountName: "Equity / Reserve Fund", accountType: "EQUITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountId: null },
+            { accountCode: "3010", accountName: "General Reserve Fund", accountType: "EQUITY", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "3000" },
+            { accountCode: "3020", accountName: "Sinking Fund", accountType: "EQUITY", normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "3000" },
 
             // INCOME
-            { accountCode: "4000", accountName: "Income",                 accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountId: null },
-            { accountCode: "4010", accountName: "Maintenance Income",     accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
-            { accountCode: "4020", accountName: "Parking Income",         accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
-            { accountCode: "4030", accountName: "Amenity Income",         accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
-            { accountCode: "4040", accountName: "Late Fee Income",        accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
-            { accountCode: "4050", accountName: "Interest Income",        accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
-            { accountCode: "4060", accountName: "Sundry Income",          accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: true,  parentAccountCode: "4000" },
-            { accountCode: "4070", accountName: "Other Income",           accountType: "INCOME",    normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
+            { accountCode: "4000", accountName: "Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountId: null },
+            { accountCode: "4010", accountName: "Maintenance Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "4000" },
+            { accountCode: "4020", accountName: "Parking Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
+            { accountCode: "4030", accountName: "Amenity Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
+            { accountCode: "4040", accountName: "Late Fee Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "4000" },
+            { accountCode: "4050", accountName: "Interest Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "4000" },
+            { accountCode: "4060", accountName: "Sundry Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: true, parentAccountCode: "4000" },
+            { accountCode: "4070", accountName: "Other Income", accountType: "INCOME", normalBalanceType: "CREDIT", isSystemAccount: false, parentAccountCode: "4000" },
 
             // EXPENSES
-            { accountCode: "5000", accountName: "Expenses",               accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountId: null },
-            { accountCode: "5010", accountName: "Electricity Expense",    accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
-            { accountCode: "5020", accountName: "Security Services",      accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
-            { accountCode: "5030", accountName: "Cleaning & Housekeeping",accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
-            { accountCode: "5040", accountName: "Repairs & Maintenance",  accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
-            { accountCode: "5050", accountName: "Administrative Expenses",accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
-            { accountCode: "5060", accountName: "Discount Allowed",       accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: true,  parentAccountCode: "5000" },
-            { accountCode: "5070", accountName: "Other Expenses",         accountType: "EXPENSE",   normalBalanceType: "DEBIT",  isSystemAccount: false, parentAccountCode: "5000" },
+            { accountCode: "5000", accountName: "Expenses", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountId: null },
+            { accountCode: "5010", accountName: "Electricity Expense", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: false, parentAccountCode: "5000" },
+            { accountCode: "5020", accountName: "Security Services", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: false, parentAccountCode: "5000" },
+            { accountCode: "5030", accountName: "Cleaning & Housekeeping", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: false, parentAccountCode: "5000" },
+            { accountCode: "5040", accountName: "Repairs & Maintenance", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: false, parentAccountCode: "5000" },
+            { accountCode: "5050", accountName: "Administrative Expenses", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: false, parentAccountCode: "5000" },
+            { accountCode: "5060", accountName: "Discount Allowed", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountCode: "5000" },
+            { accountCode: "5070", accountName: "Other Expenses", accountType: "EXPENSE", normalBalanceType: "DEBIT", isSystemAccount: false, parentAccountCode: "5000" },
         ];
 
         // First pass: create all root accounts
@@ -260,10 +260,10 @@ class LedgerService {
         const { ChartOfAccount } = getLedgerModels(db);
         const { getReconciliationModels } = require("../reconciliation/reconciliation.model");
         const { FinancialAccount } = getReconciliationModels(db);
-        
+
         const finAccounts = await FinancialAccount.find({ societyId }).lean();
         if (!finAccounts.length) return;
-        
+
         // Ensure parent 1000 Assets exists
         let rootAsset = await ChartOfAccount.findOne({ societyId, accountCode: "1000" }).lean();
         if (!rootAsset) {
@@ -272,13 +272,13 @@ class LedgerService {
                 normalBalanceType: "DEBIT", isSystemAccount: true, createdBy: finAccounts[0].createdBy
             });
         }
-        
+
         for (const f of finAccounts) {
             const existingCoa = await ChartOfAccount.findOne({ societyId, financialAccountId: f._id }).lean();
             if (!existingCoa) {
                 const parentCode = f.accountType === "BANK" ? "1010" : "1011";
                 const parentName = f.accountType === "BANK" ? "Bank Accounts" : "Cash Account";
-                
+
                 let parent = await ChartOfAccount.findOne({ societyId, accountCode: parentCode }).lean();
                 if (!parent) {
                     parent = await ChartOfAccount.create({
@@ -286,7 +286,7 @@ class LedgerService {
                         normalBalanceType: "DEBIT", isSystemAccount: true, parentAccountId: rootAsset._id, createdBy: f.createdBy
                     });
                 }
-                
+
                 const children = await ChartOfAccount.find({ societyId, parentAccountId: parent._id }).sort({ accountCode: -1 }).lean();
                 let newCode = parentCode + "1";
                 if (children.length > 0) {
@@ -297,7 +297,7 @@ class LedgerService {
                         newCode = parentCode + String(children.length + 1);
                     }
                 }
-                
+
                 await ChartOfAccount.create({
                     societyId: f.societyId,
                     accountCode: newCode,
@@ -314,7 +314,7 @@ class LedgerService {
                 });
             } else if (existingCoa.status !== f.status || existingCoa.accountName !== f.accountName) {
                 await ChartOfAccount.updateOne(
-                    { _id: existingCoa._id }, 
+                    { _id: existingCoa._id },
                     { $set: { status: f.status, accountName: f.accountName } }
                 );
             }
@@ -431,7 +431,7 @@ class LedgerService {
         for (const line of lines) {
             if ((line.debit || 0) < 0 || (line.credit || 0) < 0) throw new AppError("Debit and credit amounts must be non-negative.", 400);
             if ((line.debit || 0) === 0 && (line.credit || 0) === 0) throw new AppError("A journal line cannot have both debit and credit as zero.", 400);
-            totalDebit  += Number(line.debit || 0);
+            totalDebit += Number(line.debit || 0);
             totalCredit += Number(line.credit || 0);
         }
         const diff = Math.abs(totalDebit - totalCredit);
@@ -473,8 +473,8 @@ class LedgerService {
             residentId: residentId && /^[a-fA-F0-9]{24}$/.test(String(residentId)) ? residentId : null,
             flatId: flatId && /^[a-fA-F0-9]{24}$/.test(String(flatId)) ? flatId : null,
             createdBy: userId && /^[a-fA-F0-9]{24}$/.test(String(userId)) ? userId : societyId,
-            postedBy:  isAutomatic ? (userId && /^[a-fA-F0-9]{24}$/.test(String(userId)) ? userId : societyId) : null,
-            postedAt:  isAutomatic ? new Date() : null,
+            postedBy: isAutomatic ? (userId && /^[a-fA-F0-9]{24}$/.test(String(userId)) ? userId : societyId) : null,
+            postedAt: isAutomatic ? new Date() : null,
             notes,
         }], opts);
 
@@ -543,7 +543,8 @@ class LedgerService {
             status: "PENDING_APPROVAL", submittedBy: userId,
         }, { new: true });
 
-        await logLedgerAction({ db, societyId, userId, userRole: "accountant",
+        await logLedgerAction({
+            db, societyId, userId, userRole: "accountant",
             action: "JV_SUBMITTED", entity: "JournalEntry", entityId: journalId,
             oldValue: { status: "DRAFT" }, newValue: { status: "PENDING_APPROVAL" },
         });
@@ -561,7 +562,8 @@ class LedgerService {
             status: "APPROVED", approvedBy: userId, approvedAt: new Date(),
         }, { new: true });
 
-        await logLedgerAction({ db, societyId, userId, userRole: "admin",
+        await logLedgerAction({
+            db, societyId, userId, userRole: "admin",
             action: "JV_APPROVED", entity: "JournalEntry", entityId: journalId,
             oldValue: { status: "PENDING_APPROVAL" }, newValue: { status: "APPROVED" },
         });
@@ -595,7 +597,8 @@ class LedgerService {
 
             await session.commitTransaction();
 
-            await logLedgerAction({ db, societyId, userId, userRole: "accountant",
+            await logLedgerAction({
+                db, societyId, userId, userRole: "accountant",
                 action: "JV_POSTED", entity: "JournalEntry", entityId: journalId,
                 oldValue: { status: je.status }, newValue: { status: "POSTED" },
             });
@@ -620,14 +623,15 @@ class LedgerService {
             status: "REJECTED", rejectedBy: userId, rejectionReason: reason,
         }, { new: true });
 
-        await logLedgerAction({ db, societyId, userId, userRole: "admin",
+        await logLedgerAction({
+            db, societyId, userId, userRole: "admin",
             action: "JV_REJECTED", entity: "JournalEntry", entityId: journalId,
             reason, oldValue: { status: "PENDING_APPROVAL" }, newValue: { status: "REJECTED" },
         });
         return updated;
     }
 
-    /** Reverse a POSTED journal entry — creates a new mirror-image entry */
+    /** Reverse a POSTED journal entry - creates a new mirror-image entry */
     static async reverseJournalEntry(societyId, userId, userRole, journalId, reason, db) {
         const { JournalEntry, JournalEntryLine, ChartOfAccount } = getLedgerModels(db);
         if (!reason) throw new AppError("Reversal reason is required.", 400);
@@ -701,7 +705,8 @@ class LedgerService {
 
             await session.commitTransaction();
 
-            await logLedgerAction({ db, societyId, userId, userRole,
+            await logLedgerAction({
+                db, societyId, userId, userRole,
                 action: "JV_REVERSED", entity: "JournalEntry", entityId: journalId,
                 reason, newValue: { reversalJournalId: reversalJE._id, reversalJournalNumber: journalNumber },
             });
@@ -801,7 +806,7 @@ class LedgerService {
             if (startDate) jeFilter.transactionDate.$gte = new Date(startDate);
             if (endDate) jeFilter.transactionDate.$lte = new Date(endDate);
         }
-        
+
         let validJournalIds = [];
         if (search) {
             jeFilter.$or = [
@@ -816,14 +821,14 @@ class LedgerService {
         const lineFilter = { societyId };
         if (accountId) lineFilter.accountId = accountId;
         if (search) {
-             lineFilter.$or = [
-                 { description: { $regex: search, $options: "i" } },
-                 { journalId: { $in: validJournalIds } }
-             ];
+            lineFilter.$or = [
+                { description: { $regex: search, $options: "i" } },
+                { journalId: { $in: validJournalIds } }
+            ];
         } else {
-             // If no search, we still must filter by the date range of journals
-             const journalsInDateRange = await JournalEntry.find(jeFilter).select('_id').lean();
-             lineFilter.journalId = { $in: journalsInDateRange.map(j => j._id) };
+            // If no search, we still must filter by the date range of journals
+            const journalsInDateRange = await JournalEntry.find(jeFilter).select('_id').lean();
+            lineFilter.journalId = { $in: journalsInDateRange.map(j => j._id) };
         }
 
         const total = await JournalEntryLine.countDocuments(lineFilter);
@@ -867,9 +872,9 @@ class LedgerService {
         const lines = await JournalEntryLine.find({
             societyId, accountId, journalId: { $in: journalIds },
         })
-        .sort({ createdAt: 1 })
-        .populate({ path: "journalId", select: "journalNumber transactionDate description referenceType referenceNumber" })
-        .lean();
+            .sort({ createdAt: 1 })
+            .populate({ path: "journalId", select: "journalNumber transactionDate description referenceType referenceNumber" })
+            .lean();
 
         let runningBalance = account.openingBalance || 0;
         const isDebitNormal = account.normalBalanceType === "DEBIT";
@@ -1061,7 +1066,8 @@ class LedgerService {
             status: "CLOSED", closedAt: new Date(), closedBy: userId,
         }, { new: true });
 
-        await logLedgerAction({ db, societyId, userId, userRole: "admin",
+        await logLedgerAction({
+            db, societyId, userId, userRole: "admin",
             action: "PERIOD_CLOSED", entity: "AccountingPeriod", entityId: periodId,
             newValue: { periodCode: period.periodCode, periodName: period.periodName },
         });
@@ -1079,7 +1085,8 @@ class LedgerService {
             status: "OPEN", reopenedAt: new Date(), reopenedBy: userId, reopenReason: reason,
         }, { new: true });
 
-        await logLedgerAction({ db, societyId, userId, userRole: "admin",
+        await logLedgerAction({
+            db, societyId, userId, userRole: "admin",
             action: "PERIOD_REOPENED", entity: "AccountingPeriod", entityId: periodId,
             reason, newValue: { periodCode: period.periodCode },
         });
@@ -1087,7 +1094,7 @@ class LedgerService {
     }
 }
 
-// ─── Automatic Posting Engine — called by other modules ──────────────────────
+// ─── Automatic Posting Engine - called by other modules ──────────────────────
 
 /**
  * Generate and immediately post a double-entry journal entry for a financial event.
@@ -1140,7 +1147,7 @@ async function generateAutomaticPosting(eventPayload, db) {
         });
         return result;
     } catch (err) {
-        // Log and surface — do NOT silently swallow posting errors
+        // Log and surface - do NOT silently swallow posting errors
         console.error(`[LEDGER] Auto-posting error for event '${eventType}':`, err.message);
         throw err;
     }

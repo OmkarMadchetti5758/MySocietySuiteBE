@@ -3,12 +3,12 @@
 const AppError = require("../../common/AppError");
 const { getMasterConnection } = require("../../config/masterDb");
 
-const MAX_ATTEMPTS            = 5;
-const MAX_RESENDS             = 3;
+const MAX_ATTEMPTS = 5;
+const MAX_RESENDS = 3;
 const RESEND_COOLDOWN_SECONDS = 30;
-const RATE_WINDOW_HOURS       = 1;
-const OTP_TTL_MINUTES         = 10;
-const LOCKOUT_MINUTES         = 20;
+const RATE_WINDOW_HOURS = 1;
+const OTP_TTL_MINUTES = 10;
+const LOCKOUT_MINUTES = 20;
 
 class OtpService {
     _getModel() {
@@ -16,7 +16,7 @@ class OtpService {
         return masterDb.model("Otp");
     }
 
-    
+
     async sendOtp(identifier, purpose, societyId) {
         const Otp = this._getModel();
         const normalizedIdentifier = identifier.toLowerCase().trim();
@@ -52,16 +52,16 @@ class OtpService {
             const { code, codeHash } = Otp.schema.statics.generateCode.call(Otp);
             const expiresAt = new Date(now.getTime() + OTP_TTL_MINUTES * 60 * 1000);
 
-            existing.codeHash     = codeHash;
-            existing.expiresAt    = expiresAt;
-            existing.attempts     = 0;
-            existing.verified     = false;
+            existing.codeHash = codeHash;
+            existing.expiresAt = expiresAt;
+            existing.attempts = 0;
+            existing.verified = false;
             existing.rateLockUntil = null;
-            existing.resendCount  = (existing.resendCount || 1) + 1;
+            existing.resendCount = (existing.resendCount || 1) + 1;
             existing.lastResendAt = now;
             await existing.save();
 
-            // Deliver — may throw if SMS gateway is unreachable in production
+            // Deliver - may throw if SMS gateway is unreachable in production
             await this._deliverOtp(normalizedIdentifier, code, purpose);
 
             return { message: "OTP resent successfully" };
@@ -82,7 +82,7 @@ class OtpService {
                 lastResendAt: now,
             });
         } catch (err) {
-            // Lost a create race (duplicate request) — the other request already delivered
+            // Lost a create race (duplicate request) - the other request already delivered
             if (err && err.code === 11000) {
                 return { message: "OTP sent successfully" };
             }
@@ -124,7 +124,7 @@ class OtpService {
             throw new AppError("OTP has expired. Please request a new one.", 400, "OTP_EXPIRED");
         }
 
-        // Already verified — idempotent response
+        // Already verified - idempotent response
         if (otpDoc.verified) {
             return { verified: true, alreadyVerified: true };
         }
@@ -153,9 +153,9 @@ class OtpService {
             );
         }
 
-        // Correct code — mark as verified
-        otpDoc.verified    = true;
-        otpDoc.attempts    = 0;
+        // Correct code - mark as verified
+        otpDoc.verified = true;
+        otpDoc.attempts = 0;
         otpDoc.rateLockUntil = null;
         await otpDoc.save();
 

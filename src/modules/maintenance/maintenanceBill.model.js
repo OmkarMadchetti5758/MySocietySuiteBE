@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { MAINTENANCE_STATUS, PAYMENT_STATUS } = require("../../common/constants");
 
 /**
- * MaintenanceBill — monthly/quarterly maintenance charges per flat.
+ * MaintenanceBill - monthly/quarterly maintenance charges per flat.
  * Lives in mysociety_operations.maintenancebills
  */
 const maintenanceBillSchema = new mongoose.Schema(

@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { PARKING_REQUEST_STATUS, PARKING_TYPE } = require("../../common/constants");
 
 /**
- * ParkingRequest — resident request for parking slot allocation.
+ * ParkingRequest - resident request for parking slot allocation.
  * Lives in mysociety_operations.parkingrequests
  *
  * Flow: PENDING → APPROVED → (allocation created externally)

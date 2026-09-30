@@ -117,6 +117,27 @@ async function generateUniqueReceiptNumber(db, societyId) {
     return `REC/${year}-${nextYear}/${seq}`;
 }
 
+
+// --- CONFIGURABLE DECISIONS (BRD TODOs) ---
+const CONFIG = {
+    // Payment allocation order when arrears/fines/current dues are open
+    // Default: oldest dues first, fines before principal
+    PAYMENT_ALLOCATION_ORDER: "OLDEST_FIRST", 
+    
+    // Ledger credit timing for online payments
+    // Default: on gateway success
+    ONLINE_LEDGER_CREDIT_TIMING: "ON_SUCCESS", 
+    
+    // Gateway fee booking
+    // Default: not handled yet
+    GATEWAY_FEE_BOOKING: "NONE", 
+    
+    // Accounting basis
+    // Default: accrual
+    ACCOUNTING_BASIS: "ACCRUAL"
+};
+// ------------------------------------------
+
 class PaymentService {
     // ── 1. Initiate Online Payment ──
     static async initiateOnlinePayment({ req, db, societyId, userId, invoiceId, amount, paymentMode = "UPI" }) {
@@ -209,8 +230,15 @@ class PaymentService {
     static async verifyOnlinePayment({ req, db, societyId, userId, razorpay_order_id, razorpay_payment_id, razorpay_signature, paymentId }) {
         const { Payment, Receipt, AdvanceAccount } = getPaymentModels(db);
         const { BillingInvoice, InvoicePayment } = getBillingModels(db);
+        const { getReconciliationModels } = require("../reconciliation/reconciliation.model");
+        const { FinancialAccount } = getReconciliationModels(db);
 
         let payment = null;
+        let receipt = null;
+
+        const session = await db.startSession();
+        await session.withTransaction(async () => {
+
         if (paymentId) {
             payment = await Payment.findOne({ _id: paymentId, societyId });
         } else if (razorpay_order_id) {
@@ -223,7 +251,9 @@ class PaymentService {
 
         // Idempotency: If already SUCCESS, return result safely
         if (payment.paymentStatus === "SUCCESS") {
-            const receipt = await Receipt.findOne({ paymentId: payment._id });
+            receipt = await Receipt.findOne({ paymentId: payment._id });
+            // abort transaction early to return safely
+            await session.abortTransaction();
             return { payment, receipt };
         }
 
@@ -238,7 +268,7 @@ class PaymentService {
             if (expectedSig !== razorpay_signature) {
                 payment.paymentStatus = "FAILED";
                 payment.failureReason = "Signature verification failed";
-                await payment.save();
+                await payment.save({ session });
                 throw new Error("Invalid payment gateway signature.");
             }
         }
@@ -249,10 +279,9 @@ class PaymentService {
         payment.gatewayTransactionId = razorpay_payment_id || `txn_${Date.now()}`;
         payment.gatewaySignature = razorpay_signature || null;
         payment.paymentDate = new Date();
-        await payment.save();
+        await payment.save({ session });
 
         // Process Invoice & Allocation
-        let receipt = null;
         if (payment.invoiceId) {
             const invoice = await BillingInvoice.findOne({ _id: payment.invoiceId, societyId });
             if (invoice) {
@@ -272,12 +301,12 @@ class PaymentService {
                 } else if (invoice.paidAmount > 0) {
                     invoice.status = "PARTIALLY_PAID";
                 }
-                await invoice.save();
+                await invoice.save({ session });
 
                 // If overpaid, credit Advance Account
                 if (excessAmount > 0) {
                     payment.excessAmount = excessAmount;
-                    await payment.save();
+                    await payment.save({ session });
 
                     let advanceAcc = await AdvanceAccount.findOne({ societyId, flatId: invoice.flatId });
                     if (!advanceAcc) {
@@ -301,12 +330,12 @@ class PaymentService {
                         date: new Date(),
                         recordedBy: userId,
                     });
-                    await advanceAcc.save();
+                    await advanceAcc.save({ session });
                 }
 
                 // Generate Receipt
                 const receiptNum = await generateUniqueReceiptNumber(db, societyId);
-                receipt = await Receipt.create({
+                receipt = (await Receipt.create([{
                     societyId,
                     receiptNumber: receiptNum,
                     paymentId: payment._id,
@@ -328,14 +357,14 @@ class PaymentService {
                     remainingBalance: newBalance,
                     generatedAt: new Date(),
                     generatedBy: userId,
-                });
+                }], { session }))[0];
 
                 payment.receiptId = receipt._id;
                 payment.receiptNumber = receiptNum;
-                await payment.save();
+                await payment.save({ session });
 
                 // Register InvoicePayment record
-                await InvoicePayment.create({
+                await InvoicePayment.create([{
                     societyId,
                     invoiceId: invoice._id,
                     flatId: invoice.flatId,
@@ -349,13 +378,14 @@ class PaymentService {
                     paymentType: "ONLINE",
                     recordedBy: userId,
                     excessAmount,
-                });
+                }], { session });
             }
         }
 
         await logBillingAction({
             req,
             db,
+            session, // Pass session to audit log if supported
             action: "PAYMENT.VERIFY_ONLINE_SUCCESS",
             resource: "Payment",
             resourceId: payment._id,
@@ -366,9 +396,11 @@ class PaymentService {
         await LedgerPostingService.autoPost("online-payment", () =>
             LedgerPostingService.postConfirmedCollection({
                 societyId, userId, payment,
-                financialAccountId: payment.paymentAccountId, db
+                financialAccountId: payment.paymentAccountId, db, session
             })
         );
+        }); // end transaction
+        session.endSession();
 
         return { payment, receipt };
     }
@@ -413,6 +445,12 @@ class PaymentService {
         const { Payment, Receipt, AdvanceAccount } = getPaymentModels(db);
         const { BillingInvoice, InvoicePayment } = getBillingModels(db);
 
+        const session = await db.startSession();
+        let payment = null;
+        let receipt = null;
+        await session.withTransaction(async () => {
+
+
         if (!flatId) throw new Error("Flat ID is required for offline payment.");
         if (!amount || Number(amount) <= 0) throw new Error("Valid payment amount is required.");
         if (!paymentMode || !["CASH", "CHEQUE", "BANK_TRANSFER"].includes(paymentMode)) {
@@ -431,11 +469,33 @@ class PaymentService {
         const payDate = paymentDate ? new Date(paymentDate) : new Date();
 
         let invoice = null;
-        if (invoiceId) {
-            invoice = await BillingInvoice.findOne({ _id: invoiceId, societyId });
+        let actualInvoiceId = invoiceId;
+        if (actualInvoiceId) {
+            invoice = await BillingInvoice.findOne({ _id: actualInvoiceId, societyId }).session(session);
+        } else if (flatId) {
+            // Auto-match logic
+            const invoices = await BillingInvoice.find({ 
+                societyId, 
+                flatId, 
+                status: { $nin: ["PAID", "CANCELLED"] } 
+            }).sort({ createdAt: 1 }).session(session);
+            
+            // Auto-match to invoice by amount + date + resident/flat ID
+            let matched = invoices.find(inv => {
+                const payable = (inv.totalAmount || 0) + (inv.fineAmount || 0) - (inv.paidAmount || 0);
+                return payable === Number(amount);
+            });
+            if (!matched && invoices.length > 0) {
+                // Configurable allocation order: oldest first default
+                matched = invoices[0];
+            }
+            if (matched) {
+                actualInvoiceId = matched._id;
+                invoice = matched;
+            }
         }
 
-        const payment = await Payment.create({
+        payment = (await Payment.create([{
             societyId,
             flatId,
             userId,
@@ -454,9 +514,9 @@ class PaymentService {
             paymentDate: payDate,
             recordedBy,
             notes: notes || "",
-        });
+            invoiceId: actualInvoiceId || null,
+        }], { session }))[0];
 
-        let receipt = null;
         if (invoice) {
             const prevPaid = invoice.paidAmount || 0;
             const totalPayable = (invoice.totalAmount || 0) + (invoice.fineAmount || 0);
@@ -474,12 +534,12 @@ class PaymentService {
             } else if (invoice.paidAmount > 0) {
                 invoice.status = "PARTIALLY_PAID";
             }
-            await invoice.save();
+            await invoice.save({ session });
 
             // Advance account handling
             if (excessAmount > 0) {
                 payment.excessAmount = excessAmount;
-                await payment.save();
+                await payment.save({ session });
 
                 let advanceAcc = await AdvanceAccount.findOne({ societyId, flatId });
                 if (!advanceAcc) {
@@ -503,12 +563,12 @@ class PaymentService {
                     date: payDate,
                     recordedBy,
                 });
-                await advanceAcc.save();
+                await advanceAcc.save({ session });
             }
 
             // Generate receipt
             const receiptNum = await generateUniqueReceiptNumber(db, societyId);
-            receipt = await Receipt.create({
+            receipt = (await Receipt.create([{
                 societyId,
                 receiptNumber: receiptNum,
                 paymentId: payment._id,
@@ -530,13 +590,13 @@ class PaymentService {
                 remainingBalance: newBalance,
                 generatedAt: new Date(),
                 generatedBy: recordedBy,
-            });
+            }], { session }))[0];
 
             payment.receiptId = receipt._id;
             payment.receiptNumber = receiptNum;
-            await payment.save();
+            await payment.save({ session });
 
-            await InvoicePayment.create({
+            await InvoicePayment.create([{
                 societyId,
                 invoiceId: invoice._id,
                 flatId,
@@ -550,12 +610,13 @@ class PaymentService {
                 paymentType: "OFFLINE",
                 recordedBy,
                 excessAmount,
-            });
+            }], { session });
         }
 
         await logBillingAction({
             req,
             db,
+            session,
             action: "PAYMENT.RECORD_OFFLINE",
             resource: "Payment",
             resourceId: payment._id,
@@ -566,9 +627,11 @@ class PaymentService {
         await LedgerPostingService.autoPost("offline-payment", () =>
             LedgerPostingService.postConfirmedCollection({
                 societyId, userId: recordedBy, payment,
-                financialAccountId: paymentAccountId, db
+                financialAccountId: paymentAccountId, db, session
             })
         );
+        }); // end transaction
+        session.endSession();
 
         return { payment, receipt };
     }

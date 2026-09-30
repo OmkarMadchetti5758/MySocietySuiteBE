@@ -7,7 +7,7 @@ const {
 } = require("../../common/constants");
 
 /**
- * ParkingAssignment — links a parking slot to a resident/vehicle.
+ * ParkingAssignment - links a parking slot to a resident/vehicle.
  * Lives in mysociety_operations.parkingassignments
  *
  * Double-booking protection:

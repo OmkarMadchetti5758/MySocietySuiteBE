@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Attendance — daily attendance record per staff member.
+ * Attendance - daily attendance record per staff member.
  * Lives in mysociety_operations.attendances
  *
  * Extra staff-attendance fields (no separate collection needed):

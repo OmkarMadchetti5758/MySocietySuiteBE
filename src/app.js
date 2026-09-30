@@ -10,7 +10,7 @@ const v1Routes = require("./routes/v1");
 
 const app = express();
 
-// Disable ETag — prevents 304 "Not Modified" responses on dynamic API data
+// Disable ETag - prevents 304 "Not Modified" responses on dynamic API data
 app.set("etag", false);
 
 // Security HTTP headers

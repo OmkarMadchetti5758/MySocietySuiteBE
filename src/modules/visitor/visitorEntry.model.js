@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { VISITOR_STATUS, VISITOR_CATEGORY } = require("../../common/constants");
 
 /**
- * VisitorEntry — gate-level visitor log.
+ * VisitorEntry - gate-level visitor log.
  * Lives in mysociety_operations.visitorentries
  */
 const visitorEntrySchema = new mongoose.Schema(

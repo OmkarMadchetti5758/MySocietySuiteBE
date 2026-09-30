@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { FESTIVAL_STATUS } = require("../../common/constants");
 
 /**
- * Festival — represents a community event/festival within a society.
+ * Festival - represents a community event/festival within a society.
  * Lives in mysociety_operations.festivals
  */
 const festivalSchema = new mongoose.Schema(

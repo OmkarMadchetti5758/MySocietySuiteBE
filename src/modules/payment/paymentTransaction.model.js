@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { PAYMENT_METHOD, PAYMENT_STATUS } = require("../../common/constants");
 
 /**
- * PaymentTransaction — records an actual payment against a maintenance bill.
+ * PaymentTransaction - records an actual payment against a maintenance bill.
  * Lives in mysociety_operations.paymenttransactions
  */
 const paymentTransactionSchema = new mongoose.Schema(

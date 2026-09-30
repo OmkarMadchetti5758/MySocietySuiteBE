@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Permission Catalog — Master DB
+ * Permission Catalog - Master DB
  *
  * Global list of all 13 platform modules and their valid access-level vocabulary.
  * Seeded once on platform init; rarely changes.

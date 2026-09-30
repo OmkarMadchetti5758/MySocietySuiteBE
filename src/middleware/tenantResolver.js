@@ -8,7 +8,7 @@ const { getMasterConnection } = require("../config/masterDb");
  * (e.g. login, society selection dropdown) where the user
  * does not yet have a JWT but needs to identify their society.
  *
- * After migration: resolves only `societyId` — the `x-database-name`
+ * After migration: resolves only `societyId` - the `x-database-name`
  * header is no longer used (per-tenant DBs are retired).
  *
  * Accepts:
@@ -21,7 +21,7 @@ const tenantResolver = async (req, res, next) => {
         const tenantId = req.headers["x-tenant-id"];
 
         if (!tenantId) {
-            // No tenant context provided — continue, routes may not require it
+            // No tenant context provided - continue, routes may not require it
             return next();
         }
 

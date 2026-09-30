@@ -1,7 +1,7 @@
 "use strict";
 
 const RoleRepository = require("./role.repository");
-const AppError       = require("../../common/AppError");
+const AppError = require("../../common/AppError");
 
 class RoleService {
 
@@ -32,15 +32,15 @@ class RoleService {
         }
 
         const catalogMap = new Map(catalog.map(c => [c.moduleKey, c]));
-        const enriched   = this._enrichRole(role, catalogMap, societyId);
+        const enriched = this._enrichRole(role, catalogMap, societyId);
 
         return {
             ...enriched,
             lastAudit: audit
                 ? {
                     changedByName: audit.changedByName || "Unknown",
-                    changedAt:     audit.changedAt,
-                    action:        audit.action,
+                    changedAt: audit.changedAt,
+                    action: audit.action,
                 }
                 : null,
         };
@@ -67,17 +67,17 @@ class RoleService {
         }
 
         // 3. Load catalog to resolve hardBlockedFor
-        const catalog    = await RoleRepository.getPermissionCatalog();
+        const catalog = await RoleRepository.getPermissionCatalog();
         const catalogMap = new Map(catalog.map(c => [c.moduleKey, c]));
 
         // 4. Filter out hard-blocked modules and deprecated modules from the diff
         const safeDiff = {};
         for (const [moduleKey, patch] of Object.entries(permDiff)) {
             const catalogEntry = catalogMap.get(moduleKey);
-            if (!catalogEntry) continue; // Deprecated/unknown module — skip silently
+            if (!catalogEntry) continue; // Deprecated/unknown module - skip silently
 
             const hardBlocked = catalogEntry.hardBlockedFor || [];
-            if (hardBlocked.includes(roleKey)) continue; // Hard-blocked — skip silently
+            if (hardBlocked.includes(roleKey)) continue; // Hard-blocked - skip silently
 
             // Validate access level is in the valid set for this module
             if (patch.access !== undefined &&
@@ -145,17 +145,17 @@ class RoleService {
     }
 
     _enrichRole(role, catalogMap, societyId) {
-        const roleKey      = role.roleKey;
-        const rawPerms     = role.permissions || {};
+        const roleKey = role.roleKey;
+        const rawPerms = role.permissions || {};
         // Map might be a plain object or a Map instance (depending on lean() vs doc)
-        const permsObj     = rawPerms instanceof Map
+        const permsObj = rawPerms instanceof Map
             ? Object.fromEntries(rawPerms)
             : rawPerms;
 
         const enrichedPermissions = [];
 
         for (const [moduleKey, catalogEntry] of catalogMap) {
-            // Hard-blocked: omit entirely — don't even render a disabled toggle
+            // Hard-blocked: omit entirely - don't even render a disabled toggle
             const hardBlocked = catalogEntry.hardBlockedFor || [];
             if (hardBlocked.includes(roleKey)) continue;
 
@@ -163,12 +163,12 @@ class RoleService {
 
             enrichedPermissions.push({
                 moduleKey,
-                moduleName:       catalogEntry.moduleName,
-                sortOrder:        catalogEntry.sortOrder,
-                description:      catalogEntry.description,
+                moduleName: catalogEntry.moduleName,
+                sortOrder: catalogEntry.sortOrder,
+                description: catalogEntry.description,
                 validAccessLevels: catalogEntry.validAccessLevels,
-                enabled:          roleEntry.enabled ?? false,
-                access:           roleEntry.access  ?? "none",
+                enabled: roleEntry.enabled ?? false,
+                access: roleEntry.access ?? "none",
             });
         }
 
@@ -176,16 +176,16 @@ class RoleService {
         enrichedPermissions.sort((a, b) => a.sortOrder - b.sortOrder);
 
         return {
-            _id:          role._id,
-            societyId:    role.societyId,
-            roleKey:      role.roleKey,
-            roleName:     role.roleName,
+            _id: role._id,
+            societyId: role.societyId,
+            roleKey: role.roleKey,
+            roleName: role.roleName,
             isSystemRole: role.isSystemRole,
-            isEditable:   role.isEditable,
-            isOverride:   role._isOverride ?? (role.societyId !== "GLOBAL"),
-            updatedAt:    role.updatedAt,
-            updatedBy:    role.updatedBy,
-            permissions:  enrichedPermissions,
+            isEditable: role.isEditable,
+            isOverride: role._isOverride ?? (role.societyId !== "GLOBAL"),
+            updatedAt: role.updatedAt,
+            updatedBy: role.updatedBy,
+            permissions: enrichedPermissions,
         };
     }
 }

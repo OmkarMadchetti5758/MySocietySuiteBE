@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { PARKING_TYPE, PARKING_STATUS } = require("../../common/constants");
 
 /**
- * ParkingSlot — physical parking bays within a society.
+ * ParkingSlot - physical parking bays within a society.
  * Lives in mysociety_operations.parkingslots
  *
  * Optimistic concurrency: `version` field incremented on each update.

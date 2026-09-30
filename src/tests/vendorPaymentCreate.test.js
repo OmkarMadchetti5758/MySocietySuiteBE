@@ -234,7 +234,7 @@ async function runVendorPaymentCreateTests() {
     assert.strictEqual(equalThresholdPayment.approvalRequired, false, "approvalRequired must be false");
     assert.strictEqual(String(equalThresholdPayment.approvedBy), String(accountantReq.user.id), "approvedBy should be creator");
 
-    // e2. Committee Admin creates above threshold — no approval needed
+    // e2. Committee Admin creates above threshold - no approval needed
     const adminPayment = await BillingService.createVendorPayment(adminReq, {
         vendorId: vendors[0]._id,
         amount: 75000,

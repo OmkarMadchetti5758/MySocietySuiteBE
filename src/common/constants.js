@@ -23,28 +23,28 @@ const ROLES = Object.freeze({
     FACILITY_MANAGER: "facility_manager",
 
     // External
-    VENDOR:           "vendor",
-    VENDOR_MANAGER:   "vendor_manager",   // Department-head: manages vendor relationships
-    STAFF:            "staff",            // Legacy generic staff
-    GENERAL_STAFF:    "general_staff",    // housekeeping/gardener/electrician/plumber etc.
+    VENDOR: "vendor",
+    VENDOR_MANAGER: "vendor_manager",   // Department-head: manages vendor relationships
+    STAFF: "staff",            // Legacy generic staff
+    GENERAL_STAFF: "general_staff",    // housekeeping/gardener/electrician/plumber etc.
 
     // Staff Designations (Added as valid User roles)
-    HOUSEKEEPING:      "housekeeping",
-    GARDENER:          "gardener",
-    ELECTRICIAN:       "electrician",
-    PLUMBER:           "plumber",
-    CARPENTER:         "carpenter",
-    PEST_CONTROL:      "pest_control",
-    LIFT_TECHNICIAN:   "lift_technician",
-    SWEEPER:           "sweeper",
-    OTHER_STAFF:       "other",
+    HOUSEKEEPING: "housekeeping",
+    GARDENER: "gardener",
+    ELECTRICIAN: "electrician",
+    PLUMBER: "plumber",
+    CARPENTER: "carpenter",
+    PEST_CONTROL: "pest_control",
+    LIFT_TECHNICIAN: "lift_technician",
+    SWEEPER: "sweeper",
+    OTHER_STAFF: "other",
     VENDOR: "vendor",
     VENDOR_MANAGER: "vendor_manager",
     STAFF: "staff",
     GENERAL_STAFF: "general_staff",
 });
 
-// Separate enum/lookup table for what the job actually is — display, filtering, reporting only
+// Separate enum/lookup table for what the job actually is - display, filtering, reporting only
 const STAFF_DESIGNATIONS = Object.freeze({
     HOUSEKEEPING: "housekeeping",
     GARDENER: "gardener",
@@ -86,7 +86,7 @@ const PERMISSION_LEVELS = Object.freeze({
 const PERMISSION_SCOPE = Object.freeze({
     ALL: "all",        // Platform-wide or society-wide
     SOCIETY: "society",    // Restricted to the user's society
-    PLATFORM: "platform",   // Super Admin — cross-society platform view
+    PLATFORM: "platform",   // Super Admin - cross-society platform view
     OWN: "own",        // Only the user's own records / flat
     ASSIGNED: "assigned",   // Only records explicitly assigned to this user
     FINANCIAL: "financial",  // Only financial reports / queries

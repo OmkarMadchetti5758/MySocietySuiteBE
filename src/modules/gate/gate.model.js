@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Gate — physical entry/exit point of the society.
+ * Gate - physical entry/exit point of the society.
  */
 const gateSchema = new mongoose.Schema(
     {

@@ -13,7 +13,7 @@ const {
 
 // ── Valid status transition map ───────────────────────────────────────────────
 // Defines exactly which transitions are legal from each state.
-// This is the single source of truth — enforced in _assertValidTransition().
+// This is the single source of truth - enforced in _assertValidTransition().
 const VALID_TRANSITIONS = {
     [COMPLAINT_STATUS.OPEN]: [COMPLAINT_STATUS.ASSIGNED, COMPLAINT_STATUS.IN_PROGRESS],
     [COMPLAINT_STATUS.ASSIGNED]: [COMPLAINT_STATUS.IN_PROGRESS, COMPLAINT_STATUS.RESOLVED],
@@ -225,14 +225,14 @@ class ComplaintService {
             ? priority
             : COMPLAINT_PRIORITY.MEDIUM;
 
-        // Validate attachments — must be an array of strings (URLs)
+        // Validate attachments - must be an array of strings (URLs)
         if (!Array.isArray(attachments)) {
             throw new AppError("Attachments must be an array.", 400, "INVALID_ATTACHMENT");
         }
         const validAttachments = attachments.filter(a => typeof a === "string" && a.trim().length > 0);
 
         // ── Resident Context Resolution ───────────────────────────────────────
-        // Derives flatId from authenticated user — never trust client-provided flatId.
+        // Derives flatId from authenticated user - never trust client-provided flatId.
         const resident = await this._resolveResidentContext(opsDb, societyId, userId);
 
         // ── Atomic Operations (ticketId + complaint + history) ────────────────
@@ -380,7 +380,7 @@ class ComplaintService {
 
         if (!complaint) {
             if (isResident) {
-                // Don't leak existence to residents — return 404 for both unauthorized and not-found
+                // Don't leak existence to residents - return 404 for both unauthorized and not-found
                 throw new AppError("Complaint not found.", 404, "COMPLAINT_NOT_FOUND");
             }
             throw new AppError("Complaint not found.", 404, "COMPLAINT_NOT_FOUND");
@@ -410,7 +410,7 @@ class ComplaintService {
             await session.withTransaction(async () => {
                 const Complaint = opsDb.model("Complaint");
 
-                // Fetch complaint — must belong to same society
+                // Fetch complaint - must belong to same society
                 const current = await Complaint.findOne({ _id: complaintId, societyId }).session(session);
                 if (!current) {
                     throw new AppError("Complaint not found.", 404, "COMPLAINT_NOT_FOUND");
@@ -863,7 +863,7 @@ class ComplaintService {
             {
                 status: { $in: [COMPLAINT_STATUS.OPEN, COMPLAINT_STATUS.IN_PROGRESS] },
                 "sla.dueAt": { $lte: now },
-                "escalation.isEscalated": false, // Idempotency — skip already-escalated tickets
+                "escalation.isEscalated": false, // Idempotency - skip already-escalated tickets
             },
             {
                 $set: {
@@ -871,7 +871,7 @@ class ComplaintService {
                     "escalation.isEscalated": true,
                     "escalation.escalatedAt": now,
                     "escalation.escalationLevel": 1,
-                    "escalation.escalationReason": "SLA breach — no action taken within configured window",
+                    "escalation.escalationReason": "SLA breach - no action taken within configured window",
                 },
                 $inc: { version: 1 },
             }
@@ -927,7 +927,7 @@ class ComplaintService {
     }
 
     /**
-     * Returns a single complaint assigned to a vendor — double ownership check.
+     * Returns a single complaint assigned to a vendor - double ownership check.
      */
     async getVendorComplaintById({ societyId, vendorId, complaintId }) {
         const opsDb = getOperationsConnection();

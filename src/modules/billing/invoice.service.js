@@ -243,9 +243,9 @@ async function _calculateCharges(societyId, flatId, billingDate, db) {
             baseAmount: Math.round(baseAmount * 100) / 100,
             gstApplicable: ch.gstApplicable,
             gstRate: ch.gstRate,
-                gstAmount: Math.round(gstAmount * 100) / 100,
-                totalAmount: Math.round(totalAmount * 100) / 100,
-                ledgerAccountId: ch.ledgerAccountId || null,
+            gstAmount: Math.round(gstAmount * 100) / 100,
+            totalAmount: Math.round(totalAmount * 100) / 100,
+            ledgerAccountId: ch.ledgerAccountId || null,
         });
     }
 
@@ -1007,7 +1007,7 @@ class InvoiceService {
         const charges = chargesRaw.map(c => {
             const flatObj = c.flatId && typeof c.flatId === 'object' ? c.flatId : null;
             const flatIdStr = flatObj?._id ? String(flatObj._id) : String(c.flatId || '');
-            const flatNumber = flatObj?.flatNumber || (typeof c.flatId === 'string' ? c.flatId : '—');
+            const flatNumber = flatObj?.flatNumber || (typeof c.flatId === 'string' ? c.flatId : '-');
             const creatorObj = c.createdBy && typeof c.createdBy === 'object' ? c.createdBy : null;
             const createdByName = creatorObj ? (creatorObj.name || `${creatorObj.firstName || ''} ${creatorObj.lastName || ''}`.trim() || creatorObj.email) : 'Admin';
             const resolvedWing = flatsWingsMap[flatIdStr] || flatObj?.wing || flatObj?.blockName || '';

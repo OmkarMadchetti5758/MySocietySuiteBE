@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * ComplaintHistory — full audit trail for every ticket lifecycle event.
+ * ComplaintHistory - full audit trail for every ticket lifecycle event.
  * Lives in mysociety_operations.complainthistories
  *
  * One record per action. Immutable after creation.

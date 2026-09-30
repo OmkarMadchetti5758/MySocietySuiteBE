@@ -7,7 +7,7 @@ const {
 } = require("../../common/constants");
 
 /**
- * ParkingViolation — recorded parking rule violations.
+ * ParkingViolation - recorded parking rule violations.
  * Lives in mysociety_operations.parkingviolations
  *
  * Evidence files (images) are stored as URL paths via the upload middleware.

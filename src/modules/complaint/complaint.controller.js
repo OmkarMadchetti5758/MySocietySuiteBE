@@ -1,10 +1,10 @@
 "use strict";
 
 const ComplaintService = require("./complaint.service");
-const VendorService    = require("../vendor/vendor.service");
-const { sendSuccess }  = require("../../utils/response.utils");
+const VendorService = require("../vendor/vendor.service");
+const { sendSuccess } = require("../../utils/response.utils");
 const { MODULES, PERMISSION_LEVELS, ROLES, COMPLAINT_STATUS } = require("../../common/constants");
-const AppError         = require("../../common/AppError");
+const AppError = require("../../common/AppError");
 const { uploadMulterFiles, STORAGE_FOLDERS } = require("../../services/storage.service");
 const { getOperationsConnection } = require("../../config/operationsDb");
 
@@ -17,7 +17,7 @@ class ComplaintController {
     /**
      * POST /complaints
      * Create a new complaint (resident).
-     * societyId, raisedBy, flatId resolved from JWT — never trusted from body.
+     * societyId, raisedBy, flatId resolved from JWT - never trusted from body.
      */
     async createComplaint(req, res, next) {
         try {
@@ -30,9 +30,9 @@ class ComplaintController {
             }
 
             const complaint = await ComplaintService.createComplaint({
-                societyId:   req.societyId,
-                userId:      req.user.id,
-                role:        req.user.role,
+                societyId: req.societyId,
+                userId: req.user.id,
+                role: req.user.role,
                 category,
                 areaType,
                 areaLocation,
@@ -42,10 +42,10 @@ class ComplaintController {
             });
 
             return sendSuccess(res, 201, "Complaint created successfully.", {
-                ticketId:  complaint.ticketId,
-                status:    complaint.status,
+                ticketId: complaint.ticketId,
+                status: complaint.status,
                 createdAt: complaint.createdAt,
-                _id:       complaint._id,
+                _id: complaint._id,
             });
         } catch (error) {
             next(error);
@@ -62,7 +62,7 @@ class ComplaintController {
             const { status, category, priority, sort, page, limit, slaBreached } = req.query;
             const filter = {};
 
-            // Status filter — validated against enum
+            // Status filter - validated against enum
             if (status && Object.values(COMPLAINT_STATUS).includes(status)) {
                 filter.status = status;
             }
@@ -71,14 +71,14 @@ class ComplaintController {
             const scope = req.permission?.scope || "own";
 
             if (scope === "own") {
-                // Resident scope — only see own complaints
+                // Resident scope - only see own complaints
                 filter.raisedBy = req.user.id;
             } else if (scope === "assigned" || scope === "restricted" || req.user.role === "general_staff") {
-                // Staff / Vendor assigned scope — only see tickets assigned to them
+                // Staff / Vendor assigned scope - only see tickets assigned to them
                 const opsDb = getOperationsConnection();
                 const Staff = opsDb.model("Staff");
                 const Vendor = opsDb.model("Vendor");
-                
+
                 const [staffProfile, vendorProfile] = await Promise.all([
                     Staff.findOne({ societyId: req.societyId, userId: req.user.id }).select("_id").lean(),
                     Vendor.findOne({ societyId: req.societyId, userId: req.user.id }).select("_id").lean(),
@@ -110,8 +110,8 @@ class ComplaintController {
             const data = await ComplaintService.listComplaints({
                 societyId: req.societyId,
                 filter,
-                sort:  sort || "newest",
-                page:  parseInt(req.query.page, 10) || 1,
+                sort: sort || "newest",
+                page: parseInt(req.query.page, 10) || 1,
                 limit: parseInt(req.query.limit, 10) || 10,
             });
 
@@ -131,11 +131,11 @@ class ComplaintController {
             const isResident = scope === "own";
 
             const complaint = await ComplaintService.getComplaintById({
-                societyId:   req.societyId,
+                societyId: req.societyId,
                 complaintId: req.params.id,
-                userId:      req.user.id,
+                userId: req.user.id,
                 isResident,
-                userRole:    req.user.role,
+                userRole: req.user.role,
             });
 
             return sendSuccess(res, 200, "Complaint retrieved successfully.", complaint);
@@ -164,10 +164,10 @@ class ComplaintController {
     async confirmResolution(req, res, next) {
         try {
             const complaint = await ComplaintService.confirmResolution({
-                societyId:   req.societyId,
+                societyId: req.societyId,
                 complaintId: req.params.id,
-                userId:      req.user.id,
-                role:        req.user.role,
+                userId: req.user.id,
+                role: req.user.role,
             });
 
             return sendSuccess(res, 200, "Resolution confirmed. Complaint is now closed.", complaint);
@@ -184,10 +184,10 @@ class ComplaintController {
         try {
             const { reopeningRemarks } = req.body;
             const complaint = await ComplaintService.reopenComplaint({
-                societyId:       req.societyId,
-                complaintId:     req.params.id,
-                userId:          req.user.id,
-                role:            req.user.role,
+                societyId: req.societyId,
+                complaintId: req.params.id,
+                userId: req.user.id,
+                role: req.user.role,
                 reopeningRemarks,
             });
 
@@ -214,10 +214,10 @@ class ComplaintController {
             }
 
             const complaint = await ComplaintService.assignComplaint({
-                societyId:      req.societyId,
-                complaintId:    req.params.id,
-                assignedBy:     req.user.id,
-                role:           req.user.role,
+                societyId: req.societyId,
+                complaintId: req.params.id,
+                assignedBy: req.user.id,
+                role: req.user.role,
                 assignedToType,
                 assigneeId,
                 remarks,
@@ -243,12 +243,12 @@ class ComplaintController {
             }
 
             const complaint = await ComplaintService.updateComplaintStatus({
-                societyId:         req.societyId,
-                complaintId:       req.params.id,
-                newStatus:         status,
-                updatedBy:         req.user.id,
-                role:              req.user.role,
-                callerType:        "admin",
+                societyId: req.societyId,
+                complaintId: req.params.id,
+                newStatus: status,
+                updatedBy: req.user.id,
+                role: req.user.role,
+                callerType: "admin",
                 resolutionRemarks,
             });
 
@@ -265,7 +265,7 @@ class ComplaintController {
     async getComplaintHistory(req, res, next) {
         try {
             const history = await ComplaintService.getComplaintHistory({
-                societyId:   req.societyId,
+                societyId: req.societyId,
                 complaintId: req.params.id,
             });
 
@@ -341,7 +341,7 @@ class ComplaintController {
             const data = await ComplaintService.getVendorAssignedComplaints({
                 societyId: req.societyId,
                 vendorId,
-                page:  parseInt(req.query.page, 10) || 1,
+                page: parseInt(req.query.page, 10) || 1,
                 limit: parseInt(req.query.limit, 10) || 10,
             });
 
@@ -359,7 +359,7 @@ class ComplaintController {
         try {
             const vendorId = await VendorService.getVendorIdForUser(req.societyId, req.user.id);
             const complaint = await ComplaintService.getVendorComplaintById({
-                societyId:   req.societyId,
+                societyId: req.societyId,
                 vendorId,
                 complaintId: req.params.id,
             });
@@ -386,13 +386,13 @@ class ComplaintController {
             const vendorId = await VendorService.getVendorIdForUser(req.societyId, req.user.id);
 
             const complaint = await ComplaintService.updateComplaintStatus({
-                societyId:         req.societyId,
-                complaintId:       req.params.id,
-                newStatus:         status,
-                updatedBy:         req.user.id,
-                role:              req.user.role,
-                callerType:        "vendor",
-                assigneeId:        vendorId,
+                societyId: req.societyId,
+                complaintId: req.params.id,
+                newStatus: status,
+                updatedBy: req.user.id,
+                role: req.user.role,
+                callerType: "vendor",
+                assigneeId: vendorId,
                 resolutionRemarks,
             });
 

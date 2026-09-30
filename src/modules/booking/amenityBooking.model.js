@@ -4,11 +4,11 @@ const mongoose = require("mongoose");
 const { BOOKING_STATUS } = require("../../common/constants");
 
 /**
- * AmenityBooking — a resident's reservation of a society amenity for a specific date+slot.
+ * AmenityBooking - a resident's reservation of a society amenity for a specific date+slot.
  * Lives in mysociety_operations.amenitybookings
  *
  * The unique index on {societyId, amenityId, date, slot} prevents double-booking
- * at the database level — not just application level.
+ * at the database level - not just application level.
  */
 const amenityBookingSchema = new mongoose.Schema(
     {
@@ -85,9 +85,9 @@ const amenityBookingSchema = new mongoose.Schema(
 // DB-level double-booking prevention using partial unique index
 amenityBookingSchema.index(
     { societyId: 1, amenityId: 1, date: 1, slotId: 1 },
-    { 
-        unique: true, 
-        partialFilterExpression: { status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.CONFIRMED] } } 
+    {
+        unique: true,
+        partialFilterExpression: { status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.CONFIRMED] } }
     }
 );
 amenityBookingSchema.index({ societyId: 1, bookedBy: 1 });
