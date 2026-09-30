@@ -27,7 +27,7 @@ router.get(
     AmenityController.getAmenityById
 );
 
-// Availability check — residents use this to see open slots
+// Availability check - residents use this to see open slots
 router.get(
     "/:id/availability",
     checkPermission(MODULES.AMENITY_BOOKING, PERMISSION_LEVELS.VIEW),

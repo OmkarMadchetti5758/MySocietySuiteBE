@@ -1,12 +1,12 @@
 "use strict";
 
-const { getMasterConnection }     = require("../../config/masterDb");
+const { getMasterConnection } = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
 const { bustPermissionsVersionCache } = require("../../common/permissionsVersionCache");
 
 class RoleRepository {
     _masterDb() { return getMasterConnection(); }
-    _opsDb()    { return getOperationsConnection(); }
+    _opsDb() { return getOperationsConnection(); }
 
     async getPermissionCatalog() {
         const Permission = this._masterDb().model("Permission");
@@ -21,10 +21,10 @@ class RoleRepository {
         // Fetch both society-specific overrides and GLOBAL docs in one query
         const all = await Role.find({
             societyId: { $in: [societyId, "GLOBAL"] },
-            roleKey:   { $ne: "super_admin" },          // Super Admin is never shown
+            roleKey: { $ne: "super_admin" },          // Super Admin is never shown
         }).lean();
 
-        // Group by roleKey — society-specific wins over GLOBAL
+        // Group by roleKey - society-specific wins over GLOBAL
         const map = new Map();
         for (const doc of all) {
             const key = doc.roleKey;
@@ -79,24 +79,24 @@ class RoleRepository {
             // Create a new society-specific doc from GLOBAL
             doc = new Role({
                 societyId,
-                roleKey:      globalDoc.roleKey,
-                roleName:     globalDoc.roleName,
+                roleKey: globalDoc.roleKey,
+                roleName: globalDoc.roleName,
                 isSystemRole: globalDoc.isSystemRole,
-                isEditable:   globalDoc.isEditable,
-                permissions:  new Map(Object.entries(globalDoc.permissions || {})),
-                updatedAt:    new Date(),
-                updatedBy:    actorId,
+                isEditable: globalDoc.isEditable,
+                permissions: new Map(Object.entries(globalDoc.permissions || {})),
+                updatedAt: new Date(),
+                updatedBy: actorId,
             });
         }
 
         // Snapshot before-state for audit
         const before = Object.fromEntries(doc.permissions || new Map());
 
-        // Apply diff — only update moduleKeys present in the diff
+        // Apply diff - only update moduleKeys present in the diff
         for (const [moduleKey, patch] of Object.entries(permDiff)) {
             const existing = doc.permissions.get(moduleKey) || {};
             doc.permissions.set(moduleKey, {
-                access:  patch.access  !== undefined ? patch.access  : existing.access,
+                access: patch.access !== undefined ? patch.access : existing.access,
                 enabled: patch.enabled !== undefined ? patch.enabled : existing.enabled,
             });
         }
@@ -114,7 +114,7 @@ class RoleRepository {
         await this._writeAudit({
             societyId,
             roleKey,
-            changedBy:   actorId,
+            changedBy: actorId,
             changedByName: actorName,
             before,
             after,
@@ -128,7 +128,7 @@ class RoleRepository {
         const Role = this._masterDb().model("Role");
 
         const doc = await Role.findOne({ societyId, roleKey }).lean();
-        if (!doc) return null; // Nothing to reset — already at GLOBAL
+        if (!doc) return null; // Nothing to reset - already at GLOBAL
 
         const before = doc.permissions || {};
 
@@ -141,7 +141,7 @@ class RoleRepository {
         await this._writeAudit({
             societyId,
             roleKey,
-            changedBy:   actorId,
+            changedBy: actorId,
             changedByName: actorName,
             before,
             after,
@@ -157,7 +157,7 @@ class RoleRepository {
      */
     async bumpPermissionsVersion(societyId) {
         const masterDb = this._masterDb();
-        const Society  = masterDb.model("Society");
+        const Society = masterDb.model("Society");
         await Society.updateOne(
             { _id: societyId },
             { $inc: { permissionsVersion: 1 } }

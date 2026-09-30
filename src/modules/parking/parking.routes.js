@@ -1,13 +1,13 @@
 "use strict";
 
-const express          = require("express");
-const router           = express.Router();
-const controller       = require("./parking.controller");
-const authenticate     = require("../../middleware/authenticate");
-const injectSocietyId  = require("../../middleware/injectSocietyId");
-const checkPermission  = require("../../middleware/checkPermission");
-const authorize        = require("../../middleware/authorize");
-const upload           = require("../../middleware/upload.middleware");
+const express = require("express");
+const router = express.Router();
+const controller = require("./parking.controller");
+const authenticate = require("../../middleware/authenticate");
+const injectSocietyId = require("../../middleware/injectSocietyId");
+const checkPermission = require("../../middleware/checkPermission");
+const authorize = require("../../middleware/authorize");
+const upload = require("../../middleware/upload.middleware");
 
 const { MODULES, PERMISSION_LEVELS, ROLES } = require("../../common/constants");
 
@@ -41,7 +41,7 @@ router.get(
 // ── Parking Slots ──────────────────────────────────────────────────────────────
 
 /**
- * POST /parking/slots — Admin: create new slot
+ * POST /parking/slots - Admin: create new slot
  */
 router.post(
     "/slots",
@@ -50,7 +50,7 @@ router.post(
 );
 
 /**
- * GET /parking/slots — All: list slots (residents see all in their society for info)
+ * GET /parking/slots - All: list slots (residents see all in their society for info)
  */
 router.get(
     "/slots",
@@ -59,7 +59,7 @@ router.get(
 );
 
 /**
- * GET /parking/slots/:id — All: get single slot
+ * GET /parking/slots/:id - All: get single slot
  */
 router.get(
     "/slots/:id",
@@ -68,7 +68,7 @@ router.get(
 );
 
 /**
- * PATCH /parking/slots/:id — Admin: update slot details
+ * PATCH /parking/slots/:id - Admin: update slot details
  */
 router.patch(
     "/slots/:id",
@@ -77,7 +77,7 @@ router.patch(
 );
 
 /**
- * POST /parking/slots/:id/activate — Admin: activate slot
+ * POST /parking/slots/:id/activate - Admin: activate slot
  */
 router.post(
     "/slots/:id/activate",
@@ -86,7 +86,7 @@ router.post(
 );
 
 /**
- * POST /parking/slots/:id/deactivate — Admin: deactivate slot
+ * POST /parking/slots/:id/deactivate - Admin: deactivate slot
  */
 router.post(
     "/slots/:id/deactivate",
@@ -107,7 +107,7 @@ router.post(
 );
 
 /**
- * GET /parking/vehicles — List vehicles (scoped by role in service)
+ * GET /parking/vehicles - List vehicles (scoped by role in service)
  */
 router.get(
     "/vehicles",
@@ -125,7 +125,7 @@ router.get(
 );
 
 /**
- * PATCH /parking/vehicles/:id — Owner or Admin can update
+ * PATCH /parking/vehicles/:id - Owner or Admin can update
  */
 router.patch(
     "/vehicles/:id",
@@ -145,7 +145,7 @@ router.post(
 // ── Parking Assignments ────────────────────────────────────────────────────────
 
 /**
- * POST /parking/assignments — Admin only: allocate slot
+ * POST /parking/assignments - Admin only: allocate slot
  */
 router.post(
     "/assignments",
@@ -154,7 +154,7 @@ router.post(
 );
 
 /**
- * GET /parking/assignments — All: list (scoped in service)
+ * GET /parking/assignments - All: list (scoped in service)
  */
 router.get(
     "/assignments",
@@ -172,7 +172,7 @@ router.get(
 );
 
 /**
- * POST /parking/assignments/:id/release — Admin: release slot
+ * POST /parking/assignments/:id/release - Admin: release slot
  */
 router.post(
     "/assignments/:id/release",
@@ -181,7 +181,7 @@ router.post(
 );
 
 /**
- * POST /parking/assignments/:id/reassign — Admin: reassign slot
+ * POST /parking/assignments/:id/reassign - Admin: reassign slot
  */
 router.post(
     "/assignments/:id/reassign",
@@ -192,7 +192,7 @@ router.post(
 // ── Parking Requests ───────────────────────────────────────────────────────────
 
 /**
- * POST /parking/requests — Residents: submit parking request
+ * POST /parking/requests - Residents: submit parking request
  */
 router.post(
     "/requests",
@@ -202,7 +202,7 @@ router.post(
 );
 
 /**
- * GET /parking/requests — Residents: own; Admin: all
+ * GET /parking/requests - Residents: own; Admin: all
  */
 router.get(
     "/requests",
@@ -211,7 +211,7 @@ router.get(
 );
 
 /**
- * POST /parking/requests/:id/approve — Admin: approve (atomically allocates)
+ * POST /parking/requests/:id/approve - Admin: approve (atomically allocates)
  */
 router.post(
     "/requests/:id/approve",
@@ -220,7 +220,7 @@ router.post(
 );
 
 /**
- * POST /parking/requests/:id/reject — Admin: reject
+ * POST /parking/requests/:id/reject - Admin: reject
  */
 router.post(
     "/requests/:id/reject",
@@ -231,7 +231,7 @@ router.post(
 // ── Visitor Parking ────────────────────────────────────────────────────────────
 
 /**
- * POST /parking/visitor — Admin/Guard: create visitor session
+ * POST /parking/visitor - Admin/Guard: create visitor session
  */
 router.post(
     "/visitor",
@@ -240,7 +240,7 @@ router.post(
 );
 
 /**
- * GET /parking/visitor — View all visitor sessions
+ * GET /parking/visitor - View all visitor sessions
  */
 router.get(
     "/visitor",
@@ -258,7 +258,7 @@ router.get(
 );
 
 /**
- * POST /parking/visitor/:id/exit — Record visitor exit
+ * POST /parking/visitor/:id/exit - Record visitor exit
  */
 router.post(
     "/visitor/:id/exit",
@@ -269,7 +269,7 @@ router.post(
 // ── Parking Violations ─────────────────────────────────────────────────────────
 
 /**
- * POST /parking/violations — Admin/Guard: record violation. Supports image uploads.
+ * POST /parking/violations - Admin/Guard: record violation. Supports image uploads.
  */
 router.post(
     "/violations",
@@ -279,7 +279,7 @@ router.post(
 );
 
 /**
- * GET /parking/violations — List violations
+ * GET /parking/violations - List violations
  */
 router.get(
     "/violations",
@@ -288,7 +288,7 @@ router.get(
 );
 
 /**
- * PATCH /parking/violations/:id/resolve — Admin/Manager: resolve a violation
+ * PATCH /parking/violations/:id/resolve - Admin/Manager: resolve a violation
  */
 router.patch(
     "/violations/:id/resolve",

@@ -9,12 +9,12 @@ const getTenantConnection = async (databaseName) => {
 };
 
 const getActiveTenantConnections = () => {
-    console.warn("[DEPRECATED] getActiveTenantConnections() — per-tenant DBs retired.");
+    console.warn("[DEPRECATED] getActiveTenantConnections() - per-tenant DBs retired.");
     return [];
 };
 
 const closeAllTenantConnections = async () => {
-    console.warn("[DEPRECATED] closeAllTenantConnections() — no-op, per-tenant DBs retired.");
+    console.warn("[DEPRECATED] closeAllTenantConnections() - no-op, per-tenant DBs retired.");
 };
 
 module.exports = {

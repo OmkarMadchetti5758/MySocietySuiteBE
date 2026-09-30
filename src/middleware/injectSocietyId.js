@@ -4,15 +4,15 @@ const AppError = require("../common/AppError");
 const { ROLES } = require("../common/constants");
 
 /**
- * injectSocietyId — ensures every request has a valid societyId scope.
+ * injectSocietyId - ensures every request has a valid societyId scope.
  *
  * For normal authenticated users (non-Super Admin):
- *   - Sets req.societyId from req.user.societyId (comes from JWT — never from request body/query)
+ *   - Sets req.societyId from req.user.societyId (comes from JWT - never from request body/query)
  *   - Rejects the request if societyId is missing (e.g. a society-less user hitting a tenant endpoint)
  *
  * For Super Admins:
  *   - Allows an optional `x-society-id` header to scope a targeted society action
- *   - If no header, req.societyId remains null — Super Admin endpoints must explicitly
+ *   - If no header, req.societyId remains null - Super Admin endpoints must explicitly
  *     handle the null case (cross-society aggregation allowed, never accidental leakage)
  *
  * Usage: Add this middleware after `authenticate` on all society-scoped routes.

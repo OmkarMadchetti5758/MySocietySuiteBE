@@ -7,7 +7,7 @@ const { getOperationsConnection } = require("../../config/operationsDb");
  *
  * After migration to the shared-collection model, all methods:
  *   - Use getOperationsConnection() instead of a per-tenant DB connection
- *   - Require `societyId` as the first filter parameter — NEVER optional
+ *   - Require `societyId` as the first filter parameter - NEVER optional
  *   - Inject societyId into EVERY query so cross-society leakage is impossible
  *
  * SECURITY INVARIANT:
@@ -42,7 +42,7 @@ class UserRepository {
         const User = this._getModel();
         const query = [{ societyId }];
         const orConditions = [];
-        if (email)  orConditions.push({ email });
+        if (email) orConditions.push({ email });
         if (mobile) orConditions.push({ mobile });
 
         if (orConditions.length === 0) return null;

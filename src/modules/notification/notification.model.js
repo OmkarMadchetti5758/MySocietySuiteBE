@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { NOTIFICATION_TYPE } = require("../../common/constants");
 
 /**
- * Notification — push/in-app notifications sent to residents.
+ * Notification - push/in-app notifications sent to residents.
  * Lives in mysociety_operations.notifications
  */
 const notificationSchema = new mongoose.Schema(

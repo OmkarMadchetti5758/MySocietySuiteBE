@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * GuardGateAssignment — Maps a Guard to a Gate for a specific shift.
+ * GuardGateAssignment - Maps a Guard to a Gate for a specific shift.
  */
 const guardGateAssignmentSchema = new mongoose.Schema(
     {

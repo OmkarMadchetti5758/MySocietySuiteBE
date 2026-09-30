@@ -4,7 +4,7 @@
  * SLA Escalation Scheduler
  *
  * Runs periodically to find complaints that have breached their SLA window
- * and haven't been escalated yet. Safe to run multiple times — idempotent.
+ * and haven't been escalated yet. Safe to run multiple times - idempotent.
  *
  * Scheduling:
  *  - Runs every hour by default (configurable via SLA_CRON_INTERVAL_MS env var).
@@ -31,7 +31,7 @@ const runEscalation = async () => {
             console.log(`[SLA Scheduler] ✅ Escalated ${escalatedCount} complaint(s).`);
         }
     } catch (err) {
-        // Log but don't crash the process — scheduler will retry on next tick
+        // Log but don't crash the process - scheduler will retry on next tick
         console.error("[SLA Scheduler] ❌ Error during escalation run:", err.message);
     }
 };

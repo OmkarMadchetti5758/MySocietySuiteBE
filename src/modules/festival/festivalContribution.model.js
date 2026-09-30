@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { PAYMENT_STATUS, PAYMENT_METHOD } = require("../../common/constants");
 
 /**
- * FestivalContribution — individual flat's payment toward a festival collection.
+ * FestivalContribution - individual flat's payment toward a festival collection.
  * Lives in mysociety_operations.festivalcontributions
  */
 const festivalContributionSchema = new mongoose.Schema(

@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { VEHICLE_TYPE } = require("../../common/constants");
 
 /**
- * Vehicle — resident-owned vehicle registered with the society.
+ * Vehicle - resident-owned vehicle registered with the society.
  * Lives in mysociety_operations.vehicles
  *
  * Vehicle number uniqueness is enforced via a PARTIAL unique index

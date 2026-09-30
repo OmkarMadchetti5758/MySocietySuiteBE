@@ -37,7 +37,7 @@ const wingSchema = new mongoose.Schema(
 );
 
 /**
- * Block — one document per society, containing all its wings.
+ * Block - one document per society, containing all its wings.
  * Lives in mysociety_operations.blocks
  */
 const blockSchema = new mongoose.Schema(

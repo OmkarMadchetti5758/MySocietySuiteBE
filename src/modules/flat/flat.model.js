@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { FLAT_TYPE, FLAT_STATUS } = require("../../common/constants");
 
 /**
- * Flat — individual apartment/unit within a block.
+ * Flat - individual apartment/unit within a block.
  * Lives in mysociety_operations.flats
  */
 const flatSchema = new mongoose.Schema(

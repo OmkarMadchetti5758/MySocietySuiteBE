@@ -538,8 +538,8 @@ const createTransfer = async (req, res, next, _skipSession = false) => {
             session.startTransaction();
             useTransaction = true; // only set true if both calls succeed
         } catch (sessionErr) {
-            // Standalone MongoDB — no replica set, cannot use transactions
-            if (session) { try { session.endSession(); } catch (_) {} }
+            // Standalone MongoDB - no replica set, cannot use transactions
+            if (session) { try { session.endSession(); } catch (_) { } }
             session = null;
             useTransaction = false;
         }
@@ -693,7 +693,7 @@ const createTransfer = async (req, res, next, _skipSession = false) => {
 
         return sendSuccess(res, 201, "Account transfer executed successfully", transfer);
     } catch (err) {
-        // Standalone MongoDB: startTransaction() doesn't throw eagerly —
+        // Standalone MongoDB: startTransaction() doesn't throw eagerly -
         // it only fails when an operation with { session } is actually executed.
         // Detect this error family and retry without sessions.
         const isTransactionUnsupported =
@@ -707,15 +707,15 @@ const createTransfer = async (req, res, next, _skipSession = false) => {
             ));
 
         if (useTransaction && session && isTransactionUnsupported) {
-            try { await session.abortTransaction(); } catch (_) {}
-            try { session.endSession(); } catch (_) {}
-            // Retry WITHOUT sessions — pass _skipSession=true to prevent infinite recursion
+            try { await session.abortTransaction(); } catch (_) { }
+            try { session.endSession(); } catch (_) { }
+            // Retry WITHOUT sessions - pass _skipSession=true to prevent infinite recursion
             return createTransfer(req, res, next, true);
         }
 
         if (useTransaction && session) {
-            try { await session.abortTransaction(); } catch (_) {}
-            try { session.endSession(); } catch (_) {}
+            try { await session.abortTransaction(); } catch (_) { }
+            try { session.endSession(); } catch (_) { }
         }
         next(err);
     }

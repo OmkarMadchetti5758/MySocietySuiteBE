@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Amenity — a bookable facility within a society (e.g. clubhouse, pool, gym).
+ * Amenity - a bookable facility within a society (e.g. clubhouse, pool, gym).
  * Lives in mysociety_operations.amenities
  */
 const amenitySchema = new mongoose.Schema(

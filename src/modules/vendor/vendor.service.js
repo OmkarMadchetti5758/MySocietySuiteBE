@@ -85,7 +85,7 @@ class VendorService {
 
         // Society-scoped uniqueness: same name + serviceCategory within a society
         // NOTE: this is a check-then-act guard only. The real guarantee comes from
-        // the unique compound index defined in vendor.model.js — under concurrent
+        // the unique compound index defined in vendor.model.js - under concurrent
         // requests this findOne can race, but the index will reject the duplicate
         // insert and surface as a Mongo E11000 error (handle that in your global
         // error middleware / map it to VENDOR_ALREADY_EXISTS there too).
@@ -106,7 +106,7 @@ class VendorService {
             await session.withTransaction(async () => {
                 // Create the User record with status=invited
                 // NOTE: verify this literal "vendor" matches ROLES.VENDOR exactly
-                // (case-sensitivity) — the vendor-portal routes gate on
+                // (case-sensitivity) - the vendor-portal routes gate on
                 // authorize(ROLES.VENDOR), and a mismatch here will silently lock
                 // every invited vendor out of their own portal after activation.
                 const newUser = await User.create([{
@@ -351,7 +351,7 @@ class VendorService {
             throw new AppError("Vendor not found.", 404, "VENDOR_NOT_FOUND");
         }
 
-        // Block deletion while the vendor still has open/in-progress tasks —
+        // Block deletion while the vendor still has open/in-progress tasks -
         // otherwise those Complaints are left with a dangling assignedVendorId
         // pointing at a vendor that no longer exists.
         const activeAssignmentCount = await Complaint.countDocuments({
@@ -448,7 +448,7 @@ class VendorService {
                     throw new AppError("Task is already closed.", 400, "TASK_ALREADY_CLOSED");
                 }
 
-                // 2. Idempotency — same vendor already assigned
+                // 2. Idempotency - same vendor already assigned
                 if (task.assignedVendorId && task.assignedVendorId.toString() === vendorId.toString()) {
                     throw new AppError(
                         "Task is already assigned to this vendor.",
@@ -523,7 +523,7 @@ class VendorService {
     }
 
     /**
-     * Returns a single task — enforces double ownership check.
+     * Returns a single task - enforces double ownership check.
      */
     async getVendorTaskById(societyId, vendorId, taskId) {
         const opsDb = getOperationsConnection();
@@ -610,7 +610,7 @@ class VendorService {
         );
 
         if (!updated) {
-            // Task was reassigned or closed between the read and write — race condition caught
+            // Task was reassigned or closed between the read and write - race condition caught
             throw new AppError(
                 "This task is no longer assigned to you or is no longer open.",
                 403,

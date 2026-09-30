@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { DOCUMENT_TYPE } = require("../../common/constants");
 
 /**
- * Document — society documents (meeting minutes, circulars, legal papers, etc.)
+ * Document - society documents (meeting minutes, circulars, legal papers, etc.)
  * Lives in mysociety_operations.documents
  */
 const documentSchema = new mongoose.Schema(
@@ -54,7 +54,7 @@ const documentSchema = new mongoose.Schema(
         blockId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Block",
-            required: function() {
+            required: function () {
                 return this.visibilityScope === 'Specific Block';
             }
         },

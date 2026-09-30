@@ -77,9 +77,9 @@ function isResidentScope(req, viewAllPermissionKey) {
 }
 
 function getPagination(query) {
-    const page  = Math.max(1, parseInt(query.page)  || 1);
+    const page = Math.max(1, parseInt(query.page) || 1);
     const limit = Math.min(100, parseInt(query.limit) || 20);
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
     return { page, limit, skip };
 }
 
@@ -209,7 +209,7 @@ class AdvanceAccountsService {
     }
 
     /**
-     * Credit advance account — used for explicit advance payments or overpayments (admin/accountant)
+     * Credit advance account - used for explicit advance payments or overpayments (admin/accountant)
      * Accepts paymentMode, referenceNumber, transactionDate for offline payment metadata.
      */
     static async creditAdvanceAccount(req, accountId, { amount, transactionType = "ADVANCE_RECEIVED", referenceType, referenceId, description, idempotencyKey, paymentMode, referenceNumber, transactionDate, notes }) {
@@ -703,7 +703,7 @@ class AdvanceAccountsService {
 
         const filter = { advanceAccountId: new mongoose.Types.ObjectId(accountId), societyId: account.societyId };
         if (req.query.startDate) filter.createdAt = { $gte: new Date(req.query.startDate) };
-        if (req.query.endDate)   filter.createdAt = { ...filter.createdAt, $lte: new Date(req.query.endDate) };
+        if (req.query.endDate) filter.createdAt = { ...filter.createdAt, $lte: new Date(req.query.endDate) };
 
         const [transactions, total] = await Promise.all([
             AdvanceTransaction.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
@@ -713,13 +713,15 @@ class AdvanceAccountsService {
         // Aggregate totals
         const agg = await AdvanceTransaction.aggregate([
             { $match: filter },
-            { $group: {
-                _id: "$direction",
-                total: { $sum: "$amount" },
-            }},
+            {
+                $group: {
+                    _id: "$direction",
+                    total: { $sum: "$amount" },
+                }
+            },
         ]);
         const credits = agg.find(a => a._id === "CREDIT")?.total || 0;
-        const debits  = agg.find(a => a._id === "DEBIT")?.total  || 0;
+        const debits = agg.find(a => a._id === "DEBIT")?.total || 0;
 
         return {
             account,
@@ -776,12 +778,14 @@ class AdvanceAccountsService {
                 ResidentAdvanceAccount.findOne({ societyId, residentId: residentObjectId, status: { $in: ["ACTIVE", "ZERO_BALANCE"] } }).lean(),
                 SecurityDeposit.aggregate([
                     { $match: { societyId, residentId: residentObjectId, status: { $in: ["ACTIVE", "PARTIALLY_ADJUSTED", "REFUND_PENDING", "PARTIALLY_REFUNDED"] } } },
-                    { $group: {
-                        _id: null,
-                        totalHeld: { $sum: "$originalAmount" },
-                        refundableBalance: { $sum: "$refundableBalance" },
-                        count: { $sum: 1 },
-                    }},
+                    {
+                        $group: {
+                            _id: null,
+                            totalHeld: { $sum: "$originalAmount" },
+                            refundableBalance: { $sum: "$refundableBalance" },
+                            count: { $sum: 1 },
+                        }
+                    },
                 ]),
                 DepositRefundRequest.countDocuments({ societyId, residentId: residentObjectId, status: { $in: ["REQUESTED", "UNDER_REVIEW", "APPROVED"] } }),
             ]);
@@ -810,34 +814,40 @@ class AdvanceAccountsService {
         const [advanceStats, sdStats, advancePeriodStats, refundPendingCount] = await Promise.all([
             ResidentAdvanceAccount.aggregate([
                 { $match: { societyId, status: { $in: ["ACTIVE", "ZERO_BALANCE"] } } },
-                { $group: {
-                    _id: null,
-                    totalBalance: { $sum: "$currentBalance" },
-                    count: { $sum: 1 },
-                    withBalance: { $sum: { $cond: [{ $gt: ["$currentBalance", 0] }, 1, 0] } },
-                }},
+                {
+                    $group: {
+                        _id: null,
+                        totalBalance: { $sum: "$currentBalance" },
+                        count: { $sum: 1 },
+                        withBalance: { $sum: { $cond: [{ $gt: ["$currentBalance", 0] }, 1, 0] } },
+                    }
+                },
             ]),
             SecurityDeposit.aggregate([
                 { $match: { societyId, status: { $in: ["ACTIVE", "PARTIALLY_ADJUSTED", "REFUND_PENDING", "PARTIALLY_REFUNDED"] } } },
-                { $group: {
-                    _id: null,
-                    totalHeld: { $sum: "$originalAmount" },
-                    refundableBalance: { $sum: "$refundableBalance" },
-                    count: { $sum: 1 },
-                }},
+                {
+                    $group: {
+                        _id: null,
+                        totalHeld: { $sum: "$originalAmount" },
+                        refundableBalance: { $sum: "$refundableBalance" },
+                        count: { $sum: 1 },
+                    }
+                },
             ]),
             AdvanceTransaction.aggregate([
                 { $match: { societyId, createdAt: { $gte: periodStart } } },
-                { $group: {
-                    _id: "$transactionType",
-                    total: { $sum: "$amount" },
-                }},
+                {
+                    $group: {
+                        _id: "$transactionType",
+                        total: { $sum: "$amount" },
+                    }
+                },
             ]),
             DepositRefundRequest.countDocuments({ societyId, status: { $in: ["REQUESTED", "UNDER_REVIEW", "APPROVED"] } }),
         ]);
 
         const advReceived = advancePeriodStats.find(s => s._id === "ADVANCE_RECEIVED")?.total || 0;
-        const advUsed     = advancePeriodStats.find(s => s._id === "INVOICE_ALLOCATION")?.total || 0;
+        const advUsed = advancePeriodStats.find(s => s._id === "INVOICE_ALLOCATION")?.total || 0;
 
         return {
             advance: {
@@ -1119,7 +1129,7 @@ class SecurityDepositService {
 
             deposit.adjustedAmount = (deposit.adjustedAmount || 0) + numAmount;
             deposit.refundableBalance = deposit.originalAmount - deposit.adjustedAmount - deposit.refundedAmount;
-            
+
             if (deposit.refundableBalance <= 0) {
                 deposit.status = "REFUNDED";
             } else if (deposit.status !== "REFUND_PENDING" && deposit.status !== "PARTIALLY_REFUNDED") {

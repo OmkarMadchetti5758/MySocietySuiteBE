@@ -8,10 +8,10 @@ const BRAND = "MySocietySuite";
 const OTP_TTL_MINUTES = env.OTP_EXPIRES_IN_MINUTES || 10;
 
 const PURPOSE_LABELS = {
-    manager_invite:  "manager onboarding",
+    manager_invite: "manager onboarding",
     resident_invite: "resident onboarding",
-    staff_invite:    "staff onboarding",
-    vendor_invite:   "vendor onboarding",
+    staff_invite: "staff onboarding",
+    vendor_invite: "vendor onboarding",
 };
 
 function looksLikeEmail(value) {
@@ -85,7 +85,7 @@ class EmailService {
         }
 
         if (!this._isConfigured()) {
-            console.warn("[EmailService] SMTP not configured — email not sent");
+            console.warn("[EmailService] SMTP not configured - email not sent");
             return { sent: false, to, skipped: true };
         }
 

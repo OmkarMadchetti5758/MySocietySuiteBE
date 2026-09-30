@@ -4,10 +4,10 @@ const mongoose = require("mongoose");
 const { VISITOR_PARKING_STATUS, VEHICLE_TYPE } = require("../../common/constants");
 
 /**
- * VisitorParking — records visitor vehicle parking sessions.
+ * VisitorParking - records visitor vehicle parking sessions.
  * Lives in mysociety_operations.visitorparkings
  *
- * Visitor slots (type=VISITOR) only — cannot use resident slots.
+ * Visitor slots (type=VISITOR) only - cannot use resident slots.
  */
 const visitorParkingSchema = new mongoose.Schema(
     {

@@ -166,12 +166,12 @@ const ParkingService = {
         const { page, limit, skip } = getPaginationOptions(query);
 
         const filter = { societyId };
-        if (query.status)  filter.status = query.status;
-        if (query.type)    filter.type   = query.type;
-        if (query.wing)    filter.wing   = query.wing;
-        if (query.floor)   filter.floor  = query.floor;
+        if (query.status) filter.status = query.status;
+        if (query.type) filter.type = query.type;
+        if (query.wing) filter.wing = query.wing;
+        if (query.floor) filter.floor = query.floor;
         if (query.isActive !== undefined) filter.isActive = query.isActive === "true";
-        if (query.search)  filter.slotNumber = { $regex: query.search, $options: "i" };
+        if (query.search) filter.slotNumber = { $regex: query.search, $options: "i" };
 
         const [slots, total] = await Promise.all([
             ParkingSlot.find(filter).sort({ slotNumber: 1 }).skip(skip).limit(limit).lean(),
@@ -491,10 +491,10 @@ const ParkingService = {
         if (isResidentRole(requestingUserRole)) {
             filter.userId = requestingUserId;
         } else {
-            if (query.userId)  filter.userId  = query.userId;
-            if (query.flatId)  filter.flatId  = query.flatId;
-            if (query.type)    filter.type    = query.type;
-            if (query.search)  filter.regNumber = { $regex: normalizeRegNumber(query.search), $options: "i" };
+            if (query.userId) filter.userId = query.userId;
+            if (query.flatId) filter.flatId = query.flatId;
+            if (query.type) filter.type = query.type;
+            if (query.search) filter.regNumber = { $regex: normalizeRegNumber(query.search), $options: "i" };
             if (query.isActive !== undefined) {
                 filter.isActive = query.isActive === "true";
                 delete filter.isActive; // handled below
@@ -679,7 +679,7 @@ const ParkingService = {
         if (!updatedSlot)
             throw new AppError("Parking slot is no longer available.", 409, "PARKING_SLOT_NOT_AVAILABLE");
 
-        // 6. Create assignment — partial unique index guards against concurrent duplicates
+        // 6. Create assignment - partial unique index guards against concurrent duplicates
         try {
             const assignment = await ParkingAssignment.create({
                 societyId,
@@ -717,10 +717,10 @@ const ParkingService = {
         if (isResidentRole(requestingUserRole)) {
             filter.userId = requestingUserId;
         } else {
-            if (query.status)   filter.status   = query.status;
-            if (query.flatId)   filter.flatId   = query.flatId;
-            if (query.userId)   filter.userId   = query.userId;
-            if (query.slotId)   filter.parkingSlotId = query.slotId;
+            if (query.status) filter.status = query.status;
+            if (query.flatId) filter.flatId = query.flatId;
+            if (query.userId) filter.userId = query.userId;
+            if (query.slotId) filter.parkingSlotId = query.slotId;
         }
 
         const [assignments, total] = await Promise.all([
@@ -921,7 +921,7 @@ const ParkingService = {
             },
         });
 
-        // Update request status atomically — prevents double-approval
+        // Update request status atomically - prevents double-approval
         const updated = await ParkingRequest.findOneAndUpdate(
             { _id: requestId, status: PARKING_REQUEST_STATUS.PENDING },
             {
@@ -936,7 +936,7 @@ const ParkingService = {
         );
 
         if (!updated) {
-            // Another admin approved concurrently — rollback the assignment we just created
+            // Another admin approved concurrently - rollback the assignment we just created
             await ParkingService.releaseParking({
                 assignmentId: assignment._id,
                 societyId,
@@ -1044,7 +1044,7 @@ const ParkingService = {
         const { page, limit, skip } = getPaginationOptions(query);
 
         const filter = { societyId };
-        if (query.status)     filter.status     = query.status;
+        if (query.status) filter.status = query.status;
         if (query.hostFlatId) filter.hostFlatId = query.hostFlatId;
 
         const [sessions, total] = await Promise.all([
@@ -1133,7 +1133,7 @@ const ParkingService = {
         if (isResidentRole(requestingUserRole)) {
             filter.reportedBy = requestingUserId;
         } else {
-            if (query.status)       filter.status       = query.status;
+            if (query.status) filter.status = query.status;
             if (query.violationType) filter.violationType = query.violationType;
         }
 
@@ -1174,7 +1174,7 @@ const ParkingService = {
         violation.resolvedBy = resolvedByUserId;
         violation.resolvedAt = new Date();
         if (resolutionNotes) violation.resolutionNote = resolutionNotes;
-        
+
         await violation.save();
         return violation;
     },
@@ -1188,9 +1188,9 @@ const ParkingService = {
         if (isResidentRole(requestingUserRole)) {
             filter.userId = requestingUserId;
         } else {
-            if (query.status)  filter.status  = query.status;
-            if (query.flatId)  filter.flatId  = query.flatId;
-            if (query.slotId)  filter.parkingSlotId = query.slotId;
+            if (query.status) filter.status = query.status;
+            if (query.flatId) filter.flatId = query.flatId;
+            if (query.slotId) filter.parkingSlotId = query.slotId;
         }
 
         const [history, total] = await Promise.all([

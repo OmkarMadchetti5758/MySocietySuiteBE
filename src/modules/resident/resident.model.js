@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { RESIDENT_TYPE } = require("../../common/constants");
 
 /**
- * Resident — links a user to a flat within a society.
+ * Resident - links a user to a flat within a society.
  * Lives in mysociety_operations.residents
  */
 const residentSchema = new mongoose.Schema(

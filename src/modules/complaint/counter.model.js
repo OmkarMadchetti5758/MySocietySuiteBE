@@ -3,7 +3,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Counter — atomic sequence counter for human-readable unique ID generation.
+ * Counter - atomic sequence counter for human-readable unique ID generation.
  * Lives in mysociety_operations.counters
  *
  * Uses MongoDB's atomic findOneAndUpdate($inc) to guarantee uniqueness

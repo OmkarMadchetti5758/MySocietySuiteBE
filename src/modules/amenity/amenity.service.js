@@ -183,7 +183,7 @@ class AmenityService {
 
         const availability = slots.map(slot => {
             const isBooked = bookedSet.has(slot._id.toString());
-            // For same day — slot must not have started yet
+            // For same day - slot must not have started yet
             const slotStarted = targetDate.getTime() === today.getTime() && slot.startTime <= nowHHMM;
             return {
                 ...slot,

@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { STAFF_TYPE } = require("../../common/constants");
 
 /**
- * Staff — society-employed or contracted staff member.
+ * Staff - society-employed or contracted staff member.
  * Lives in mysociety_operations.staff
  */
 const staffSchema = new mongoose.Schema(

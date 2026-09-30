@@ -1,10 +1,10 @@
 "use strict";
 
 const mongoose = require("mongoose");
-const crypto   = require("crypto");
+const crypto = require("crypto");
 
 /**
- * OTP — Master DB
+ * OTP - Master DB
  *
  * Stores hashed one-time passwords for identity verification.
  * Currently used for the manager invite onboarding flow.
@@ -14,7 +14,7 @@ const crypto   = require("crypto");
  *   - lastResendAt: timestamp of last resend (for 30s cooldown check)
  *
  * Design choices:
- *   - Code is stored hashed (SHA-256) — never plaintext
+ *   - Code is stored hashed (SHA-256) - never plaintext
  *   - TTL index on expiresAt auto-removes expired docs
  *   - attempts is incremented on every failed verify call (max: 5)
  *   - verified: true once user enters correct code; allows resuming flow
@@ -47,7 +47,7 @@ const otpSchema = new mongoose.Schema(
         expiresAt: {
             type: Date,
             required: true,
-            // 10-minute window — set in service layer
+            // 10-minute window - set in service layer
         },
         attempts: {
             type: Number,
@@ -57,7 +57,7 @@ const otpSchema = new mongoose.Schema(
         verified: {
             type: Boolean,
             default: false,
-            // Set to true on successful verification — allows resuming flow
+            // Set to true on successful verification - allows resuming flow
         },
 
         // ── Rate Limiting ──────────────────────────────────────────────────────

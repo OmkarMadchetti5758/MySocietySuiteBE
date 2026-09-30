@@ -91,7 +91,7 @@ class VendorController {
 
     async reassignTask(req, res, next) {
         try {
-            // Reassign uses the same atomic flow as assign — history is preserved in the service
+            // Reassign uses the same atomic flow as assign - history is preserved in the service
             const data = await VendorService.assignTask(
                 req.societyId,
                 req.params.taskId,

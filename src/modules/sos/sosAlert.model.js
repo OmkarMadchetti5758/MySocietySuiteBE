@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { SOS_STATUS } = require("../../common/constants");
 
 /**
- * SOSAlert — Emergency alerts triggered by residents.
+ * SOSAlert - Emergency alerts triggered by residents.
  */
 const sosAlertSchema = new mongoose.Schema(
     {
