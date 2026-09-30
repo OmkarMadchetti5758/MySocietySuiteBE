@@ -13,7 +13,7 @@ router.use(authenticate, injectSocietyId);
 
 router.get(
     "/",
-    checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.VIEW),
+    checkPermission([MODULES.SOCIETY_FLAT_SETUP, MODULES.VISITOR_MANAGEMENT], PERMISSION_LEVELS.VIEW),
     BlockController.getWings.bind(BlockController)
 );
 router.put(

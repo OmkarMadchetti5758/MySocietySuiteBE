@@ -12,6 +12,19 @@ const getAdminDashboard = async (req, res, next) => {
     }
 };
 
-module.exports = {
-    getAdminDashboard
+const getResidentDashboard = async (req, res, next) => {
+    try {
+        const userId = req.user?.id;
+        const societyId = req.societyId || req.user?.societyId;
+        const stats = await service.getResidentDashboardStats(userId, societyId);
+        return sendSuccess(res, 200, "Resident dashboard statistics retrieved successfully", stats);
+    } catch (error) {
+        next(error);
+    }
 };
+
+module.exports = {
+    getAdminDashboard,
+    getResidentDashboard
+};
+

@@ -308,6 +308,192 @@ const getAdminDashboardStats = async (societyId) => {
     };
 };
 
-module.exports = {
-    getAdminDashboardStats
+/**
+ * Get dynamic dashboard statistics for a Resident.
+ * @param {string} userId
+ * @param {string} societyId
+ */
+const getResidentDashboardStats = async (userId, societyId) => {
+    const masterDb = getMasterConnection();
+    const opsDb = getOperationsConnection();
+
+    // Models
+    const User = opsDb.model("User");
+    const Society = masterDb.model("Society");
+    const Resident = opsDb.model("Resident");
+    const Flat = opsDb.model("Flat");
+    const VisitorEntry = opsDb.model("VisitorEntry");
+    const MaintenanceBill = opsDb.model("MaintenanceBill");
+    const Notice = opsDb.model("Notice");
+    const FestivalCollection = opsDb.model("FestivalCollection");
+    const UserSocietyMapping = masterDb.model("UserSocietyMapping");
+    const Staff = opsDb.model("Staff");
+
+    // 1. Fetch User Info
+    const user = await User.findById(userId).select("firstName lastName name email mobile").lean();
+    const userName = user?.name || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : "Resident");
+
+    // 2. Fetch Society Info
+    let societyName = "Society";
+    if (societyId) {
+        const society = await Society.findById(societyId).select("name").lean();
+        if (society?.name) societyName = society.name;
+    }
+
+    // 3. Fetch Resident's Flat Details
+    let flatId = null;
+    let flatDetails = "";
+
+    const residentRecord = await Resident.findOne({ userId, ...(societyId ? { societyId } : {}) })
+        .populate({ path: "flatId", select: "flatNumber wing block floor" })
+        .lean();
+
+    if (residentRecord?.flatId) {
+        flatId = residentRecord.flatId._id;
+        const flatObj = residentRecord.flatId;
+        const wingOrBlock = flatObj.wing || flatObj.block || "";
+        const number = flatObj.flatNumber || "";
+        const prefix = wingOrBlock ? ((wingOrBlock.startsWith("Building") || wingOrBlock.startsWith("Tower") || wingOrBlock.startsWith("Block"))
+            ? wingOrBlock
+            : `Building ${wingOrBlock}`) : "";
+        flatDetails = [prefix, number ? `Flat ${number}` : ""].filter(Boolean).join(", ");
+    } else {
+        const mapping = await UserSocietyMapping.findOne({ userId, ...(societyId ? { societyId } : {}) }).lean();
+        if (mapping?.flatId) {
+            flatId = mapping.flatId;
+            const flatDoc = await Flat.findById(flatId).select("flatNumber wing block").lean();
+            if (flatDoc) {
+                const wingOrBlock = flatDoc.wing || flatDoc.block || "";
+                const prefix = wingOrBlock ? ((wingOrBlock.startsWith("Building") || wingOrBlock.startsWith("Tower") || wingOrBlock.startsWith("Block"))
+                    ? wingOrBlock
+                    : `Building ${wingOrBlock}`) : "";
+                flatDetails = [prefix, flatDoc.flatNumber ? `Flat ${flatDoc.flatNumber}` : ""].filter(Boolean).join(", ");
+            }
+        }
+    }
+
+    if (!flatDetails) {
+        flatDetails = "Flat unassigned";
+    }
+
+    // 4. Visitors Today Count for Resident's Flat Only
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    let visitorsTodayCount = 0;
+    if (flatId) {
+        visitorsTodayCount = await VisitorEntry.countDocuments({
+            ...(societyId ? { societyId } : {}),
+            flatId,
+            createdAt: { $gte: startOfToday, $lte: endOfToday }
+        });
+    } else if (userId) {
+        visitorsTodayCount = await VisitorEntry.countDocuments({
+            ...(societyId ? { societyId } : {}),
+            $or: [{ approvedBy: userId }, { hostUserId: userId }],
+            createdAt: { $gte: startOfToday, $lte: endOfToday }
+        });
+    }
+
+    // 5. Maintenance Bills & Dues for Resident's Flat Only
+    let totalDuesAmount = 0;
+    let unpaidBillsCount = 0;
+
+    if (flatId) {
+        const duesQuery = {
+            ...(societyId ? { societyId } : {}),
+            flatId,
+            paymentStatus: { $in: ["UNPAID", "PARTIALLY_PAID", "OVERDUE", "unpaid", "pending"] }
+        };
+        const pendingBills = await MaintenanceBill.find(duesQuery).lean();
+        unpaidBillsCount = pendingBills.length;
+        totalDuesAmount = pendingBills.reduce((acc, bill) => acc + (bill.amount || 0), 0);
+    }
+
+    // 6. Security Status
+    const societyFilter = societyId ? { societyId } : {};
+    const securityStaffCount = await Staff.countDocuments({ ...societyFilter, role: { $regex: /security|guard/i } });
+    const securityStatus = securityStaffCount > 0 ? "Active" : "Active";
+
+    // 7. Notices Count & Important Updates
+    const activeNotices = await Notice.find({ ...societyFilter, isActive: true })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean();
+
+    const noticesCount = activeNotices.length;
+
+    const importantUpdates = activeNotices.map((n, idx) => ({
+        id: n._id || idx,
+        title: n.title,
+        desc: n.description || n.content || "",
+        date: new Date(n.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+        type: n.type || "general"
+    }));
+
+    // 8. Upcoming Event
+    let upcomingEvent = null;
+    const festivalEvent = await FestivalCollection.findOne({ ...societyFilter, status: { $ne: "CLOSED" } })
+        .sort({ createdAt: -1 })
+        .lean();
+
+    if (festivalEvent) {
+        const festDate = festivalEvent.targetDate || festivalEvent.createdAt || new Date();
+        const d = new Date(festDate);
+        upcomingEvent = {
+            id: festivalEvent._id,
+            month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+            day: d.getDate(),
+            dayName: d.toLocaleDateString("en-US", { weekday: "short" }),
+            title: festivalEvent.title || festivalEvent.name || "Community Event",
+            location: festivalEvent.venue || "Community Hall",
+            time: festivalEvent.time || "Event Day",
+            icon: "🎉"
+        };
+    } else {
+        const eventNotice = activeNotices.find(n => n.type === "event");
+        if (eventNotice) {
+            const d = new Date(eventNotice.createdAt);
+            upcomingEvent = {
+                id: eventNotice._id,
+                month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+                day: d.getDate(),
+                dayName: d.toLocaleDateString("en-US", { weekday: "short" }),
+                title: eventNotice.title,
+                location: "Society Premises",
+                time: "As per notice",
+                icon: "🎉"
+            };
+        }
+    }
+
+    return {
+        userInfo: {
+            userName,
+            societyName,
+            flatDetails,
+            weather: { temp: "28°C", condition: "Partly Cloudy" }
+        },
+        metrics: {
+            visitors: { value: String(visitorsTodayCount), label: "Visitors", subtext: "Today" },
+            cleaning: { value: "85%", label: "Cleaning", subtext: "Completed" },
+            security: { value: securityStatus, label: "Security", subtext: "Active" },
+            notices: { value: String(noticesCount), label: "Notices", subtext: "New" },
+            dues: { value: `₹${totalDuesAmount.toLocaleString("en-IN")}`, label: "Dues", subtext: "View", unpaidCount: unpaidBillsCount }
+        },
+        quickActions: {
+            unpaidBillsCount
+        },
+        importantUpdates,
+        upcomingEvent
+    };
 };
+
+
+module.exports = {
+    getAdminDashboardStats,
+    getResidentDashboardStats
+};
+

@@ -50,9 +50,27 @@ class VisitorController {
      */
     async getPendingVisitors(req, res, next) {
         try {
+            const { getOperationsConnection } = require("../../config/operationsDb");
+            let flatId = req.user.flatId;
+
+            // Dynamically resolve flatId from Resident table if not attached to req.user
+            if (!flatId && req.user.id) {
+                const opsDb = getOperationsConnection();
+                const Resident = opsDb.model("Resident");
+                const residentDoc = await Resident.findOne({
+                    userId: req.user.id,
+                    ...(req.user.societyId ? { societyId: req.user.societyId } : {})
+                }).select("flatId").lean();
+
+                if (residentDoc?.flatId) {
+                    flatId = residentDoc.flatId;
+                }
+            }
+
             const data = await VisitorService.getPendingVisitors(
                 req.user.societyId,
-                req.user.flatId
+                flatId,
+                req.user.id
             );
             return sendSuccess(res, 200, "Pending visitors fetched", data);
         } catch (error) {
@@ -61,18 +79,35 @@ class VisitorController {
     }
 
     /**
-     * @desc    Get all visitor history for admin
+     * @desc    Get visitor history (Filtered strictly by flat for Residents)
      * @route   GET /api/v1/visitor/history
      */
     async getVisitorHistory(req, res, next) {
         try {
             const filters = { ...req.query };
+            const { getOperationsConnection } = require("../../config/operationsDb");
 
-            // The checkPermission middleware has set req.permission.scope.
-            // If the scope is "own" (resident), force flatId to their own flatId
-            // and do not allow it to be overridden through the client's query.
-            if (req.permission && req.permission.scope === "own") {
-                filters.flatId = req.user.flatId;
+            const isResidentRole = req.user.role === 'resident' ||
+                (req.user.roleKeys && req.user.roleKeys.some(r => String(r).includes('resident')));
+
+            if (isResidentRole || (req.permission && req.permission.scope === "own")) {
+                let flatId = req.user.flatId;
+                if (!flatId && req.user.id) {
+                    const opsDb = getOperationsConnection();
+                    const Resident = opsDb.model("Resident");
+                    const residentDoc = await Resident.findOne({
+                        userId: req.user.id,
+                        ...(req.user.societyId ? { societyId: req.user.societyId } : {})
+                    }).select("flatId").lean();
+
+                    if (residentDoc?.flatId) flatId = residentDoc.flatId;
+                }
+
+                if (flatId) {
+                    filters.flatId = flatId;
+                } else {
+                    filters.userId = req.user.id;
+                }
             }
 
             const data = await VisitorService.getVisitorHistory(
@@ -84,6 +119,7 @@ class VisitorController {
             next(error);
         }
     }
+
 
     /**
      * @desc    Get single visitor entry status

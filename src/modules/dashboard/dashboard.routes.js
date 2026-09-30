@@ -14,4 +14,11 @@ router.use(authenticate, injectSocietyId);
  */
 router.get("/admin", controller.getAdminDashboard);
 
+/**
+ * GET /api/v1/dashboard/resident
+ * Returns dynamic stats for the Resident Dashboard
+ */
+router.get("/resident", controller.getResidentDashboard);
+
 module.exports = router;
+

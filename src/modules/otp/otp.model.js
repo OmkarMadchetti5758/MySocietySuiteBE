@@ -87,11 +87,12 @@ otpSchema.index({ identifier: 1, purpose: 1, societyId: 1 }, { unique: true });
 
 // ── Static Helpers ─────────────────────────────────────────────────────────────
 otpSchema.statics.generateCode = function () {
-    // Hardcode OTP to 123456 in development, else generate cryptographically random 6-digit OTP
-    const code = process.env.NODE_ENV !== "production" ? "123456" : String(crypto.randomInt(100000, 999999));
+    // Generate cryptographically random 6-digit OTP
+    const code = String(crypto.randomInt(100000, 999999));
     const codeHash = crypto.createHash("sha256").update(code).digest("hex");
     return { code, codeHash };
 };
+
 
 otpSchema.statics.hashCode = function (code) {
     return crypto.createHash("sha256").update(String(code)).digest("hex");
