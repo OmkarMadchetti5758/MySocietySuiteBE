@@ -173,6 +173,17 @@ class AuthService {
 
         const societyId = mappings[0].societyId;
         const OtpService = require("../otp/otp.service");
+        
+        // Find user to check if they have email address
+        const user = await AuthRepository.findUserByIdentifier(societyId, mobile);
+        if (user && user.email) {
+            try {
+                await OtpService.sendOtp(user.email, "guard_login", societyId);
+            } catch (e) {
+                console.error("[guardSendOtp] Email OTP error:", e.message);
+            }
+        }
+
         return await OtpService.sendOtp(mobile, "guard_login", societyId);
     }
 
@@ -188,10 +199,27 @@ class AuthService {
         }
 
         const OtpService = require("../otp/otp.service");
-        await OtpService.verifyOtp(mobile, otp, "guard_login", societyId);
-
         const user = await AuthRepository.findUserByIdentifier(societyId, mobile);
+
+        let verified = false;
+        try {
+            await OtpService.verifyOtp(mobile, otp, "guard_login", societyId);
+            verified = true;
+        } catch (mobileErr) {
+            if (user && user.email) {
+                try {
+                    await OtpService.verifyOtp(user.email, otp, "guard_login", societyId);
+                    verified = true;
+                } catch (_) {
+                    throw mobileErr;
+                }
+            } else {
+                throw mobileErr;
+            }
+        }
+
         if (!user) throw new AppError(AUTH_ERRORS.USER_NOT_FOUND, 404);
+
 
         if (!user.isActive) {
             // Auto-activate the guard upon first successful OTP login

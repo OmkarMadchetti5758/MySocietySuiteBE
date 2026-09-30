@@ -26,32 +26,39 @@ class VisitorService {
             status: VISITOR_STATUS.PENDING
         });
 
-        // Notify all residents of the flat via socket
-        // Residents are stored in UserSocietyMapping (master DB) with flatId + resident roleKey
+        // Notify all residents of the target flat via socket
         try {
             const Mapping = masterDb.model("UserSocietyMapping");
-            const residentMappings = await Mapping.find({
-                societyId: data.societyId,
-                flatId: data.flatId,
-                status: "active",
-                roleKeys: { $in: ["resident_owner", "resident_tenant"] }
-            }).lean();
+            const Resident = opsDb.model("Resident");
+
+            const [residentMappings, residentDocs] = await Promise.all([
+                Mapping.find({
+                    societyId: data.societyId,
+                    flatId: data.flatId,
+                    status: "active"
+                }).select("userId").lean(),
+                Resident.find({
+                    societyId: data.societyId,
+                    flatId: data.flatId,
+                    isActive: true
+                }).select("userId").lean()
+            ]);
+
+            const targetUserIds = new Set();
+            residentMappings.forEach(m => m.userId && targetUserIds.add(m.userId.toString()));
+            residentDocs.forEach(r => r.userId && targetUserIds.add(r.userId.toString()));
 
             const io = getIO();
-            if (residentMappings && residentMappings.length > 0) {
-                residentMappings.forEach(mapping => {
-                    if (mapping.userId) {
-                        io.to(`user_${mapping.userId.toString()}`).emit("visitor-approval-request", entry);
-                    }
-                });
-            }
+            targetUserIds.forEach(uId => {
+                io.to(`user_${uId}`).emit("visitor-approval-request", entry);
+            });
         } catch (notifyErr) {
-            // Non-blocking: log but don't fail the entry creation
             console.error("[VisitorService] Failed to notify residents:", notifyErr.message);
         }
 
         return entry;
     }
+
 
     async approveVisitor(entryId, societyId, residentId, status) {
         const opsDb = getOperationsConnection();
@@ -230,24 +237,24 @@ class VisitorService {
         return { qrPass, entry };
     }
 
-    async getPendingVisitors(societyId, flatId) {
+    async getPendingVisitors(societyId, flatId, userId) {
         const opsDb = getOperationsConnection();
         const VisitorEntry = opsDb.model("VisitorEntry");
 
         const query = { societyId, status: VISITOR_STATUS.PENDING };
-        console.log('getPendingVisitors query --> ', query);
 
         if (flatId) {
             query.flatId = flatId;
+        } else if (userId) {
+            query.$or = [{ approvedBy: userId }, { hostUserId: userId }];
+        } else {
+            // Do NOT return all visitors if flatId/userId is missing for a resident
+            return [];
         }
 
-        console.log('Flat Id -->', flatId);
-
         const entries = await VisitorEntry.find(query)
-            // .populate("flatId")
             .sort({ createdAt: -1 })
             .lean();
-        console.log("Entries in society status pending --->", entries)
         return entries;
     }
 
@@ -258,15 +265,17 @@ class VisitorService {
         const query = { societyId };
         if (filters.status) query.status = filters.status;
         if (filters.flatId) query.flatId = filters.flatId;
+        if (filters.userId) query.$or = [{ approvedBy: filters.userId }, { hostUserId: filters.userId }];
         if (filters.category) query.category = filters.category;
 
         const entries = await VisitorEntry.find(query)
             .sort({ createdAt: -1 })
             .limit(100)
             .lean();
- 
+
         return entries;
     }
+
 
     async getVisitorById(entryId, societyId) {
         const opsDb = getOperationsConnection();

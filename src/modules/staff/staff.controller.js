@@ -10,6 +10,26 @@ const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repo
 const { canonicalPhone, canonicalIdentifier } = require("../../common/loginIdentifier");
 const { FRONTEND_URL } = require("../../config/env");
 
+/**
+ * Map a staff designation string to the correct system role key.
+ * Security guards must get ROLES.SECURITY_GUARD, not ROLES.GENERAL_STAFF,
+ * so they see the Guard dashboard and have the correct permissions.
+ */
+const DESIGNATION_TO_ROLE = {
+    security_guard: ROLES.SECURITY_GUARD,
+    security:       ROLES.SECURITY_GUARD,
+    guard:          ROLES.SECURITY_GUARD,
+    guard_manager:  ROLES.GUARD_MANAGER,
+    facility_manager: ROLES.FACILITY_MANAGER,
+    accountant:     ROLES.ACCOUNTANT,
+    vendor_manager: ROLES.VENDOR_MANAGER,
+};
+
+function resolveUserRoleFromDesignation(designation) {
+    if (!designation) return ROLES.GENERAL_STAFF;
+    return DESIGNATION_TO_ROLE[designation.toLowerCase().trim()] || ROLES.GENERAL_STAFF;
+}
+
 exports.addStaff = async (req, res, next) => {
     try {
         const { name, mobile, email, designation, shiftTiming, gateOrArea, address } = req.body;
@@ -41,6 +61,9 @@ exports.addStaff = async (req, res, next) => {
             return next(new AppError("A user with this mobile number or email already exists in this society", 409));
         }
 
+        // Resolve the correct system role based on the designation chosen
+        const userRole = resolveUserRoleFromDesignation(designation);
+
         let user;
         let staff;
         let plainToken;
@@ -50,7 +73,7 @@ exports.addStaff = async (req, res, next) => {
                 societyId,
                 name: name.trim(),
                 mobile: mobileCanonical,
-                role: ROLES.GENERAL_STAFF,
+                role: userRole,
                 status: "invited",
                 isActive: false,
             };
@@ -76,7 +99,7 @@ exports.addStaff = async (req, res, next) => {
                 userId: user._id,
                 email: emailCanonical,
                 mobile: mobileCanonical,
-                roleKeys: [ROLES.GENERAL_STAFF],
+                roleKeys: [userRole],
             });
 
             // Generate invite token (same mechanism as resident)
@@ -201,6 +224,7 @@ exports.updateStaff = async (req, res, next) => {
             return next(new AppError("Name, designation, and shiftTiming are required", 400));
         }
 
+        const masterDb = getMasterConnection();
         const opsDb = getOperationsConnection();
         const Staff = opsDb.model("Staff");
         const User = opsDb.model("User");
@@ -219,7 +243,21 @@ exports.updateStaff = async (req, res, next) => {
         await staff.save();
 
         if (staff.userId) {
-            await User.updateOne({ _id: staff.userId, societyId: req.societyId }, { name });
+            // Resolve the correct system role from the new designation
+            const newUserRole = resolveUserRoleFromDesignation(designation);
+
+            // Update User.role and name
+            await User.updateOne(
+                { _id: staff.userId, societyId: req.societyId },
+                { name, role: newUserRole }
+            );
+
+            // Update UserSocietyMapping roleKeys
+            const Mapping = masterDb.model("UserSocietyMapping");
+            await Mapping.updateMany(
+                { userId: staff.userId, societyId: req.societyId },
+                { $set: { roleKeys: [newUserRole] } }
+            );
         }
 
         return sendSuccess(res, 200, "Staff updated successfully", staff);
