@@ -157,7 +157,7 @@ class ResidentRepository {
                 userId: user._id,
                 residentType,
                 isActive: true,
-                moveInDate: new Date(),
+                moveInDate: data.moveInDate ? new Date(data.moveInDate) : new Date(),
             });
 
             // Update flat's ownerName so it shows correctly in the Guard's Walk-in Visitor dropdown

@@ -2,6 +2,7 @@
 
 const ResidentService = require("./resident.service");
 const { sendSuccess } = require("../../utils/response.utils");
+const AppError = require("../../common/AppError");
 
 class ResidentController {
     async getResidents(req, res, next) {
@@ -9,6 +10,45 @@ class ResidentController {
             const { page, limit, search } = req.query;
             const result = await ResidentService.getResidents(req.societyId, page, limit, search);
             return sendSuccess(res, 200, "Residents retrieved successfully", result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // download bulk upload template for residents
+    async downloadBulkUploadTemplate(req, res, next) {
+        try {
+            const buffer = ResidentService.generateResidentBulkUploadTemplate();
+
+            res.setHeader(
+                "Content-Type",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            );
+
+            res.setHeader(
+                "Content-Disposition",
+                'attachment; filename="resident-bulk-upload-template.xlsx"'
+            );
+
+            return res.send(buffer);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // bulk upload residents from Excel
+    async bulkUploadResidents(req, res, next) {
+        try {
+            if (!req.file) {
+                throw new AppError("Please select an Excel (.xlsx) file to upload", 400);
+            }
+
+            const result = await ResidentService.processResidentBulkUpload(
+                req.societyId,
+                req.file.buffer
+            );
+
+            return sendSuccess(res, 200, "Bulk upload processed", result);
         } catch (error) {
             next(error);
         }
