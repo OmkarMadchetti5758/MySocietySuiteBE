@@ -263,6 +263,21 @@ class AdvanceAccountsService {
 
             await session.commitTransaction();
 
+            // Post to ledger: Dr Bank/Cash, Cr Advance from Members
+            await LedgerPostingService.autoPost("advance-deposit-credit", () =>
+                LedgerPostingService.postAdvanceDeposit({
+                    societyId,
+                    userId: req.user.id,
+                    transaction: txn[0],
+                    amount: numAmount,
+                    financialAccountId: null,
+                    paymentMode: paymentMode || "BANK_TRANSFER",
+                    residentId: account.residentId,
+                    flatId: account.flatId,
+                    db: req.opsDb,
+                })
+            );
+
             await logBillingAction({
                 req,
                 action: "BILLING.ADVANCE.CREDIT",
@@ -399,6 +414,21 @@ class AdvanceAccountsService {
             }], { session });
 
             await session.commitTransaction();
+
+            // Post to ledger: Dr Bank, Cr Advance from Members
+            await LedgerPostingService.autoPost("advance-online-top-up", () =>
+                LedgerPostingService.postAdvanceDeposit({
+                    societyId,
+                    userId: req.user.id,
+                    transaction: txn,
+                    amount: numAmount,
+                    financialAccountId: null,
+                    paymentMode: "ONLINE",
+                    residentId: account.residentId,
+                    flatId: account.flatId,
+                    db: req.opsDb,
+                })
+            );
 
             await logBillingAction({
                 req,
@@ -668,6 +698,19 @@ class AdvanceAccountsService {
             }], { session });
 
             await session.commitTransaction();
+
+            // Post to ledger: Dr Advance from Members, Cr Bank
+            await LedgerPostingService.autoPost("advance-refund", () =>
+                LedgerPostingService.postAdvanceRefund({
+                    societyId,
+                    userId: req.user.id,
+                    transaction: txn,
+                    amount: numAmount,
+                    residentId: account.residentId,
+                    flatId: account.flatId,
+                    db: req.opsDb,
+                })
+            );
 
             await logBillingAction({
                 req,
@@ -1155,6 +1198,18 @@ class SecurityDepositService {
             }], { session });
 
             await session.commitTransaction();
+
+            // Post to ledger: Dr Security Deposit Liability, Cr Members' Receivable
+            await LedgerPostingService.autoPost("security-deposit-adjusted", () =>
+                LedgerPostingService.postSecurityDepositAdjusted({
+                    societyId,
+                    userId: req.user.id,
+                    deposit: deposit.toObject(),
+                    amount: numAmount,
+                    reason,
+                    db: req.opsDb,
+                })
+            );
 
             await logBillingAction({
                 req,

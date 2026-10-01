@@ -64,7 +64,7 @@ const advanceTransactionSchema = new mongoose.Schema(
 );
 
 advanceTransactionSchema.index({ societyId: 1, advanceAccountId: 1, createdAt: -1 });
-advanceTransactionSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+advanceTransactionSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $exists: true, $ne: null } } });
 
 // ── 3. Advance Allocation ────────────────────────────────────────────────────
 const advanceAllocationSchema = new mongoose.Schema(
@@ -93,7 +93,7 @@ const advanceAllocationSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-advanceAllocationSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+advanceAllocationSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $exists: true, $ne: null } } });
 
 // ── 4. Security Deposit Type ────────────────────────────────────────────────
 const securityDepositTypeSchema = new mongoose.Schema(
@@ -161,7 +161,7 @@ const securityDepositSchema = new mongoose.Schema(
 
 securityDepositSchema.index({ societyId: 1, residentId: 1, status: 1 });
 securityDepositSchema.index({ societyId: 1, flatId: 1, status: 1 });
-securityDepositSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+securityDepositSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $exists: true, $ne: null } } });
 
 // ── 6. Security Deposit Transaction ─────────────────────────────────────────
 const securityDepositTransactionSchema = new mongoose.Schema(
@@ -194,7 +194,7 @@ const securityDepositTransactionSchema = new mongoose.Schema(
 );
 
 securityDepositTransactionSchema.index({ societyId: 1, securityDepositId: 1, createdAt: -1 });
-securityDepositTransactionSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+securityDepositTransactionSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $exists: true, $ne: null } } });
 
 // ── 7. Deposit Refund Request ────────────────────────────────────────────────
 const depositRefundRequestSchema = new mongoose.Schema(
@@ -253,7 +253,7 @@ const depositRefundRequestSchema = new mongoose.Schema(
 );
 
 depositRefundRequestSchema.index({ societyId: 1, securityDepositId: 1, status: 1 });
-depositRefundRequestSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
+depositRefundRequestSchema.index({ societyId: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $exists: true, $ne: null } } });
 
 // ── Model Factory ────────────────────────────────────────────────────────────
 function getAdvanceDepositModels(db) {

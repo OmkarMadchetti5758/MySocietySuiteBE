@@ -159,6 +159,64 @@ class LedgerPostingService {
         });
     }
 
+    // 3b. Direct advance deposit (admin offline credit or resident online top-up)
+    static async postAdvanceDeposit({ societyId, userId, transaction, amount, financialAccountId, paymentMode, residentId, flatId, db, session }) {
+        const advanceAcc = await this.getSystemAccount(societyId, "2010", db);
+        const bankAccId = await this.resolveBankOrCashGl(
+            societyId,
+            financialAccountId,
+            db,
+            { preferCash: String(paymentMode || "").toUpperCase() === "CASH" }
+        );
+
+        const lines = [
+            { accountId: bankAccId, debit: amount, description: `Advance Deposit Received`, residentId, flatId },
+            { accountId: advanceAcc, credit: amount, description: `Advance Account Credited`, residentId, flatId }
+        ];
+
+        return LedgerService.postJournalEntry({
+            societyId, userId, userRole: "system", description: `Advance Deposit: ${amount}`,
+            transactionDate: new Date(), referenceType: "ADVANCE_RECEIVED", referenceId: transaction._id,
+            lines, idempotencyKey: `ADV-DEP-${transaction._id}`, isAutomatic: true, residentId, flatId, db, session
+        });
+    }
+
+    // 3c. Advance refund (advance balance returned to resident)
+    static async postAdvanceRefund({ societyId, userId, transaction, amount, residentId, flatId, db, session }) {
+        const advanceAcc = await this.getSystemAccount(societyId, "2010", db);
+        const bankAccId = await this.resolveBankOrCashGl(societyId, null, db);
+
+        const lines = [
+            { accountId: advanceAcc, debit: amount, description: `Advance Refunded to Resident`, residentId, flatId },
+            { accountId: bankAccId, credit: amount, description: `Advance Refund Disbursed`, residentId, flatId }
+        ];
+
+        return LedgerService.postJournalEntry({
+            societyId, userId, userRole: "admin", description: `Advance Refund: ${amount}`,
+            transactionDate: new Date(), referenceType: "ADVANCE_REFUND", referenceId: transaction._id,
+            lines, idempotencyKey: `ADV-REF-${transaction._id}`, isAutomatic: true, residentId, flatId, db, session
+        });
+    }
+
+    // 9c. Security deposit adjusted against dues (partial/full deduction from deposit)
+    static async postSecurityDepositAdjusted({ societyId, userId, deposit, amount, reason, db, session }) {
+        const sdAcc = await this.getSystemAccount(societyId, "2020", db);
+        const receivableAcc = await this.getSystemAccount(societyId, "1021", db);
+        const residentId = deposit.residentId;
+        const flatId = deposit.flatId;
+
+        const lines = [
+            { accountId: sdAcc, debit: amount, description: `Security Deposit Adjusted: ${reason || ''}`, residentId, flatId },
+            { accountId: receivableAcc, credit: amount, description: `Deposit Adjustment vs Dues`, residentId, flatId }
+        ];
+
+        return LedgerService.postJournalEntry({
+            societyId, userId, userRole: "admin", description: `Security Deposit Adjusted: ${reason || ''}`,
+            transactionDate: new Date(), referenceType: "DEPOSIT_ADJUSTMENT", referenceId: deposit._id,
+            lines, idempotencyKey: `SD-ADJ-${deposit._id}-${Date.now()}`, isAutomatic: true, residentId, flatId, db, session
+        });
+    }
+
     // 4. Advance auto-settles an invoice
     static async postAdvanceSettlement({ societyId, userId, invoice, advanceAmount, db, session }) {
         const advanceAcc = await this.getSystemAccount(societyId, "2010", db);
@@ -259,15 +317,23 @@ class LedgerPostingService {
         const sdAcc = await this.getSystemAccount(societyId, "2020", db);
         const bankAccId = await this.resolveBankOrCashGl(societyId, financialAccountId, db);
 
+        // SecurityDeposit model uses originalAmount / collectedAmount (no bare `amount` field)
+        const amount = Number(deposit.amount || deposit.originalAmount || deposit.collectedAmount || 0);
+        if (amount <= 0) return null;
+
+        const residentId = deposit.residentId || deposit.userId;
+        const flatId = deposit.flatId;
+
         const lines = [
-            { accountId: bankAccId, debit: deposit.amount, description: `Security Deposit Received`, residentId: deposit.userId || deposit.residentId, flatId: deposit.flatId },
-            { accountId: sdAcc, credit: deposit.amount, description: `Security Deposit`, residentId: deposit.userId || deposit.residentId, flatId: deposit.flatId }
+            { accountId: bankAccId, debit: amount, description: `Security Deposit Received`, residentId, flatId },
+            { accountId: sdAcc, credit: amount, description: `Security Deposit`, residentId, flatId }
         ];
 
         return LedgerService.postJournalEntry({
             societyId, userId, userRole: "system", description: `Security Deposit Received`,
-            transactionDate: deposit.paymentDate || new Date(), referenceType: "SECURITY_DEPOSIT", referenceId: deposit._id,
-            lines, idempotencyKey: `SD-REC-${deposit._id}`, isAutomatic: true, residentId: deposit.userId, flatId: deposit.flatId, db, session
+            transactionDate: deposit.receivedDate || deposit.paymentDate || new Date(),
+            referenceType: "SECURITY_DEPOSIT", referenceId: deposit._id,
+            lines, idempotencyKey: `SD-REC-${deposit._id}`, isAutomatic: true, residentId, flatId, db, session
         });
     }
 
@@ -276,15 +342,22 @@ class LedgerPostingService {
         const sdAcc = await this.getSystemAccount(societyId, "2020", db);
         const bankAccId = await this.resolveBankOrCashGl(societyId, financialAccountId, db);
 
+        // deposit.amount is explicitly set by the caller in processRefund; fall back to originalAmount if absent
+        const amount = Number(deposit.amount || deposit.originalAmount || 0);
+        if (amount <= 0) return null;
+
+        const residentId = deposit.residentId || deposit.userId;
+        const flatId = deposit.flatId;
+
         const lines = [
-            { accountId: sdAcc, debit: deposit.amount, description: `Security Deposit Refund`, residentId: deposit.userId || deposit.residentId, flatId: deposit.flatId },
-            { accountId: bankAccId, credit: deposit.amount, description: `Security Deposit Refund`, residentId: deposit.userId || deposit.residentId, flatId: deposit.flatId }
+            { accountId: sdAcc, debit: amount, description: `Security Deposit Refund`, residentId, flatId },
+            { accountId: bankAccId, credit: amount, description: `Security Deposit Refund`, residentId, flatId }
         ];
 
         return LedgerService.postJournalEntry({
             societyId, userId, userRole: "admin", description: `Security Deposit Refunded`,
             transactionDate: new Date(), referenceType: "DEPOSIT_REFUND", referenceId: deposit._id,
-            lines, idempotencyKey: `SD-REF-${deposit._id}`, isAutomatic: true, residentId: deposit.userId, flatId: deposit.flatId, db, session
+            lines, idempotencyKey: `SD-REF-${deposit._id}`, isAutomatic: true, residentId, flatId, db, session
         });
     }
 
