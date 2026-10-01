@@ -6,6 +6,10 @@ const AppError = require("../../common/AppError");
 const { RESIDENT_ERRORS } = require("./resident.constants");
 const emailService = require("../../services/email.service");
 const { FRONTEND_URL } = require("../../config/env");
+const {
+    generateResidentBulkUploadTemplate,
+    processResidentBulkUpload,
+} = require("./residentBulkUpload.service");
 
 class ResidentService {
     async getResidents(societyId, page, limit, search) {
@@ -100,6 +104,15 @@ class ResidentService {
 
     async deleteResident(societyId, userId) {
         return ResidentRepository.deleteResident(societyId, userId);
+    }
+
+    // Resident bulk upload template
+    generateResidentBulkUploadTemplate() {
+        return generateResidentBulkUploadTemplate();
+    }
+
+    async processResidentBulkUpload(societyId, fileBuffer) {
+        return processResidentBulkUpload(societyId, fileBuffer);
     }
 }
 
