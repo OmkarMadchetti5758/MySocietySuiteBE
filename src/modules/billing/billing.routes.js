@@ -289,9 +289,19 @@ router.get(
     BillingController.getMyLedger
 );
 router.get(
+    "/audit-logs/transaction-types",
+    requireBillingPermission(BILLING_PERMISSIONS.AUDIT_LOG_VIEW),
+    BillingController.getAuditLogTransactionTypes
+);
+router.get(
     "/audit-logs",
     requireBillingPermission(BILLING_PERMISSIONS.AUDIT_LOG_VIEW),
     BillingController.getAuditLogs
+);
+router.get(
+    "/audit-logs/:id",
+    requireBillingPermission(BILLING_PERMISSIONS.AUDIT_LOG_VIEW),
+    BillingController.getAuditLogDetails
 );
 
 // ── 7. Fines, Interest & Arrears (Dunning) ────────────────────────────────

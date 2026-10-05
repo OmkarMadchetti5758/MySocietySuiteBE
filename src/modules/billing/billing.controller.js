@@ -2,7 +2,7 @@
 
 const BillingService = require("./billing.service");
 const InvoiceService = require("./invoice.service");
-const { sendSuccess } = require("../../utils/response.utils");
+const { sendSuccess, sendError } = require("../../utils/response.utils");
 const { getBillingAuditModel } = require("../../services/billingAudit.service");
 
 class BillingController {
@@ -444,12 +444,83 @@ class BillingController {
 
     static async getAuditLogs(req, res, next) {
         try {
+            const { userId, fromDate, toDate, transactionType, page = 1, limit = 20, sortBy = "timestamp", sortOrder = "desc" } = req.query;
             const AuditModel = getBillingAuditModel(req.opsDb);
-            const logs = await AuditModel.find({ societyId: req.user.societyId })
-                .sort({ createdAt: -1 })
-                .limit(100)
-                .lean();
-            return sendSuccess(res, 200, "Billing audit logs fetched successfully", logs);
+            
+            const query = { societyId: req.user.societyId };
+            
+            if (userId) {
+                query.userId = userId;
+            }
+            if (transactionType) {
+                query.transactionType = transactionType;
+            }
+            if (fromDate || toDate) {
+                query.timestamp = {};
+                if (fromDate) {
+                    query.timestamp.$gte = new Date(fromDate);
+                }
+                if (toDate) {
+                    const endDate = new Date(toDate);
+                    endDate.setHours(23, 59, 59, 999);
+                    query.timestamp.$lte = endDate;
+                }
+            }
+
+            const parsedPage = parseInt(page, 10) || 1;
+            const parsedLimit = parseInt(limit, 10) || 20;
+            const skip = (parsedPage - 1) * parsedLimit;
+            
+            const sortField = sortBy || "timestamp";
+            const sortDir = sortOrder.toLowerCase() === "asc" ? 1 : -1;
+
+            const [logs, total] = await Promise.all([
+                AuditModel.find(query)
+                    .sort({ [sortField]: sortDir })
+                    .skip(skip)
+                    .limit(parsedLimit)
+                    .populate("userId", "firstName lastName name")
+                    .lean(),
+                AuditModel.countDocuments(query)
+            ]);
+
+            return sendSuccess(res, 200, "Billing audit logs fetched successfully", {
+                data: logs,
+                pagination: {
+                    page: parsedPage,
+                    limit: parsedLimit,
+                    total,
+                    totalPages: Math.ceil(total / parsedLimit) || 1
+                }
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async getAuditLogTransactionTypes(req, res, next) {
+        try {
+            const AuditModel = getBillingAuditModel(req.opsDb);
+            const types = await AuditModel.distinct("transactionType", { societyId: req.user.societyId });
+            return sendSuccess(res, 200, "Transaction types fetched successfully", types);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    static async getAuditLogDetails(req, res, next) {
+        try {
+            const AuditModel = getBillingAuditModel(req.opsDb);
+            const log = await AuditModel.findOne({ 
+                _id: req.params.id,
+                societyId: req.user.societyId 
+            }).populate("userId", "firstName lastName name").lean();
+            
+            if (!log) {
+                return sendError(res, 404, "Audit log not found");
+            }
+            
+            return sendSuccess(res, 200, "Audit log details fetched successfully", log);
         } catch (err) {
             next(err);
         }

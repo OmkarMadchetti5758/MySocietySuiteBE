@@ -702,6 +702,7 @@ class InvoiceService {
             resource: "BillingInvoice",
             resourceId: invoice._id,
             amount: totalAmount,
+            afterValue: invoice,
             details: { invoiceNumber, flatId, billingPeriod, isBulk },
         });
 
@@ -893,6 +894,7 @@ class InvoiceService {
             resource: "BillingInvoice",
             resourceId: invoice._id,
             amount,
+            afterValue: payment,
             details: { receiptNumber, paymentMode, paymentAccount, newStatus, excessAmount },
         });
 
