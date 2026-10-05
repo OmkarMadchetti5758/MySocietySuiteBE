@@ -45,6 +45,26 @@ const vendorSchema = new mongoose.Schema(
             trim: true,
             uppercase: true,
         },
+        // ── FR-B11.3 TDS fields ────────────────────────────────────────────
+        // PAN: stored in full; UI masking enforced at controller layer (AXXXXXX1234X → AXXXX1234X).
+        // TODO(BA): confirm TDS applicability per vendor category.
+        pan: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            default: null,
+        },
+        // TDS category: maps to the statutory section (e.g. "CONTRACTOR", "PROFESSIONAL")
+        // Rates per category configured separately; NOT hardcoded here (BRD silent).
+        tdsCategory: {
+            type: String,
+            default: null,
+        },
+        tdsApplicable: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
         status: {
             type: String,
             enum: ["INVITED", "ACTIVE", "INACTIVE"],

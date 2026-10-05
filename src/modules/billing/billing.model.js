@@ -79,6 +79,8 @@ const billingConfigurationSchema = new mongoose.Schema(
         billingDay: { type: Number, min: 1, max: 28, default: 1 },
         dueDays: { type: Number, min: 1, max: 90, default: 10 },
         arrearsDisplayMode: { type: String, enum: ["SINGLE_TOTAL", "LINE_BY_LINE"], default: "SINGLE_TOTAL" },
+        // Late fee charged per overdue invoice at the time a new invoice is generated
+        lateFeePerOverdueInvoice: { type: Number, min: 0, default: 0 },
         defaultTaxSettings: {
             taxName: { type: String, default: "GST" },
             taxRate: { type: Number, default: 18 },
@@ -326,6 +328,16 @@ const vendorPaymentSchema = new mongoose.Schema(
         paidBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
         paidAt: { type: Date, default: null },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+        // ── FR-B11.3 TDS fields ───────────────────────────────────────────────
+        // TDS rates per vendor category are NOT hardcoded (BRD silent; configurable per vendor).
+        // TODO(BA): confirm TDS sections/rates per vendor category.
+        tdsApplicable: { type: Boolean, default: false, index: true },
+        tdsSection:    { type: String, default: null },   // e.g. "194C", "194J"
+        tdsRate:       { type: Number, default: null },   // e.g. 1, 2, 10 (percent)
+        tdsAmount:     { type: Number, default: 0, min: 0 }, // deducted TDS in rupees
+        netPaid:       { type: Number, default: null },   // amount - tdsAmount
+        challanRef:    { type: String, default: null },   // optional challan reference
     },
     { timestamps: true }
 );
@@ -343,6 +355,7 @@ vendorPaymentSchema.index({ societyId: 1, vendorId: 1, status: 1 });
 vendorPaymentSchema.index({ societyId: 1, createdAt: -1 });
 vendorPaymentSchema.index({ societyId: 1, workOrderId: 1 });
 vendorPaymentSchema.index({ societyId: 1, purchaseId: 1 });
+vendorPaymentSchema.index({ societyId: 1, tdsApplicable: 1, paidAt: -1 }); // FR-B11.3
 
 // ── 7. Annual Budget Schema ────────────────────────────────────────────────
 const annualBudgetSchema = new mongoose.Schema(
