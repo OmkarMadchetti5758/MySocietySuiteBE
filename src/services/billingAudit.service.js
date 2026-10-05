@@ -16,6 +16,9 @@ const billingAuditLogSchema = new mongoose.Schema(
             required: true,
             index: true,
         },
+        userName: {
+            type: String,
+        },
         userRole: {
             type: String,
             required: true,
@@ -24,39 +27,62 @@ const billingAuditLogSchema = new mongoose.Schema(
             type: String,
             required: true,
             index: true,
-            // e.g. "BILLING.CREDIT_NOTE.CREATE", "BILLING.CREDIT_NOTE.APPROVE"
         },
-        resource: {
+        module: {
             type: String,
-            required: true,
-            // e.g. "CreditNote", "Invoice", "ChargeHead"
+            default: "Accounting",
         },
-        resourceId: {
+        transactionType: {
             type: String,
-            default: null,
+            index: true,
         },
-        status: {
+        entityType: {
             type: String,
-            enum: ["SUCCESS", "DENIED", "FAILED"],
-            default: "SUCCESS",
         },
-        amount: {
-            type: Number,
-            default: null,
+        entityId: {
+            type: mongoose.Schema.Types.ObjectId,
         },
-        details: {
+        transactionId: {
+            type: String,
+        },
+        orderId: {
+            type: String,
+        },
+        referenceId: {
+            type: String,
+        },
+        description: {
+            type: String,
+        },
+        beforeValue: {
+            type: mongoose.Schema.Types.Mixed,
+        },
+        afterValue: {
+            type: mongoose.Schema.Types.Mixed,
+        },
+        metadata: {
             type: mongoose.Schema.Types.Mixed,
             default: {},
         },
-        ipAddress: {
-            type: String,
-            default: null,
+        timestamp: {
+            type: Date,
+            default: Date.now,
+            index: true,
         },
+        // Legacy fields for backward compatibility
+        resource: { type: String },
+        resourceId: { type: String },
+        status: { type: String },
+        amount: { type: Number },
+        details: { type: mongoose.Schema.Types.Mixed },
+        ipAddress: { type: String },
     },
     { timestamps: true }
 );
 
-billingAuditLogSchema.index({ societyId: 1, createdAt: -1 });
+billingAuditLogSchema.index({ societyId: 1, timestamp: -1 });
+billingAuditLogSchema.index({ societyId: 1, userId: 1, timestamp: -1 });
+billingAuditLogSchema.index({ societyId: 1, transactionType: 1, timestamp: -1 });
 
 function getBillingAuditModel(db) {
     if (!db) {
@@ -69,24 +95,50 @@ function getBillingAuditModel(db) {
 /**
  * Audit Logger for Accounting & Billing Actions
  */
-async function logBillingAction({ req, db, action, resource, resourceId, status = "SUCCESS", amount = null, details = {} }) {
+async function logBillingAction(params) {
     try {
+        const {
+            req, db,
+            action, module = "Billing", transactionType, entityType, entityId,
+            transactionId, orderId, referenceId, description,
+            beforeValue, afterValue, metadata = {},
+            // Legacy params
+            resource, resourceId, status = "SUCCESS", amount = null, details = {}
+        } = params;
+
         const auditDb = db || req?.opsDb;
         if (!auditDb) return;
 
         const AuditModel = getBillingAuditModel(auditDb);
+        const user = req?.user;
 
         await AuditModel.create({
-            societyId:  req?.user?.societyId || details?.societyId,
-            userId:     req?.user?.id,
-            userRole:   req?.user?.role || (req?.user?.roleKeys ? req.user.roleKeys[0] : "unknown"),
+            societyId: user?.societyId || details?.societyId || params.societyId,
+            userId: user?.id || params.userId,
+            userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : params.userName,
+            userRole: user?.role || (user?.roleKeys ? user.roleKeys[0] : "unknown") || params.userRole,
+            
             action,
+            module: module || "Billing",
+            transactionType: transactionType || resource,
+            entityType: entityType || resource,
+            entityId: entityId || (resourceId && mongoose.Types.ObjectId.isValid(resourceId) ? resourceId : null),
+            transactionId,
+            orderId,
+            referenceId,
+            description,
+            beforeValue,
+            afterValue,
+            metadata: Object.keys(metadata).length ? metadata : details,
+            timestamp: new Date(),
+
+            // Legacy fields mapped just in case
             resource,
             resourceId: resourceId ? String(resourceId) : null,
             status,
             amount,
             details,
-            ipAddress:  req?.ip || req?.headers?.["x-forwarded-for"],
+            ipAddress: req?.ip || req?.headers?.["x-forwarded-for"],
         });
     } catch (err) {
         console.error("[BILLING AUDIT ERROR] Failed to record audit log:", err.message);

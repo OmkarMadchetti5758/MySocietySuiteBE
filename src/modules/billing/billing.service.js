@@ -1184,6 +1184,7 @@ class BillingService {
             resource: "JournalVoucher",
             resourceId: voucher._id,
             amount: totalAmount,
+            afterValue: voucher,
             details: { voucherNumber },
         });
 
@@ -1224,6 +1225,7 @@ class BillingService {
             resource: "JournalVoucher",
             resourceId: voucher._id,
             amount: voucher.totalAmount,
+            afterValue: voucher,
             details: { action, targetStatus },
         });
 
