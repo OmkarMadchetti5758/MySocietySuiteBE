@@ -58,4 +58,7 @@ router.use("/ledger/accounts", require("../../modules/ledger/accounts.routes"));
 router.use("/ledger/journal-entries", require("../../modules/ledger/journalEntries.routes"));
 router.use("/ledger/periods", require("../../modules/ledger/accountingPeriods.routes"));
 
+// ── Financial Reports ────────────────────────────────────────────────────────
+router.use("/reports", require("../../modules/report/report.routes"));
+
 module.exports = router;

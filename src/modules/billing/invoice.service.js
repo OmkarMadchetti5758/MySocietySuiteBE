@@ -311,7 +311,7 @@ async function _calculateArrears(societyId, flatId, currentPeriod, db) {
     };
 }
 
-async function _calculateFines(societyId, flatId, db) {
+async function _calculateFines(societyId, flatId, db, config) {
     const { BillingInvoice } = getBillingModels(db);
     const now = new Date();
 
@@ -322,8 +322,10 @@ async function _calculateFines(societyId, flatId, db) {
         dueDate: { $lt: now },
     }).lean();
 
-    const fineAmount = overdueInvoices.length * 100;
-    return { fineAmount };
+    // Use configured late fee per overdue invoice; fall back to 0 if not set
+    const ratePerInvoice = Number(config?.lateFeePerOverdueInvoice ?? 0);
+    const fineAmount = Math.round(overdueInvoices.length * ratePerInvoice * 100) / 100;
+    return { fineAmount, overdueCount: overdueInvoices.length };
 }
 
 async function _fetchApprovedAdjustments(societyId, flatId, db) {
@@ -524,7 +526,7 @@ class InvoiceService {
         const [chargesResult, arrearsResult, finesResult, adjustmentsResult] = await Promise.all([
             _calculateCharges(societyId, flatId, date, db),
             _calculateArrears(societyId, flatId, currentPeriod, db),
-            _calculateFines(societyId, flatId, db),
+            _calculateFines(societyId, flatId, db, config),
             _fetchApprovedAdjustments(societyId, flatId, db),
         ]);
 
@@ -615,7 +617,7 @@ class InvoiceService {
         const [chargesResult, arrearsResult, finesResult, adjustmentsResult] = await Promise.all([
             _calculateCharges(societyId, flatId, date, db),
             _calculateArrears(societyId, flatId, billingPeriod, db),
-            _calculateFines(societyId, flatId, db),
+            _calculateFines(societyId, flatId, db, config),
             _fetchApprovedAdjustments(societyId, flatId, db),
         ]);
 
