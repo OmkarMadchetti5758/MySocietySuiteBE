@@ -453,7 +453,33 @@ class BillingController {
                 query.userId = userId;
             }
             if (transactionType) {
-                query.transactionType = transactionType;
+                // Map the frontend key to known patterns in the DB
+                const TYPE_PATTERNS = {
+                    invoice:  ["invoice", "INVOICE"],
+                    payment:  ["payment", "PAYMENT"],
+                    credit:   ["credit", "CREDIT", "discount", "DISCOUNT"],
+                    waiver:   ["waiver", "WAIVER", "fine", "FINE"],
+                    voucher:  ["voucher", "VOUCHER", "journal", "JOURNAL"],
+                    vendor:   ["vendor", "VENDOR"],
+                    recon:    ["recon", "RECON", "reconcil"],
+                    deposit:  ["deposit", "DEPOSIT", "advance", "ADVANCE"],
+                    budget:   ["budget", "BUDGET"],
+                    config:   ["config", "CONFIG", "charge", "CHARGE", "ChargeHead", "rate", "RATE"],
+                    approval: ["approv", "APPROV"],
+                };
+                const patterns = TYPE_PATTERNS[transactionType.toLowerCase()];
+                if (patterns) {
+                    const regexStr = patterns.join("|");
+                    const regex = new RegExp(regexStr, "i");
+                    query.$or = [
+                        { transactionType: regex },
+                        { action: regex },
+                        { resource: regex },
+                        { entityType: regex },
+                    ];
+                } else {
+                    query.transactionType = new RegExp(transactionType, "i");
+                }
             }
             if (fromDate || toDate) {
                 query.timestamp = {};
