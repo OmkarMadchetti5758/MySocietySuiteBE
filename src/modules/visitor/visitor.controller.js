@@ -194,12 +194,17 @@ class VisitorController {
      */
     async validateQrPass(req, res, next) {
         try {
-            const { qrCode, gateId } = req.body;
-            if (!qrCode) {
-                return sendError(res, 400, "qrCode is required");
+            const { qrCode, code, passCode, gateId } = req.body;
+            let inputCode = (qrCode || code || passCode || "").trim().toUpperCase();
+            if (inputCode && !inputCode.startsWith("MSS-PASS-")) {
+                inputCode = `MSS-PASS-${inputCode}`;
+            }
+
+            if (!inputCode) {
+                return sendError(res, 400, "Pass code or QR code is required");
             }
             const data = await VisitorService.validateQrPass(
-                qrCode,
+                inputCode,
                 gateId,
                 req.user.societyId,
                 req.user.id
