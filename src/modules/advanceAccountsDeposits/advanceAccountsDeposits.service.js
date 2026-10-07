@@ -221,7 +221,7 @@ class AdvanceAccountsService {
             const existing = await AdvanceTransaction.findOne({ societyId, idempotencyKey });
             if (existing) return existing;
         }
-
+ 
         const session = await req.opsDb.startSession();
         session.startTransaction();
         try {
@@ -256,8 +256,8 @@ class AdvanceAccountsService {
                 referenceId: referenceId || referenceNumber || null,
                 description: description || notes || `Advance credited via ${paymentMode || "BANK_TRANSFER"}`,
                 createdBy: req.user.id,
+                idempotencyKey: idempotencyKey || require('crypto').randomUUID()
             };
-            if (idempotencyKey) txnData.idempotencyKey = idempotencyKey;
 
             const txn = await AdvanceTransaction.create([txnData], { session });
 

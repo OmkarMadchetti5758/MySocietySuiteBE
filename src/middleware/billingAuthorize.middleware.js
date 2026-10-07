@@ -24,14 +24,17 @@ const requireBillingPermission = (permissionKey) => {
             }
 
             if (!matchedKey) {
-                // Log denied attempt for sensitive operations
-                await logBillingAction({
-                    req,
-                    action: keys[0],
-                    resource: keys[0].split(".")[1] || "BILLING",
-                    status: "DENIED",
-                    details: { reason: `Missing required billing permission: ${keys.join(", ")}`, activeContext },
-                });
+                // Log denied attempt for sensitive operations (skip VIEW operations to avoid noise)
+                const isViewAction = keys.every(k => k.endsWith(".VIEW"));
+                if (!isViewAction) {
+                    await logBillingAction({
+                        req,
+                        action: keys[0],
+                        resource: keys[0].split(".")[1] || "BILLING",
+                        status: "DENIED",
+                        details: { reason: `Missing required billing permission: ${keys.join(", ")}`, activeContext },
+                    });
+                }
 
                 return next(new AppError(`Access denied. Insufficient permission for ${keys.join(", ")}`, 403));
             }
