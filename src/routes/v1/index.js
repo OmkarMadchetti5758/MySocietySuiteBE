@@ -61,4 +61,7 @@ router.use("/ledger/periods", require("../../modules/ledger/accountingPeriods.ro
 // ── Financial Reports ────────────────────────────────────────────────────────
 router.use("/reports", require("../../modules/report/report.routes"));
 
+// ── Budgeting (FR-B10.1 / FR-B10.2 / FR-B10.3) ──────────────────────────────
+router.use("/budgets", require("../../modules/budget/budget.routes"));
+
 module.exports = router;
