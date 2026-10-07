@@ -154,12 +154,14 @@ class VisitorService {
         const QRDigitalPass = opsDb.model("QRDigitalPass");
         const VisitorEntry = opsDb.model("VisitorEntry");
 
-        const qrPass = await QRDigitalPass.findOne({ passCode: qrCode, societyId }).populate("flatId");
+        const normalizedCode = (qrCode || "").trim().toUpperCase();
+        const qrPass = await QRDigitalPass.findOne({ passCode: normalizedCode, societyId }).populate("flatId");
         if (!qrPass) {
-            const err = new AppError("Invalid QR Code: Pass not found in system", 404);
+            const err = new AppError("Invalid Pass: Pass code not found in system", 404);
             err.errorCode = "QR_NOT_FOUND";
             throw err;
         }
+
 
         const now = new Date();
 
