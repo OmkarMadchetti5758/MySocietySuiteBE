@@ -149,6 +149,7 @@ class AmenityBookingService {
             .populate("amenityId", "name requiresApproval")
             .populate("slotId", "startTime endTime dayOfWeek")
             .populate("bookedBy", "name email")
+            .populate("flatId", "flatNumber blockId")
             .populate("approvedBy", "name")
             .populate("rejectedBy", "name")
             .sort({ createdAt: -1 })

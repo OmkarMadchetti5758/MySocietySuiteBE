@@ -255,6 +255,8 @@ class VisitorService {
         }
 
         const entries = await VisitorEntry.find(query)
+            .populate("flatId", "flatNumber blockId")
+            .populate("guardId", "name")
             .sort({ createdAt: -1 })
             .lean();
         return entries;
@@ -271,6 +273,8 @@ class VisitorService {
         if (filters.category) query.category = filters.category;
 
         const entries = await VisitorEntry.find(query)
+            .populate("flatId", "flatNumber blockId")
+            .populate("guardId", "name")
             .sort({ createdAt: -1 })
             .limit(100)
             .lean();
