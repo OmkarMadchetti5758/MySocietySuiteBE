@@ -7,6 +7,7 @@ const { getBillingModels } = require("../billing/billing.model");
 const { getBillingAuditModel, logBillingAction } = require("../../services/billingAudit.service");
 const LedgerPostingService = require("../ledger/ledgerPosting.service");
 const { getReconciliationModels } = require("../reconciliation/reconciliation.model");
+const InvoiceService = require("../billing/invoice.service");
 
 async function resolveDefaultCollectionAccount(db, societyId) {
     try {
@@ -379,6 +380,16 @@ class PaymentService {
                     recordedBy: userId,
                     excessAmount,
                 }], { session });
+
+                await InvoiceService.settleCascadeInvoicesOnPayment({
+                    db,
+                    societyId,
+                    invoice,
+                    session,
+                    payment,
+                    recordedBy: userId,
+                    userId,
+                });
             }
         }
 
@@ -611,6 +622,16 @@ class PaymentService {
                 recordedBy,
                 excessAmount,
             }], { session });
+
+            await InvoiceService.settleCascadeInvoicesOnPayment({
+                db,
+                societyId,
+                invoice,
+                session,
+                payment,
+                recordedBy,
+                userId,
+            });
         }
 
         await logBillingAction({
@@ -739,22 +760,23 @@ class PaymentService {
             invoiceMatch.$or = orClauses;
         }
 
-        const outstanding = await BillingInvoice.aggregate([
-            { $match: invoiceMatch },
-            {
-                $group: {
-                    _id: null,
-                    total: {
-                        $sum: {
-                            $subtract: [
-                                { $add: ["$totalAmount", { $ifNull: ["$fineAmount", 0] }] },
-                                { $ifNull: ["$paidAmount", 0] }
-                            ]
-                        }
-                    }
+        const unpaidInvoices = await BillingInvoice.find(invoiceMatch).lean();
+        const rolledInIds = new Set();
+        for (const inv of unpaidInvoices) {
+            if (Array.isArray(inv.arrearsBreakdown)) {
+                for (const b of inv.arrearsBreakdown) {
+                    if (b.invoiceId) rolledInIds.add(String(b.invoiceId));
                 }
-            },
-        ]);
+            }
+        }
+        let totalOutstanding = 0;
+        for (const inv of unpaidInvoices) {
+            if (!rolledInIds.has(String(inv._id))) {
+                const totalPayable = (inv.totalAmount || 0) + (inv.fineAmount || 0);
+                const bal = Math.max(0, totalPayable - (inv.paidAmount || 0));
+                totalOutstanding += bal;
+            }
+        }
 
         return {
             totalCollected: totalColl[0]?.total || 0,
@@ -764,7 +786,7 @@ class PaymentService {
             pendingPaymentsCount: pendingCount,
             failedPaymentsCount: failedCount,
             unmatchedPaymentsCount: unmatchedCount,
-            outstandingAmount: outstanding[0]?.total || 0,
+            outstandingAmount: totalOutstanding,
         };
     }
 
@@ -979,6 +1001,16 @@ class PaymentService {
             paymentType: payment.paymentSource,
             recordedBy: userId,
             excessAmount,
+        });
+
+        await InvoiceService.settleCascadeInvoicesOnPayment({
+            db,
+            societyId,
+            invoice,
+            session: null,
+            payment,
+            recordedBy: userId,
+            userId,
         });
 
         await logBillingAction({

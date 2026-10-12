@@ -362,10 +362,18 @@ class InvoiceService {
 
         const filter = { societyId };
         if (isResidentOnly) {
-            filter.$or = [
+            const uid = req.user.id || req.user._id;
+            const uidStr = String(uid);
+            const orClauses = [
                 { residentUserId: req.user._id },
-                { residentUserId: String(req.user._id) }
+                { residentUserId: uidStr },
+                { userId: req.user._id },
+                { userId: uidStr },
             ];
+            if (req.user.flatId) {
+                orClauses.push({ flatId: req.user.flatId });
+            }
+            filter.$or = orClauses;
         }
 
         const [total, paid, partiallyPaid, overdue, unpaid] = await Promise.all([
@@ -391,10 +399,18 @@ class InvoiceService {
         const filter = { societyId };
 
         if (isResidentOnly) {
-            filter.$or = [
+            const uid = req.user.id || req.user._id;
+            const uidStr = String(uid);
+            const orClauses = [
                 { residentUserId: req.user._id },
-                { residentUserId: String(req.user._id) }
+                { residentUserId: uidStr },
+                { userId: req.user._id },
+                { userId: uidStr },
             ];
+            if (req.user.flatId) {
+                orClauses.push({ flatId: req.user.flatId });
+            }
+            filter.$or = orClauses;
         }
 
         if (status && status !== "ALL") {
@@ -626,9 +642,12 @@ class InvoiceService {
         const { fineAmount } = finesResult;
         const { creditNoteAmount, discountAmount } = adjustmentsResult;
 
+        // fineAmount is intentionally kept SEPARATE from totalAmount.
+        // The total the resident pays = totalAmount + fineAmount.
+        // This matches the stored invoice structure and frontend calculation.
         const chargesBeforeAdvance = Math.max(
             0,
-            Math.round((subTotal + totalGst + arrearsAmount + fineAmount - creditNoteAmount - discountAmount) * 100) / 100
+            Math.round((subTotal + totalGst + arrearsAmount - creditNoteAmount - discountAmount) * 100) / 100
         );
         const { available: availableAdvance } = await _getAvailableAdvance(societyId, flatId, residentUserId, db);
         const requestedAdvance = Number(advanceAdjustment) || 0;
@@ -890,6 +909,16 @@ class InvoiceService {
         invoice.status = newStatus;
         await invoice.save();
 
+        await InvoiceService.settleCascadeInvoicesOnPayment({
+            db: req.opsDb,
+            societyId,
+            invoice,
+            session: null,
+            payment,
+            recordedBy: req.user.id,
+            userId: invoice.userId,
+        });
+
         await logBillingAction({
             req,
             action: BILLING_PERMISSIONS.PAYMENT_OFFLINE_CREATE,
@@ -922,6 +951,203 @@ class InvoiceService {
         );
 
         return { payment, invoice };
+    }
+
+    /**
+     * Cascades payment settlements to previous invoices whose arrears were included in `invoice`,
+     * or if `invoice` is a past invoice that was paid directly, reduces the arrears rolled into future invoices.
+     */
+    static async settleCascadeInvoicesOnPayment({ db, societyId, invoice, session, payment, recordedBy, userId }) {
+        if (!invoice || !invoice._id) return;
+        const { BillingInvoice, InvoicePayment } = getBillingModels(db);
+        const resolvedSocietyId = societyId || invoice.societyId;
+
+        // ── 1. If this invoice includes arrears from earlier invoices ──
+        const arrearsBreakdown = Array.isArray(invoice.arrearsBreakdown) ? invoice.arrearsBreakdown : [];
+        let previousInvoiceIds = [];
+
+        // Collect invoice IDs directly from arrearsBreakdown
+        for (const item of arrearsBreakdown) {
+            if (item.invoiceId) {
+                previousInvoiceIds.push(item.invoiceId);
+            }
+        }
+
+        // If arrearsBreakdown had billingPeriods but no invoiceIds, look them up
+        for (const item of arrearsBreakdown) {
+            if (!item.invoiceId && item.billingPeriod) {
+                const query = {
+                    societyId: resolvedSocietyId,
+                    flatId: invoice.flatId,
+                    billingPeriod: item.billingPeriod,
+                    _id: { $ne: invoice._id },
+                };
+                const matched = session
+                    ? await BillingInvoice.findOne(query).session(session)
+                    : await BillingInvoice.findOne(query);
+                if (matched && !previousInvoiceIds.some(id => String(id) === String(matched._id))) {
+                    previousInvoiceIds.push(matched._id);
+                }
+            }
+        }
+
+        // Fallback: If arrearsAmount > 0 and no breakdown items had valid IDs,
+        // find all unpaid invoices for this flat created before this invoice
+        if (previousInvoiceIds.length === 0 && (invoice.arrearsAmount || 0) > 0) {
+            const query = {
+                societyId: resolvedSocietyId,
+                flatId: invoice.flatId,
+                _id: { $ne: invoice._id },
+                status: { $in: ["GENERATED", "OVERDUE", "PARTIALLY_PAID", "generated", "overdue", "partially_paid"] },
+                createdAt: { $lt: invoice.createdAt || new Date() },
+            };
+            const priorUnpaid = session
+                ? await BillingInvoice.find(query).sort({ createdAt: 1 }).session(session)
+                : await BillingInvoice.find(query).sort({ createdAt: 1 });
+
+            previousInvoiceIds = priorUnpaid.map(inv => inv._id);
+        }
+
+        if (previousInvoiceIds.length > 0) {
+            const query = {
+                societyId: resolvedSocietyId,
+                _id: { $in: previousInvoiceIds },
+                status: { $nin: ["PAID", "paid", "CANCELLED"] },
+            };
+            const prevInvoices = session
+                ? await BillingInvoice.find(query).sort({ createdAt: 1 }).session(session)
+                : await BillingInvoice.find(query).sort({ createdAt: 1 });
+
+            const isFullyPaid = ["PAID", "paid"].includes(invoice.status) ||
+                (invoice.paidAmount || 0) >= ((invoice.totalAmount || 0) + (invoice.fineAmount || 0));
+
+            let availableAmount = invoice.paidAmount || 0;
+
+            for (const prevInv of prevInvoices) {
+                const prevTotal = (prevInv.totalAmount || 0) + (prevInv.fineAmount || 0);
+                const prevPrevPaid = prevInv.paidAmount || 0;
+                const prevOutstanding = Math.max(0, prevTotal - prevPrevPaid);
+
+                if (isFullyPaid) {
+                    prevInv.paidAmount = prevTotal;
+                    prevInv.status = "PAID";
+                    if (session) {
+                        await prevInv.save({ session });
+                    } else {
+                        await prevInv.save();
+                    }
+
+                    try {
+                        if (InvoicePayment) {
+                            const validModes = ["CASH", "CHEQUE", "BANK_TRANSFER", "UPI", "ONLINE", "OTHER"];
+                            const resolvedMode = validModes.includes(payment?.paymentMode?.toUpperCase()) ? payment.paymentMode.toUpperCase() : "OTHER";
+                            const resolvedType = payment?.paymentSource === "ONLINE" || payment?.paymentType === "ONLINE" ? "ONLINE" : "OFFLINE";
+
+                            const paymentDoc = [{
+                                societyId: resolvedSocietyId,
+                                invoiceId: prevInv._id,
+                                flatId: prevInv.flatId,
+                                userId: prevInv.userId,
+                                amountPaid: prevOutstanding > 0 ? prevOutstanding : prevTotal,
+                                paymentMode: resolvedMode,
+                                paymentAccount: payment?.paymentAccountName || payment?.paymentAccount || "Consolidated Invoice Settlement",
+                                paymentDate: payment?.paymentDate || new Date(),
+                                receiptNumber: payment?.receiptNumber || `SETTLE-${invoice.invoiceNumber}`,
+                                referenceNumber: payment?.gatewayTransactionId || payment?.transactionReference || `Cleared via ${invoice.invoiceNumber}`,
+                                paymentType: resolvedType,
+                                notes: `Automatically marked PAID: arrears cleared by payment of consolidated invoice ${invoice.invoiceNumber}`,
+                                recordedBy: recordedBy || userId || invoice.userId,
+                            }];
+                            if (session) {
+                                await InvoicePayment.create(paymentDoc, { session });
+                            } else {
+                                await InvoicePayment.create(paymentDoc);
+                            }
+                        }
+                    } catch (err) {
+                        console.error("[CASCADE_PAYMENT] Failed to create InvoicePayment for previous invoice:", err.message);
+                    }
+                } else if (availableAmount > 0 && prevOutstanding > 0) {
+                    const alloc = Math.min(availableAmount, prevOutstanding);
+                    prevInv.paidAmount = prevPrevPaid + alloc;
+                    if (prevInv.paidAmount >= prevTotal) {
+                        prevInv.status = "PAID";
+                    } else {
+                        prevInv.status = "PARTIALLY_PAID";
+                    }
+                    availableAmount -= alloc;
+                    if (session) {
+                        await prevInv.save({ session });
+                    } else {
+                        await prevInv.save();
+                    }
+
+                    try {
+                        if (InvoicePayment) {
+                            const validModes = ["CASH", "CHEQUE", "BANK_TRANSFER", "UPI", "ONLINE", "OTHER"];
+                            const resolvedMode = validModes.includes(payment?.paymentMode?.toUpperCase()) ? payment.paymentMode.toUpperCase() : "OTHER";
+                            const resolvedType = payment?.paymentSource === "ONLINE" || payment?.paymentType === "ONLINE" ? "ONLINE" : "OFFLINE";
+
+                            const paymentDoc = [{
+                                societyId: resolvedSocietyId,
+                                invoiceId: prevInv._id,
+                                flatId: prevInv.flatId,
+                                userId: prevInv.userId,
+                                amountPaid: alloc,
+                                paymentMode: resolvedMode,
+                                paymentAccount: payment?.paymentAccountName || payment?.paymentAccount || "Consolidated Invoice Settlement",
+                                paymentDate: payment?.paymentDate || new Date(),
+                                receiptNumber: payment?.receiptNumber || `SETTLE-${invoice.invoiceNumber}`,
+                                referenceNumber: payment?.gatewayTransactionId || payment?.transactionReference || `Partial via ${invoice.invoiceNumber}`,
+                                paymentType: resolvedType,
+                                notes: `Automatically allocated partial payment from consolidated invoice ${invoice.invoiceNumber}`,
+                                recordedBy: recordedBy || userId || invoice.userId,
+                            }];
+                            if (session) {
+                                await InvoicePayment.create(paymentDoc, { session });
+                            } else {
+                                await InvoicePayment.create(paymentDoc);
+                            }
+                        }
+                    } catch (err) {
+                        console.error("[CASCADE_PAYMENT] Failed to create partial InvoicePayment for previous invoice:", err.message);
+                    }
+                }
+            }
+        }
+
+        // ── 2. Reverse Check: If this invoice is an older invoice that was just paid directly ──
+        if (["PAID", "paid"].includes(invoice.status)) {
+            const laterQuery = {
+                societyId: resolvedSocietyId,
+                flatId: invoice.flatId,
+                _id: { $ne: invoice._id },
+                status: { $nin: ["PAID", "paid", "CANCELLED"] },
+                "arrearsBreakdown.invoiceId": invoice._id,
+            };
+            const laterInvoices = session
+                ? await BillingInvoice.find(laterQuery).session(session)
+                : await BillingInvoice.find(laterQuery);
+
+            for (const laterInv of laterInvoices) {
+                const breakdownItem = laterInv.arrearsBreakdown.find(b => String(b.invoiceId) === String(invoice._id));
+                const deductedAmount = breakdownItem ? breakdownItem.amount : 0;
+                if (deductedAmount > 0) {
+                    laterInv.arrearsAmount = Math.max(0, Math.round(((laterInv.arrearsAmount || 0) - deductedAmount) * 100) / 100);
+                    laterInv.totalAmount = Math.max(0, Math.round(((laterInv.totalAmount || 0) - deductedAmount) * 100) / 100);
+                    laterInv.arrearsBreakdown = laterInv.arrearsBreakdown.filter(b => String(b.invoiceId) !== String(invoice._id));
+                    const laterPayable = (laterInv.totalAmount || 0) + (laterInv.fineAmount || 0);
+                    if ((laterInv.paidAmount || 0) >= laterPayable) {
+                        laterInv.status = "PAID";
+                    }
+                    if (session) {
+                        await laterInv.save({ session });
+                    } else {
+                        await laterInv.save();
+                    }
+                }
+            }
+        }
     }
 
     static async getInvoicePayments(req, invoiceId) {
@@ -1044,6 +1270,33 @@ class InvoiceService {
         }
         if (req.user.flatId) orClauses.push({ flatId: req.user.flatId });
         filter.$or = orClauses;
+
+        // Self-heal check: ensure any invoices rolled into an already-paid consolidated invoice are marked PAID
+        try {
+            const paidWithArrears = await BillingInvoice.find({
+                ...filter,
+                status: { $in: ["PAID", "paid"] },
+                "arrearsBreakdown.0": { $exists: true },
+            }).lean();
+            for (const pInv of paidWithArrears) {
+                const targetIds = (pInv.arrearsBreakdown || []).map(b => b.invoiceId).filter(Boolean);
+                if (targetIds.length > 0) {
+                    await BillingInvoice.updateMany(
+                        {
+                            societyId: req.user.societyId,
+                            _id: { $in: targetIds },
+                            status: { $nin: ["PAID", "paid", "CANCELLED"] },
+                        },
+                        {
+                            $set: { status: "PAID" },
+                        }
+                    );
+                }
+            }
+        } catch (e) {
+            console.error("[getMyInvoices] Error syncing consolidated arrears status:", e.message);
+        }
+
         return BillingInvoice.find(filter).sort({ createdAt: -1 }).lean();
     }
 

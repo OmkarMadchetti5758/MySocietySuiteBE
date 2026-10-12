@@ -18,6 +18,7 @@ const {
 } = require("../../services/billingAuthorization.service");
 const { logBillingAction } = require("../../services/billingAudit.service");
 const LedgerPostingService = require("../ledger/ledgerPosting.service");
+const InvoiceService = require("./invoice.service");
 
 class BillingService {
 
@@ -653,6 +654,16 @@ class BillingService {
         invoice.status = newStatus;
         await invoice.save();
 
+        await InvoiceService.settleCascadeInvoicesOnPayment({
+            db: req.opsDb,
+            societyId: req.user.societyId,
+            invoice,
+            session: null,
+            payment: null,
+            recordedBy: req.user.id,
+            userId: invoice.userId,
+        });
+
         await logBillingAction({
             req,
             action: BILLING_PERMISSIONS.PAYMENT_OFFLINE_CREATE,
@@ -687,6 +698,18 @@ class BillingService {
             { $set: { paidAmount: newPaidAmount, status: newStatus } },
             { new: true }
         );
+
+        if (updated) {
+            await InvoiceService.settleCascadeInvoicesOnPayment({
+                db: req.opsDb,
+                societyId: req.user.societyId,
+                invoice: updated,
+                session: null,
+                payment: null,
+                recordedBy: req.user.id,
+                userId: req.user.id,
+            });
+        }
 
         await logBillingAction({
             req,
