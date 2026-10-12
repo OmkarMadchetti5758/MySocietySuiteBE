@@ -19,6 +19,32 @@ class DunningService {
         return req.user?.id || req.user?._id || new mongoose.Types.ObjectId("60c72b2f9b1d8b2b99999999");
     }
 
+    // Helper: Determine if request is scoped to a resident only
+    static isResidentOnly(req) {
+        if (!req.user) return false;
+        const roleKeys = req.user.roleKeys || [];
+        const isAdmin = req.user.role === "admin" || req.user.role === "super_admin" || roleKeys.includes("admin") || roleKeys.includes("super_admin");
+        const isAccountant = roleKeys.includes("accountant");
+        return !isAdmin && !isAccountant;
+    }
+
+    // Helper: Build resident invoice query filter
+    static getResidentInvoiceClause(req) {
+        const userId = req.user.id || req.user._id;
+        const userIdStr = String(userId);
+        const orClauses = [
+            { userId: userIdStr },
+            { residentUserId: userIdStr },
+        ];
+        if (req.user._id) {
+            orClauses.push({ userId: req.user._id }, { residentUserId: req.user._id });
+        }
+        if (req.user.flatId) {
+            orClauses.push({ flatId: req.user.flatId });
+        }
+        return { $or: orClauses };
+    }
+
     // ── 1. KPI Summary Cards Overview ──────────────────────────────────────────
     static async getOverviewStats(req) {
         const db = req.opsDb;
@@ -28,12 +54,21 @@ class DunningService {
 
         const UNPAID_STATUSES = ["GENERATED", "ISSUED", "OVERDUE", "PARTIALLY_PAID", "unpaid", "partially_paid", "overdue"];
 
-        // Fetch unpaid / overdue invoices
-        const overdueInvoices = await BillingInvoice.find({
+        const query = {
             societyId,
             status: { $in: UNPAID_STATUSES },
             dueDate: { $lt: new Date() }
-        }).select("totalAmount paidAmount fineAmount dueDate flatId invoiceNumber");
+        };
+
+        const isResident = this.isResidentOnly(req);
+        if (isResident) {
+            const residentClause = this.getResidentInvoiceClause(req);
+            query.$or = residentClause.$or;
+        }
+
+        // Fetch unpaid / overdue invoices
+        const overdueInvoices = await BillingInvoice.find(query)
+            .select("totalAmount paidAmount fineAmount dueDate flatId invoiceNumber");
 
         let totalOutstanding = 0;
         let totalArrears = 0;
@@ -48,10 +83,22 @@ class DunningService {
         });
 
         // Count defaulters
-        const defaultersCount = await DefaulterRecord.countDocuments({
-            societyId,
-            status: "DEFAULTER"
-        });
+        let defaultersCount = 0;
+        if (isResident) {
+            const userFlatId = req.user.flatId;
+            const defaulterQuery = { societyId, status: "DEFAULTER" };
+            if (userFlatId) {
+                defaulterQuery.flatId = userFlatId;
+            } else {
+                defaulterQuery.residentId = req.user.id || req.user._id;
+            }
+            defaultersCount = await DefaulterRecord.countDocuments(defaulterQuery);
+        } else {
+            defaultersCount = await DefaulterRecord.countDocuments({
+                societyId,
+                status: "DEFAULTER"
+            });
+        }
 
         return {
             totalOutstanding,
@@ -163,11 +210,18 @@ class DunningService {
 
         const UNPAID_STATUSES = ["GENERATED", "ISSUED", "OVERDUE", "PARTIALLY_PAID", "unpaid", "partially_paid", "overdue"];
 
-        const overdueInvoices = await BillingInvoice.find({
+        const query = {
             societyId,
             status: { $in: UNPAID_STATUSES },
             dueDate: { $lt: new Date() }
-        })
+        };
+
+        if (this.isResidentOnly(req)) {
+            const residentClause = this.getResidentInvoiceClause(req);
+            query.$or = residentClause.$or;
+        }
+
+        const overdueInvoices = await BillingInvoice.find(query)
         .populate({
             path: "flatId",
             select: "flatNumber ownerName block wing wingName buildingName blockId",

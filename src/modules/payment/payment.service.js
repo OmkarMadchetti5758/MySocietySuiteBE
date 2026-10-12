@@ -637,7 +637,7 @@ class PaymentService {
     }
 
     // ── 5. Dashboard Overview Metrics ──
-    static async getOverviewStats({ db, societyId, startDate, endDate, wing, blockId, flatId, paymentMode, paymentAccountId }) {
+    static async getOverviewStats({ db, societyId, startDate, endDate, wing, blockId, flatId, paymentMode, paymentAccountId, residentId, residentUser }) {
         const { Payment } = getPaymentModels(db);
         const { BillingInvoice } = getBillingModels(db);
         const mongoose = require("mongoose");
@@ -657,6 +657,12 @@ class PaymentService {
         if (flatId) filter.flatId = typeof flatId === "string" ? new mongoose.Types.ObjectId(flatId) : flatId;
         if (paymentMode) filter.paymentMode = paymentMode;
         if (paymentAccountId) filter.paymentAccountId = paymentAccountId;
+        if (residentId) {
+            const resObjId = typeof residentId === "string" && mongoose.Types.ObjectId.isValid(residentId)
+                ? new mongoose.Types.ObjectId(residentId)
+                : residentId;
+            filter.userId = resObjId;
+        }
 
         const totalColl = await Payment.aggregate([
             { $match: { ...filter, paymentStatus: "SUCCESS" } },
@@ -668,8 +674,16 @@ class PaymentService {
         const todayEnd = new Date();
         todayEnd.setHours(23, 59, 59, 999);
 
+        const todayFilter = { societyId: socObjectId, paymentStatus: "SUCCESS", paymentDate: { $gte: todayStart, $lte: todayEnd } };
+        if (residentId) {
+            const resObjId = typeof residentId === "string" && mongoose.Types.ObjectId.isValid(residentId)
+                ? new mongoose.Types.ObjectId(residentId)
+                : residentId;
+            todayFilter.userId = resObjId;
+        }
+
         const todayColl = await Payment.aggregate([
-            { $match: { societyId: socObjectId, paymentStatus: "SUCCESS", paymentDate: { $gte: todayStart, $lte: todayEnd } } },
+            { $match: todayFilter },
             { $group: { _id: null, total: { $sum: "$amount" } } },
         ]);
 
@@ -683,17 +697,50 @@ class PaymentService {
             { $group: { _id: null, total: { $sum: "$amount" } } },
         ]);
 
-        const pendingCount = await Payment.countDocuments({ societyId: socObjectId, paymentStatus: "PENDING" });
-        const failedCount = await Payment.countDocuments({ societyId: socObjectId, paymentStatus: "FAILED" });
-        const unmatchedCount = await Payment.countDocuments({
+        let pendingCountFilter = { societyId: socObjectId, paymentStatus: "PENDING" };
+        let failedCountFilter = { societyId: socObjectId, paymentStatus: "FAILED" };
+        let unmatchedFilter = {
             societyId: socObjectId,
             paymentStatus: "SUCCESS",
             reconciliationStatus: { $in: ["UNRECONCILED", "MATCH_FAILED", "MANUAL_REVIEW"] },
-        });
+        };
+        if (residentId) {
+            const resObjId = typeof residentId === "string" && mongoose.Types.ObjectId.isValid(residentId)
+                ? new mongoose.Types.ObjectId(residentId)
+                : residentId;
+            pendingCountFilter.userId = resObjId;
+            failedCountFilter.userId = resObjId;
+            unmatchedFilter.userId = resObjId;
+        }
+
+        const pendingCount = await Payment.countDocuments(pendingCountFilter);
+        const failedCount = await Payment.countDocuments(failedCountFilter);
+        const unmatchedCount = await Payment.countDocuments(unmatchedFilter);
 
         // Calculate Outstanding Invoice Balance (including fineAmount)
+        const invoiceMatch = { societyId: socObjectId, status: { $nin: ["PAID", "paid", "CANCELLED", "cancelled"] } };
+        if (residentUser || residentId) {
+            const userId = residentUser?.id || residentUser?._id || residentId;
+            const userIdStr = String(userId);
+            const orClauses = [
+                { userId: userIdStr },
+                { residentUserId: userIdStr },
+            ];
+            if (mongoose.Types.ObjectId.isValid(userIdStr)) {
+                const uObjId = new mongoose.Types.ObjectId(userIdStr);
+                orClauses.push({ userId: uObjId }, { residentUserId: uObjId });
+            }
+            if (residentUser?.flatId) {
+                orClauses.push({ flatId: residentUser.flatId });
+                if (typeof residentUser.flatId === "string" && mongoose.Types.ObjectId.isValid(residentUser.flatId)) {
+                    orClauses.push({ flatId: new mongoose.Types.ObjectId(residentUser.flatId) });
+                }
+            }
+            invoiceMatch.$or = orClauses;
+        }
+
         const outstanding = await BillingInvoice.aggregate([
-            { $match: { societyId: socObjectId, status: { $nin: ["PAID", "CANCELLED"] } } },
+            { $match: invoiceMatch },
             {
                 $group: {
                     _id: null,
@@ -961,7 +1008,7 @@ class PaymentService {
     }
 
     // ── 9. Collections Analytics ──
-    static async getCollectionsAnalytics({ db, societyId, startDate, endDate, flatId, paymentAccountId }) {
+    static async getCollectionsAnalytics({ db, societyId, startDate, endDate, flatId, paymentAccountId, residentId, residentUser }) {
         const { Payment } = getPaymentModels(db);
         const mongoose = require("mongoose");
 
@@ -979,6 +1026,12 @@ class PaymentService {
         }
         if (flatId) filter.flatId = typeof flatId === "string" ? new mongoose.Types.ObjectId(flatId) : flatId;
         if (paymentAccountId) filter.paymentAccountId = paymentAccountId;
+
+        // Scope to resident's own payments only
+        if (residentId) {
+            const resUserObjectId = typeof residentId === "string" ? new mongoose.Types.ObjectId(residentId) : residentId;
+            filter.userId = resUserObjectId;
+        }
 
         const byMode = await Payment.aggregate([
             { $match: filter },

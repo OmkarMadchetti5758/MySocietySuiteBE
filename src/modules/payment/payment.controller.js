@@ -132,6 +132,17 @@ class PaymentController {
             const societyId = req.user?.societyId || req.query.societyId || req.headers["x-society-id"];
             if (!societyId) return sendError(res, 400, "Society ID is required.");
 
+            // If resident, enforce residentId scoping
+            const roleKeys = req.user?.roleKeys || [];
+            const isAdmin = req.user?.role === "admin" || req.user?.role === "super_admin" || roleKeys.includes("admin") || roleKeys.includes("super_admin");
+            const isAccountant = roleKeys.includes("accountant");
+            let residentId = req.query.residentId;
+            let residentUser = null;
+            if (!isAdmin && !isAccountant) {
+                residentId = req.user?.id || req.user?._id;
+                residentUser = req.user;
+            }
+
             const db = req.opsDb;
             const stats = await PaymentService.getOverviewStats({
                 db,
@@ -143,6 +154,8 @@ class PaymentController {
                 flatId: req.query.flatId,
                 paymentMode: req.query.paymentMode,
                 paymentAccountId: req.query.paymentAccountId,
+                residentId,
+                residentUser,
             });
 
             return sendSuccess(res, 200, "Payment metrics fetched successfully.", stats);
@@ -241,6 +254,17 @@ class PaymentController {
             const societyId = req.user?.societyId || req.query.societyId || req.headers["x-society-id"];
             if (!societyId) return sendError(res, 400, "Society ID is required.");
 
+            // Scope to resident's own payments when applicable
+            const roleKeys = req.user?.roleKeys || [];
+            const isAdmin = req.user?.role === "admin" || req.user?.role === "super_admin" || roleKeys.includes("admin") || roleKeys.includes("super_admin");
+            const isAccountant = roleKeys.includes("accountant");
+            let residentId = null;
+            let residentUser = null;
+            if (!isAdmin && !isAccountant) {
+                residentId = req.user?.id || req.user?._id;
+                residentUser = req.user;
+            }
+
             const db = req.opsDb;
             const analytics = await PaymentService.getCollectionsAnalytics({
                 db,
@@ -249,6 +273,8 @@ class PaymentController {
                 endDate: req.query.endDate,
                 flatId: req.query.flatId,
                 paymentAccountId: req.query.paymentAccountId,
+                residentId,
+                residentUser,
             });
 
             return sendSuccess(res, 200, "Collection analytics retrieved successfully.", analytics);
