@@ -12,7 +12,10 @@ const { getPaymentModels } = require("../payment/payment.model");
 const PaymentService = require("../payment/payment.service");
 
 const getFestivalCollectionModel = () => getOperationsConnection().model("FestivalCollection");
-const getFestivalContributionModel = () => getOperationsConnection().model("FestivalContribution");
+const getFestivalContributionModel = () => {
+    getPaymentModels(getOperationsConnection());
+    return getOperationsConnection().model("FestivalContribution");
+};
 const getFlatModel = () => getOperationsConnection().model("Flat");
 const getBlockModel = () => getOperationsConnection().model("Block");
 const getUserSocietyMappingModel = () => getMasterConnection().model("UserSocietyMapping");
@@ -171,10 +174,24 @@ exports.initiateOnlinePayment = async (req, res, next) => {
         const FestivalContribution = getFestivalContributionModel();
         const Flat = getFlatModel();
         const { id } = req.params;
-        const { amount, flatId } = req.body;
+        const { amount, flatId: bodyFlatId } = req.body;
+        let flatId = bodyFlatId || req.user.flatId;
 
-        if (!amount || amount <= 0) {
+        if (!flatId) {
+            const userFlat = await Flat.findOne({
+                societyId: req.societyId,
+                $or: [{ primaryOwner: req.user.id }, { activeTenant: req.user.id }]
+            });
+            if (userFlat) flatId = userFlat._id;
+        }
+
+        const numAmount = Number(amount);
+        if (!numAmount || numAmount <= 0) {
             return next(new AppError("INVALID_AMOUNT", 400, "Invalid payment amount"));
+        }
+
+        if (!flatId) {
+            return next(new AppError("INVALID_FLAT", 400, "Flat ID is required for contribution"));
         }
 
         const collection = await FestivalCollection.findOne({ _id: id, societyId: req.societyId });
@@ -190,7 +207,7 @@ exports.initiateOnlinePayment = async (req, res, next) => {
             return next(new AppError("NOT_APPLICABLE", 403, "This collection is not applicable to your flat"));
         }
 
-        const receiptRef = `FEST_${Date.now()}_${flat.flatNumber}`;
+        const receiptRef = `FEST_${Date.now()}_${flat.flatNumber || 'FLAT'}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
         const keyId = process.env.RAZORPAY_KEY_ID;
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
@@ -200,10 +217,10 @@ exports.initiateOnlinePayment = async (req, res, next) => {
 
         const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
         const postData = JSON.stringify({
-            amount: Math.round(amount * 100),
+            amount: Math.round(numAmount * 100),
             currency: "INR",
             receipt: receiptRef,
-            notes: { collectionId: id, flatId: flatId, residentId: req.user.id },
+            notes: { collectionId: String(id), flatId: String(flatId), residentId: String(req.user.id) },
         });
 
         const https = require("https");
@@ -224,11 +241,15 @@ exports.initiateOnlinePayment = async (req, res, next) => {
                 let body = "";
                 response.on("data", (chunk) => (body += chunk));
                 response.on("end", () => {
-                    const parsed = JSON.parse(body);
-                    if (response.statusCode >= 200 && response.statusCode < 300) {
-                        resolve(parsed);
-                    } else {
-                        reject(new AppError("GATEWAY_ERROR", 500, parsed.error?.description || "Gateway failed"));
+                    try {
+                        const parsed = JSON.parse(body);
+                        if (response.statusCode >= 200 && response.statusCode < 300) {
+                            resolve(parsed);
+                        } else {
+                            reject(new AppError("GATEWAY_ERROR", 500, parsed.error?.description || "Gateway failed"));
+                        }
+                    } catch (e) {
+                        reject(new AppError("GATEWAY_ERROR", 500, "Failed to parse payment gateway response"));
                     }
                 });
             });
@@ -390,6 +411,18 @@ exports.verifyOnlinePayment = async (req, res, next) => {
             { $inc: { collectedAmount: contribution.amount } }
         );
 
+        const collection = await FestivalCollection.findById(contribution.festivalCollectionId);
+        const LedgerPostingService = require("../ledger/ledgerPosting.service");
+        await LedgerPostingService.autoPost("festival-online-payment", () =>
+            LedgerPostingService.postFestivalContribution({
+                societyId: req.societyId,
+                userId: req.user.id,
+                payment,
+                collectionTitle: collection?.title,
+                db: getOperationsConnection()
+            })
+        );
+
         return sendSuccess(res, 200, "Payment verified successfully", { receipt });
     } catch (error) {
         next(error);
@@ -404,15 +437,46 @@ exports.recordOfflineContribution = async (req, res, next) => {
         const Flat = getFlatModel();
 
         const { id } = req.params;
-        const { flatId, residentId, amount, paymentMode, transactionRef, paymentAccountId, notes } = req.body;
+        const {
+            flatId,
+            residentId,
+            amount,
+            paymentMode = "CASH",
+            transactionRef,
+            reference,
+            paymentDate,
+            paymentAccountId,
+            notes
+        } = req.body;
+
+        const numAmount = Number(amount);
+        if (!numAmount || numAmount <= 0) {
+            return next(new AppError("INVALID_AMOUNT", 400, "Please provide a valid contribution amount"));
+        }
 
         const collection = await FestivalCollection.findOne({ _id: id, societyId: req.societyId });
         if (!collection || collection.status !== "ACTIVE") {
             return next(new AppError("INVALID_COLLECTION", 400, "Collection not active or not found"));
         }
 
-        const flat = await Flat.findOne({ _id: flatId, societyId: req.societyId });
+        const flat = await Flat.findOne({ _id: flatId, societyId: req.societyId })
+            .populate("primaryOwner", "name email phone")
+            .populate("activeTenant", "name email phone");
         if (!flat) return next(new AppError("INVALID_FLAT", 400, "Invalid flat"));
+
+        const finalRef = transactionRef || reference || "";
+        const finalDate = paymentDate ? new Date(paymentDate) : new Date();
+        const residentObj = flat.primaryOwner || flat.activeTenant;
+        // In some societies flats are not assigned to a user yet; fallback to recording user or flat's occupant
+        const finalResidentId = residentId || (residentObj ? residentObj._id : req.user.id);
+        const residentName = req.body.residentName || residentObj?.name || `Flat ${flat.flatNumber} Resident`;
+
+        // Check if a contribution for this flat already exists (to avoid duplicate key error on { societyId, festivalCollectionId, flatId })
+        let existingContribution = await FestivalContribution.findOne({
+            societyId: req.societyId,
+            festivalCollectionId: collection._id,
+            flatId: flat._id
+        });
 
         const count = await Payment.countDocuments({ societyId: req.societyId });
         const paymentNumber = `PAY-${new Date().getFullYear()}-${String(count + 1).padStart(5, "0")}`;
@@ -423,19 +487,19 @@ exports.recordOfflineContribution = async (req, res, next) => {
         const payment = await Payment.create({
             societyId: req.societyId,
             flatId: flat._id,
-            userId: residentId,
+            userId: finalResidentId,
             festivalCollectionId: collection._id,
             paymentCategory: "FESTIVAL",
             paymentAccountId: paymentAccountId || "OFFLINE_CASH",
-            paymentAccountName: "Cash/Bank Account",
+            paymentAccountName: paymentMode === "UPI" ? "UPI Account" : paymentMode === "BANK_TRANSFER" ? "Bank Transfer" : "Cash/Bank Account",
             paymentNumber,
-            amount: amount,
+            amount: numAmount,
             paymentMode: paymentMode || "CASH",
             paymentSource: "OFFLINE",
             paymentStatus: "SUCCESS",
             reconciliationStatus: "UNRECONCILED",
-            transactionReference: transactionRef,
-            paymentDate: new Date(),
+            transactionReference: finalRef,
+            paymentDate: finalDate,
             recordedBy: req.user.id,
             receiptNumber,
             notes
@@ -467,45 +531,73 @@ exports.recordOfflineContribution = async (req, res, next) => {
             paymentId: payment._id,
             festivalCollectionId: collection._id,
             flatId: flat._id,
-            userId: residentId,
-            residentName: "Resident",
+            userId: finalResidentId,
+            residentName: residentName,
             flatNumber: flat.flatNumber || "",
-            amount: amount,
-            amountInWords: numberToWords(amount),
+            amount: numAmount,
+            amountInWords: numberToWords(numAmount),
             paymentMode: paymentMode || "CASH",
-            paymentAccountName: "Cash/Bank Account",
-            transactionRef: transactionRef || "",
-            currentPaidAmount: amount,
-            generatedAt: new Date(),
+            paymentAccountName: paymentMode === "UPI" ? "UPI Account" : paymentMode === "BANK_TRANSFER" ? "Bank Transfer" : "Cash/Bank Account",
+            transactionRef: finalRef,
+            currentPaidAmount: numAmount,
+            generatedAt: finalDate,
             generatedBy: req.user.id,
         });
 
         payment.receiptId = receipt._id;
         await payment.save();
 
-        const contribution = await FestivalContribution.create({
-            societyId: req.societyId,
-            festivalCollectionId: collection._id,
-            flatId: flat._id,
-            paidBy: residentId,
-            amount: amount,
-            status: PAYMENT_STATUS.SUCCESS,
-            paymentMethod: paymentMode || "CASH",
-            paymentSource: "OFFLINE",
-            paymentId: payment._id,
-            receiptId: receipt._id,
-            transactionRef: transactionRef,
-            paymentDate: new Date(),
-            recordedBy: req.user.id
-        });
+        let contribution;
+        if (existingContribution) {
+            existingContribution.amount = (existingContribution.amount || 0) + numAmount;
+            existingContribution.paidBy = finalResidentId;
+            existingContribution.status = PAYMENT_STATUS.SUCCESS;
+            existingContribution.paymentMethod = String(paymentMode || "CASH").toLowerCase();
+            existingContribution.paymentSource = "OFFLINE";
+            existingContribution.paymentId = payment._id;
+            existingContribution.receiptId = receipt._id;
+            existingContribution.transactionRef = finalRef;
+            existingContribution.paymentDate = finalDate;
+            existingContribution.recordedBy = req.user.id;
+            await existingContribution.save();
+            contribution = existingContribution;
+        } else {
+            contribution = await FestivalContribution.create({
+                societyId: req.societyId,
+                festivalCollectionId: collection._id,
+                flatId: flat._id,
+                paidBy: finalResidentId,
+                amount: numAmount,
+                status: PAYMENT_STATUS.SUCCESS,
+                paymentMethod: String(paymentMode || "CASH").toLowerCase(),
+                paymentSource: "OFFLINE",
+                paymentId: payment._id,
+                receiptId: receipt._id,
+                transactionRef: finalRef,
+                paymentDate: finalDate,
+                recordedBy: req.user.id
+            });
+        }
 
         await FestivalCollection.updateOne(
             { _id: collection._id },
-            { $inc: { collectedAmount: amount } }
+            { $inc: { collectedAmount: numAmount } }
+        );
+
+        const LedgerPostingService = require("../ledger/ledgerPosting.service");
+        await LedgerPostingService.autoPost("festival-offline-payment", () =>
+            LedgerPostingService.postFestivalContribution({
+                societyId: req.societyId,
+                userId: req.user.id,
+                payment,
+                collectionTitle: collection?.title,
+                db: getOperationsConnection()
+            })
         );
 
         return sendSuccess(res, 201, "Offline contribution recorded successfully", { contribution, receipt });
     } catch (error) {
+        console.error("Error in recordOfflineContribution:", error);
         next(error);
     }
 };
@@ -514,17 +606,25 @@ exports.getContributions = async (req, res, next) => {
     try {
         const FestivalContribution = getFestivalContributionModel();
         const { id } = req.params;
-        const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT } = req.query;
+        const { page = 1, limit = 200 } = req.query;
 
-        const query = { festivalCollectionId: id, societyId: req.societyId, status: PAYMENT_STATUS.SUCCESS };
+        const query = {
+            festivalCollectionId: id,
+            societyId: req.societyId,
+            status: { $in: [PAYMENT_STATUS.SUCCESS, "SUCCESS", "success"] }
+        };
         const skip = (page - 1) * limit;
 
         const contributions = await FestivalContribution.find(query)
-            .populate("flatId", "flatNumber")
-            .populate("paidBy", "name email")
-            .populate("receiptId", "receiptNumber")
+            .populate({
+                path: "flatId",
+                select: "flatNumber blockId",
+                populate: { path: "blockId", select: "name" }
+            })
+            .populate("paidBy", "name email phone")
+            .populate("receiptId", "receiptNumber generatedAt")
             .populate("paymentId", "paymentNumber gatewayOrderId gatewayTransactionId")
-            .sort({ createdAt: -1 })
+            .sort({ paymentDate: -1, createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit));
 
@@ -563,30 +663,98 @@ exports.getResidentStatus = async (req, res, next) => {
 
 exports.getCollectionReport = async (req, res, next) => {
     try {
+        getPaymentModels(getOperationsConnection());
         const FestivalCollection = getFestivalCollectionModel();
         const FestivalContribution = getFestivalContributionModel();
+        const Flat = getFlatModel();
         const { id } = req.params;
 
         const collection = await FestivalCollection.findOne({ _id: id, societyId: req.societyId });
         if (!collection) return next(new AppError("NOT_FOUND", 404, "Collection not found"));
 
-        const contributions = await FestivalContribution.aggregate([
-            { $match: { festivalCollectionId: collection._id, status: PAYMENT_STATUS.SUCCESS } },
+        const successStatuses = [PAYMENT_STATUS.SUCCESS, "SUCCESS", "success"];
+
+        // Payment mode breakdown aggregation
+        const modeAgg = await FestivalContribution.aggregate([
+            { $match: { festivalCollectionId: collection._id, status: { $in: successStatuses } } },
             { $group: { _id: "$paymentMethod", total: { $sum: "$amount" }, count: { $sum: 1 } } }
         ]);
 
-        const totalPaid = await FestivalContribution.countDocuments({ festivalCollectionId: collection._id, status: PAYMENT_STATUS.SUCCESS });
+        // All successful contributions populated
+        const contributions = await FestivalContribution.find({
+            festivalCollectionId: collection._id,
+            societyId: req.societyId,
+            status: { $in: successStatuses }
+        })
+            .populate({
+                path: "flatId",
+                select: "flatNumber blockId",
+                populate: { path: "blockId", select: "name" }
+            })
+            .populate("paidBy", "name email phone")
+            .populate("receiptId", "receiptNumber generatedAt")
+            .sort({ paymentDate: -1, createdAt: -1 });
 
-        return sendSuccess(res, 200, "Collection report fetched", {
+        const totalPaidCount = contributions.length;
+        const totalCollected = contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+
+        // Flats analysis according to applicableType
+        let targetFlatsCount = 0;
+        let unpaidFlats = [];
+        const paidFlatIds = new Set(
+            contributions.map(c => c.flatId?._id ? c.flatId._id.toString() : (c.flatId ? c.flatId.toString() : null)).filter(Boolean)
+        );
+
+        let targetFlatFilter = { societyId: req.societyId };
+        if (collection.applicableType === "SPECIFIC_BLOCK" && collection.applicableBlocks?.length > 0) {
+            targetFlatFilter.blockId = { $in: collection.applicableBlocks };
+        } else if (collection.applicableType === "SPECIFIC_FLAT" && collection.applicableFlats?.length > 0) {
+            targetFlatFilter._id = { $in: collection.applicableFlats };
+        } else if (collection.targetFlats && collection.targetFlats.length > 0) {
+            targetFlatFilter._id = { $in: collection.targetFlats };
+        }
+
+        const targetFlatsList = await Flat.find(targetFlatFilter)
+            .populate("blockId", "name")
+            .populate("primaryOwner", "name phone")
+            .lean()
+            .catch(() => []);
+
+        targetFlatsCount = targetFlatsList.length;
+        unpaidFlats = targetFlatsList.filter(f => !paidFlatIds.has(f._id.toString()));
+
+        const totalUnpaidCount = Math.max(0, targetFlatsCount - totalPaidCount);
+
+        const reportData = {
             collection,
+            totalTarget: collection.targetAmount || 0,
+            totalCollected: totalCollected || collection.collectedAmount || 0,
+            totalPaidCount,
+            totalUnpaidCount,
+            targetFlatsCount,
+            byPaymentMode: modeAgg.map(m => ({
+                _id: m._id || "CASH",
+                total: m.total || 0,
+                count: m.count || 0
+            })),
+            contributions,
+            unpaidFlats: unpaidFlats.map(f => ({
+                _id: f._id,
+                flatNumber: f.flatNumber,
+                blockName: f.blockId?.name || "",
+                residentName: f.primaryOwner?.name || "-"
+            })),
             metrics: {
-                totalCollected: collection.collectedAmount,
-                targetAmount: collection.targetAmount,
-                totalPaidResidents: totalPaid,
-                methodBreakdown: contributions
+                totalCollected: totalCollected || collection.collectedAmount || 0,
+                targetAmount: collection.targetAmount || 0,
+                totalPaidResidents: totalPaidCount,
+                methodBreakdown: modeAgg
             }
-        });
+        };
+
+        return sendSuccess(res, 200, "Collection report fetched", reportData);
     } catch (error) {
+        console.error("Error in getCollectionReport:", error);
         next(error);
     }
 };
