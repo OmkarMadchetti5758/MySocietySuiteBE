@@ -35,9 +35,12 @@ const parkingRequestSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Vehicle",
         },
+        requestType: {
+            type: String,
+            default: "NEW_SLOT",
+        },
         requestedSlotType: {
             type: String,
-            enum: Object.values(PARKING_TYPE),
         },
         notes: {
             type: String,

@@ -82,7 +82,10 @@ const assertSlotAvailable = (slot) => {
  */
 const getResidentContextOrThrow = async (db, userId, societyId) => {
     const Resident = db.model("Resident");
-    const resident = await Resident.findOne({ userId, societyId, isActive: true }).lean();
+    let resident = await Resident.findOne({ userId, societyId, isActive: true }).lean();
+    if (!resident && mongoose.Types.ObjectId.isValid(userId)) {
+        resident = await Resident.findOne({ _id: userId, societyId, isActive: true }).lean();
+    }
     if (!resident) throw new AppError("Resident not found in this society.", 404, "RESIDENT_NOT_FOUND");
     return resident;
 };
@@ -449,7 +452,8 @@ const ParkingService = {
         if (!regNumber) throw new AppError("Vehicle registration number is required.", 400, "VEHICLE_NOT_FOUND");
 
         // Validate resident context
-        const resident = await getResidentContextOrThrow(db, userId, societyId);
+        const resident = await getResidentContextOrThrow(db, userId || requestingUserId, societyId);
+        userId = resident.userId;
         if (flatId) {
             const flat = await getFlatOrThrow(db, flatId, societyId);
             assertResidentInFlat(resident, flat._id);
@@ -646,7 +650,16 @@ const ParkingService = {
 
         // 4. Validate vehicle
         const vehicle = await getVehicleOrThrow(db, vehicleId, societyId);
-        if (String(vehicle.userId) !== String(userId))
+        const vehicleUserId = String(vehicle.userId?._id || vehicle.userId || "");
+        const vehicleResidentId = String(vehicle.residentId?._id || vehicle.residentId || "");
+        const targetUserId = String(resident.userId?._id || resident.userId || userId || "");
+        const targetResidentId = String(resident._id || "");
+
+        const belongsToResident =
+            (vehicleUserId && targetUserId && vehicleUserId === targetUserId) ||
+            (vehicleResidentId && targetResidentId && vehicleResidentId === targetResidentId);
+
+        if (!belongsToResident)
             throw new AppError("Vehicle does not belong to the specified resident.", 400, "INVALID_VEHICLE_TYPE");
 
         // 5. Validate date range for TEMPORARY assignments
@@ -695,6 +708,32 @@ const ParkingService = {
                 assignedBy: assignedByUserId,
                 notes,
             });
+
+            // Store parking slot id in vehicle record
+            if (vehicleId) {
+                const Vehicle = db.model("Vehicle");
+                await Vehicle.updateOne(
+                    { _id: vehicleId },
+                    { $set: { parkingSlotId: slotId, updatedBy: assignedByUserId } }
+                );
+            }
+
+            // If linked to a parking request, mark request approved
+            if (body.requestId) {
+                const ParkingRequest = db.model("ParkingRequest");
+                await ParkingRequest.findOneAndUpdate(
+                    { _id: body.requestId, status: PARKING_REQUEST_STATUS.PENDING },
+                    {
+                        $set: {
+                            status: PARKING_REQUEST_STATUS.APPROVED,
+                            reviewedBy: assignedByUserId,
+                            reviewedAt: new Date(),
+                            assignmentId: assignment._id,
+                        },
+                    }
+                );
+            }
+
             return { assignment, slot: updatedSlot };
         } catch (err) {
             // Rollback slot status on assignment failure
@@ -787,6 +826,15 @@ const ParkingService = {
             { $set: { status: PARKING_STATUS.AVAILABLE, updatedBy: releasedByUserId }, $inc: { version: 1 } }
         );
 
+        // Clear parkingSlotId from Vehicle
+        if (assignment.vehicleId) {
+            const Vehicle = db.model("Vehicle");
+            await Vehicle.updateOne(
+                { _id: assignment.vehicleId },
+                { $set: { parkingSlotId: null, updatedBy: releasedByUserId } }
+            );
+        }
+
         return assignment;
     },
 
@@ -824,23 +872,54 @@ const ParkingService = {
     async createRequest({ societyId, requestingUserId, body }) {
         const db = getOperationsConnection();
         const ParkingRequest = db.model("ParkingRequest");
+        const Resident = db.model("Resident");
 
-        const { vehicleId, requestedSlotType, notes } = body;
+        const {
+            vehicleId,
+            requestedSlotType,
+            preferredSlotType,
+            preferredType,
+            requestType,
+            notes,
+            reason
+        } = body;
 
-        const resident = await getResidentContextOrThrow(db, requestingUserId, societyId);
+        let resident;
+        let targetUserId = requestingUserId;
+
+        // If admin/staff is submitting on behalf of a resident
+        if (body.residentId) {
+            resident = await Resident.findOne({ _id: body.residentId, societyId, isActive: true }).lean();
+            if (!resident && mongoose.Types.ObjectId.isValid(body.residentId)) {
+                resident = await Resident.findOne({ userId: body.residentId, societyId, isActive: true }).lean();
+            }
+            if (resident) {
+                targetUserId = resident.userId;
+            }
+        }
+
+        if (!resident) {
+            resident = await getResidentContextOrThrow(db, requestingUserId, societyId);
+            targetUserId = resident.userId || requestingUserId;
+        }
 
         if (vehicleId) {
             await getVehicleOrThrow(db, vehicleId, societyId);
         }
 
+        const finalRequestedSlotType = requestedSlotType || preferredSlotType || preferredType || "FOUR_WHEELER";
+        const finalNotes = notes || reason || "";
+        const finalRequestType = requestType || "NEW_SLOT";
+
         const request = await ParkingRequest.create({
             societyId,
-            userId: requestingUserId,
+            userId: targetUserId,
             residentId: resident._id,
             flatId: resident.flatId,
             vehicleId: vehicleId || null,
-            requestedSlotType: requestedSlotType || null,
-            notes,
+            requestType: finalRequestType,
+            requestedSlotType: finalRequestedSlotType,
+            notes: finalNotes,
             status: PARKING_REQUEST_STATUS.PENDING,
         });
 
@@ -880,6 +959,11 @@ const ParkingService = {
             const wingName = req.flatId?.wing || req.flatId?.blockId?.wingName || req.flatId?.blockId?.name || "";
             return {
                 ...req,
+                requestType: req.requestType || "NEW_SLOT",
+                requestedSlotType: req.requestedSlotType || "FOUR_WHEELER",
+                preferredSlotType: req.requestedSlotType || "FOUR_WHEELER",
+                notes: req.notes || "",
+                reason: req.notes || "",
                 flatId: req.flatId ? { ...req.flatId, wing: wingName } : null,
                 residentId: req.residentId ? {
                     ...req.residentId,
@@ -896,18 +980,22 @@ const ParkingService = {
         const db = getOperationsConnection();
         const ParkingRequest = db.model("ParkingRequest");
 
+        const pendingStatusFilter = { $in: [PARKING_REQUEST_STATUS.PENDING, "pending", "PENDING"] };
+
         const request = await ParkingRequest.findOne({
             _id: requestId,
             societyId,
-            status: PARKING_REQUEST_STATUS.PENDING,
+            status: pendingStatusFilter,
         });
 
         if (!request)
             throw new AppError("Pending parking request not found.", 404, "PARKING_REQUEST_NOT_FOUND");
 
-        const { slotId, notes } = body;
+        const { slotId, notes, vehicleId, assignmentType } = body;
 
-        // Allocate parking (this handles all validation + concurrency)
+        // Allocate parking (this handles all validation + concurrency + vehicle update).
+        // CRITICAL: Do NOT pass requestId to allocateParking to prevent it from pre-emptively
+        // marking the request approved before our atomic concurrency check below!
         const { assignment } = await ParkingService.allocateParking({
             societyId,
             assignedByUserId: reviewedByUserId,
@@ -915,15 +1003,15 @@ const ParkingService = {
                 slotId,
                 userId: request.userId,
                 flatId: request.flatId,
-                vehicleId: request.vehicleId,
-                assignmentType: PARKING_ASSIGNMENT_TYPE.PERMANENT,
+                vehicleId: vehicleId || request.vehicleId,
+                assignmentType: assignmentType || PARKING_ASSIGNMENT_TYPE.PERMANENT,
                 notes,
             },
         });
 
         // Update request status atomically - prevents double-approval
         const updated = await ParkingRequest.findOneAndUpdate(
-            { _id: requestId, status: PARKING_REQUEST_STATUS.PENDING },
+            { _id: requestId, status: pendingStatusFilter },
             {
                 $set: {
                     status: PARKING_REQUEST_STATUS.APPROVED,
