@@ -24,6 +24,7 @@ const startServer = async () => {
         // 4. Start Express Server
         const server = app.listen(env.PORT, () => {
             logger.info(`🚀 Server running on http://localhost:${env.PORT}`);
+            logger.info(`📑 Swagger Docs available at http://localhost:${env.PORT}/api-docs`);
             logger.info(`Environment: ${env.NODE_ENV}`);
         });
 
