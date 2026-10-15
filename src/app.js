@@ -8,13 +8,19 @@ const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 const v1Routes = require("./routes/v1");
 
+const { swaggerUi, swaggerSpec, swaggerUiOptions } = require("./config/swagger");
+
 const app = express();
 
 // Disable ETag - prevents 304 "Not Modified" responses on dynamic API data
 app.set("etag", false);
 
-// Security HTTP headers
-app.use(helmet());
+// Security HTTP headers (disable CSP for Swagger UI compatibility)
+app.use(
+    helmet({
+        contentSecurityPolicy: false,
+    })
+);
 
 // Enable CORS
 app.use(cors());
@@ -42,6 +48,14 @@ app.use(
         },
     })
 );
+
+// Swagger API Documentation (UI & JSON specification)
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+app.get("/api-docs.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.send(swaggerSpec);
+});
+app.get(["/docs", "/api/docs"], (req, res) => res.redirect("/api-docs"));
 
 // API Versioning - mount v1 routes
 app.use("/api/v1", v1Routes);
