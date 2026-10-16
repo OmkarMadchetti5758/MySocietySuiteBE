@@ -19,6 +19,7 @@ router.get("/health", (req, res) => {
 // Module Routes
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
+router.use("/societies/setup", require("../../modules/societySetup/societySetup.routes"));
 router.use("/societies", societyRoutes);
 router.use("/super-admin", require("../../modules/superAdmin/superAdmin.routes"));
 router.use("/societies/:societyId/roles", require("../../modules/role/role.routes"));

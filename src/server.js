@@ -1,5 +1,6 @@
 "use strict";
 
+// Triggers nodemon reload
 const env = require("./config/env");
 const app = require("./app");
 const { connectMasterDB } = require("./config/masterDb");

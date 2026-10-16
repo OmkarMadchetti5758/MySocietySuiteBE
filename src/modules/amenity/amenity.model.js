@@ -28,8 +28,32 @@ const amenitySchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ["ACTIVE", "INACTIVE"],
-            default: "ACTIVE",
+            enum: ["ACTIVE", "INACTIVE", "UNDER_MAINTENANCE", "Active", "Inactive", "Under Maintenance"],
+            default: "Active",
+        },
+        category: {
+            type: String,
+            enum: ["Recreation", "Sports", "Community", "Fitness & Wellness", "Convenience", "Other"],
+        },
+        location: {
+            type: String,
+            trim: true,
+        },
+        bookable: {
+            type: Boolean,
+            default: false,
+        },
+        chargesApplicable: {
+            type: Boolean,
+            default: false,
+        },
+        operatingHours: {
+            type: String,
+            trim: true,
+        },
+        iconType: {
+            type: String,
+            trim: true,
         },
         requiresApproval: {
             type: Boolean,

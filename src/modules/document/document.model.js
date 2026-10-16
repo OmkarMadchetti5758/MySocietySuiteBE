@@ -30,7 +30,6 @@ const documentSchema = new mongoose.Schema(
         },
         fileUrl: {
             type: String,
-            required: [true, "File URL is required"],
             trim: true,
         },
         fileName: {
@@ -40,16 +39,30 @@ const documentSchema = new mongoose.Schema(
         fileSize: {
             type: Number, // in bytes
         },
+        fileType: {
+            type: String,
+            trim: true,
+        },
         uploadedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: [true, "uploadedBy is required"],
+        },
+        isMandatory: {
+            type: Boolean,
+            default: false,
+        },
+        expiryDate: {
+            type: Date,
+        },
+        documentStatus: {
+            type: String,
+            enum: ['Verified', 'Pending', 'Expiring Soon', 'Expired'],
+            default: 'Pending',
         },
         visibilityScope: {
             type: String,
             enum: ['All Residents', 'Committee Only', 'Specific Block'],
             default: 'All Residents',
-            required: [true, "visibilityScope is required"]
         },
         blockId: {
             type: mongoose.Schema.Types.ObjectId,
