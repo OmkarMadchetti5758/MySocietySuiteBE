@@ -143,6 +143,24 @@ class AuthService {
         userObj.password = undefined;
         userObj.refreshToken = undefined;
 
+        let setupStatus = "completed";
+        let setupProgress = { currentStep: 1, completedSteps: [] };
+        if (user.societyId) {
+            try {
+                const masterDb = require("../../config/masterDb").getMasterConnection();
+                const Society = masterDb.model("Society");
+                const soc = await Society.findById(user.societyId).select("setupStatus setupProgress").lean();
+                if (soc) {
+                    setupStatus = soc.setupStatus || "in_progress";
+                    setupProgress = soc.setupProgress || { currentStep: 1, completedSteps: [] };
+                }
+            } catch (err) {
+                console.error("[login] Error fetching society setupStatus:", err.message);
+            }
+        }
+        userObj.setupStatus = setupStatus;
+        userObj.setupProgress = setupProgress;
+
         return {
             user: userObj,
             accessToken,
@@ -150,6 +168,8 @@ class AuthService {
             permissions: authContext.permissions,
             permissionsVersion: authContext.permissionsVersion,
             roleKeys: authContext.roleKeys,
+            setupStatus,
+            setupProgress,
         };
     }
 

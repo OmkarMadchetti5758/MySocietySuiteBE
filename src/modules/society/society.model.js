@@ -21,7 +21,15 @@ const societySchema = new mongoose.Schema(
         },
         societyType: {
             type: String,
-            enum: ["Residential", "Commercial", "Mixed"],
+            enum: [
+                "Residential",
+                "Commercial",
+                "Mixed",
+                "Mixed (Residential + Commercial)",
+                "Co-operative Housing Society",
+                "Gated Community / Villa",
+            ],
+            default: "Mixed (Residential + Commercial)",
         },
         numberOfBlocks: {
             type: Number,
@@ -67,6 +75,42 @@ const societySchema = new mongoose.Schema(
             // Incremented every time a role's permissions are changed for this society.
             // Embedded in JWT at login; middleware compares it on each request.
             // Mismatch signals the FE to re-fetch the permissions matrix without forcing re-login.
+        },
+        registrationDate: {
+            type: Date,
+        },
+        societyCode: {
+            type: String,
+            trim: true,
+        },
+        setupStatus: {
+            type: String,
+            enum: ["not_started", "in_progress", "completed"],
+            default: "in_progress",
+        },
+        setupProgress: {
+            currentStep: { type: Number, default: 1 },
+            completedSteps: [{ type: Number }],
+            lastSavedAt: { type: Date },
+        },
+        projectInfo: {
+            projectName: { type: String, trim: true },
+            developerName: { type: String, trim: true },
+            projectStartDate: { type: Date },
+            expectedCompletionDate: { type: Date },
+            actualCompletionDate: { type: Date },
+            possessionStartDate: { type: Date },
+            totalProjectArea: { type: Number },
+            totalDevelopedArea: { type: Number },
+            numberOfBuildings: { type: Number },
+            propertyType: { type: String, trim: true },
+        },
+        parkingConfig: {
+            fourWheeler: { type: Number, default: 0 },
+            twoWheeler: { type: Number, default: 0 },
+            visitor: { type: Number, default: 0 },
+            evCharging: { type: Number, default: 0 },
+            allocationMethod: { type: String, default: "By Society" },
         },
     },
     { timestamps: true }

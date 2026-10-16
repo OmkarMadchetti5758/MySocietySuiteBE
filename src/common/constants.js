@@ -667,12 +667,17 @@ const STAFF_TYPE = Object.freeze({
 });
 
 const DOCUMENT_TYPE = Object.freeze({
+    LEGAL: "Legal",
+    GOVERNANCE: "Governance",
+    PLANS_LAYOUTS: "Plans & Layouts",
+    NOC: "NOC",
+    MARKETING: "Marketing",
     MINUTES_OF_MEETING: "Minutes of Meeting",
     CIRCULARS: "Circulars",
     COMPLIANCE: "Compliance",
     FINANCIAL: "Financial",
     AGREEMENT: "agreement",
-    NOC: "noc",
+    NOC_LOWER: "noc",
     AUDIT_REPORT: "audit_report",
     OTHER: "other",
 });
