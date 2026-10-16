@@ -551,6 +551,188 @@ class BillingController {
             next(err);
         }
     }
+
+    static async getBillingHubStats(req, res, next) {
+        try {
+            const db = req.opsDb;
+            const societyId = req.user?.societyId;
+            if (!societyId) return sendError(res, 400, "Society ID is required.");
+
+            const mongoose = require("mongoose");
+            const socObjectId = typeof societyId === "string" ? new mongoose.Types.ObjectId(societyId) : societyId;
+
+            const roleKeys = req.user?.roleKeys || [];
+            const isAdmin = req.user?.role === "admin" || req.user?.role === "super_admin" || roleKeys.includes("admin") || roleKeys.includes("super_admin");
+            const isAccountant = roleKeys.includes("accountant");
+            const isResidentOnly = !isAdmin && !isAccountant;
+
+            const { getBillingModels } = require("./billing.model");
+            const { BillingInvoice, ChargeHead, CreditNote, VendorPayment } = getBillingModels(db);
+            const { getPaymentModels } = require("../payment/payment.model");
+            const { Payment } = getPaymentModels(db);
+            const { getDunningModels } = require("./dunning.model");
+            const { DefaulterRecord } = getDunningModels(db);
+            const { getReconciliationModels } = require("../reconciliation/reconciliation.model");
+            const { FinancialAccount } = getReconciliationModels(db);
+            const { getAdvanceDepositModels } = require("../advanceAccountsDeposits/advanceAccountsDeposits.model");
+            const { ResidentAdvanceAccount, SecurityDeposit } = getAdvanceDepositModels(db);
+            const { getLedgerModels } = require("../ledger/ledger.model");
+            const { ChartOfAccount: LedgerAccount } = getLedgerModels(db);
+            const { getBudgetModels } = require("../budget/budget.model");
+            const { Budget, BudgetLine } = getBudgetModels(db);
+            const { getBillingAuditModel } = require("../../services/billingAudit.service");
+            const AuditModel = getBillingAuditModel(db);
+
+            // Invoices filter based on user scope
+            const invFilter = { societyId: socObjectId };
+            if (isResidentOnly) {
+                invFilter.$or = [
+                    { residentUserId: req.user._id },
+                    { residentUserId: String(req.user._id) }
+                ];
+            }
+
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const curYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+            const currentFY = `${curYear}-${String(curYear + 1).slice(-2)}`;
+
+            const [
+                invoiceStats,
+                invoicedTotalAgg,
+                arrearsAgg,
+                chargeHeadsCount,
+                paymentTotalAgg,
+                monthPaymentAgg,
+                defaultersCount,
+                financialAccounts,
+                advancesAgg,
+                depositsAgg,
+                creditNotesAgg,
+                vendorPaymentsAgg,
+                activeLedgersCount,
+                auditLogsCount,
+                activeBudget
+            ] = await Promise.all([
+                Promise.all([
+                    BillingInvoice.countDocuments(invFilter).catch(() => 0),
+                    BillingInvoice.countDocuments({ ...invFilter, status: { $in: ["PAID", "paid"] } }).catch(() => 0),
+                    BillingInvoice.countDocuments({ ...invFilter, status: { $in: ["OVERDUE", "overdue"] } }).catch(() => 0),
+                ]),
+                BillingInvoice.aggregate([
+                    { $match: { ...invFilter, status: { $nin: ["CANCELLED", "cancelled"] } } },
+                    { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+                ]).catch(() => []),
+                BillingInvoice.aggregate([
+                    { $match: { ...invFilter, status: { $nin: ["PAID", "paid", "CANCELLED", "cancelled"] } } },
+                    {
+                        $group: {
+                            _id: null,
+                            total: {
+                                $sum: {
+                                    $subtract: [
+                                        { $add: [{ $ifNull: ["$totalAmount", 0] }, { $ifNull: ["$fineAmount", 0] }] },
+                                        { $ifNull: ["$paidAmount", 0] }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                ]).catch(() => []),
+                ChargeHead.countDocuments({ societyId: socObjectId, status: { $ne: "ARCHIVED" } }).catch(() => 0),
+                Payment.aggregate([
+                    { $match: { societyId: socObjectId, paymentStatus: "SUCCESS" } },
+                    { $group: { _id: null, total: { $sum: "$amount" } } }
+                ]).catch(() => []),
+                Payment.aggregate([
+                    { $match: { societyId: socObjectId, paymentStatus: "SUCCESS", paymentDate: { $gte: startOfMonth } } },
+                    { $group: { _id: null, total: { $sum: "$amount" } } }
+                ]).catch(() => []),
+                DefaulterRecord.countDocuments({ societyId: socObjectId, status: "DEFAULTER" }).catch(() => 0),
+                FinancialAccount.find({ societyId: socObjectId, status: "ACTIVE" }).select("currentBalance accountType").lean().catch(() => []),
+                ResidentAdvanceAccount.aggregate([
+                    { $match: { societyId: socObjectId, status: { $in: ["ACTIVE", "ZERO_BALANCE"] } } },
+                    { $group: { _id: null, total: { $sum: "$currentBalance" }, count: { $sum: 1 } } }
+                ]).catch(() => []),
+                SecurityDeposit.aggregate([
+                    { $match: { societyId: socObjectId, status: { $in: ["ACTIVE", "PARTIALLY_ADJUSTED", "REFUND_PENDING"] } } },
+                    { $group: { _id: null, total: { $sum: "$originalAmount" }, count: { $sum: 1 } } }
+                ]).catch(() => []),
+                CreditNote.aggregate([
+                    { $match: { societyId: socObjectId, status: { $in: ["APPROVED", "approved"] } } },
+                    { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
+                ]).catch(() => []),
+                Promise.all([
+                    VendorPayment.countDocuments({ societyId: socObjectId }).catch(() => 0),
+                    VendorPayment.aggregate([
+                        { $match: { societyId: socObjectId, status: { $in: ["APPROVED", "PAID", "paid"] } } },
+                        { $group: { _id: null, total: { $sum: "$billAmount" } } }
+                    ]).catch(() => [])
+                ]),
+                LedgerAccount.countDocuments({ societyId: socObjectId, status: "ACTIVE" }).catch(() => 0),
+                AuditModel.countDocuments({ societyId: socObjectId }).catch(() => 0),
+                Budget.findOne({ societyId: socObjectId, financialYear: currentFY, status: "APPROVED" }).lean().catch(() => null)
+            ]);
+
+            const invoicesTotal = invoiceStats[0] || 0;
+            const invoicesPaid = invoiceStats[1] || 0;
+            const invoicesOverdue = invoiceStats[2] || 0;
+            const totalInvoicedAmount = invoicedTotalAgg[0]?.total || 0;
+            const totalArrears = arrearsAgg[0]?.total || 0;
+            const activeChargeHeads = chargeHeadsCount || 0;
+            const totalCollected = paymentTotalAgg[0]?.total || 0;
+            const collectedThisMonth = monthPaymentAgg[0]?.total || 0;
+
+            let reconciledBalance = 0;
+            financialAccounts.forEach(a => { reconciledBalance += (a.currentBalance || 0); });
+
+            const advanceBalance = advancesAgg[0]?.total || 0;
+            const depositsHeld = depositsAgg[0]?.total || 0;
+            const totalHeldDeposits = advanceBalance + depositsHeld;
+            const advanceAccountsCount = advancesAgg[0]?.count || 0;
+
+            const discountsIssued = creditNotesAgg[0]?.total || 0;
+            const creditNotesCount = creditNotesAgg[0]?.count || 0;
+
+            const vendorPaymentsCount = vendorPaymentsAgg[0] || 0;
+            const vendorPaymentsAmount = vendorPaymentsAgg[1]?.[0]?.total || 0;
+
+            let budgetTotalPaise = 0;
+            if (activeBudget) {
+                const lines = await BudgetLine.find({ budgetId: activeBudget._id }).lean().catch(() => []);
+                budgetTotalPaise = lines.reduce((sum, l) => sum + (l.allocatedPaise || 0), 0);
+            }
+
+            const data = {
+                invoicesIssued: invoicesTotal,
+                invoicesPaid,
+                invoicesOverdue,
+                totalInvoicedAmount,
+                activeChargeHeads,
+                totalArrears,
+                overdueInvoicesCount: invoicesOverdue,
+                defaultersCount,
+                totalCollected,
+                collectedThisMonth,
+                totalHeldDeposits,
+                advanceAccountsCount,
+                discountsIssued,
+                creditNotesCount,
+                reconciledBalance,
+                financialAccountsCount: financialAccounts.length,
+                activeLedgers: activeLedgersCount,
+                vendorPaymentsCount,
+                vendorPaymentsAmount,
+                auditLogsCount,
+                budgetTotalPaise,
+                budgetFYLabel: `FY ${currentFY} Budget`
+            };
+
+            return sendSuccess(res, 200, "Billing hub statistics retrieved successfully.", data);
+        } catch (err) {
+            next(err);
+        }
+    }
 }
 
 module.exports = BillingController;

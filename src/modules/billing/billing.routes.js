@@ -12,6 +12,9 @@ const router = express.Router();
 // Apply global JWT authentication to all billing routes
 router.use(authenticate);
 
+// ── Billing Hub Summary Overview (All Submodules & Executive KPIs) ──────────
+router.get("/hub-stats", BillingController.getBillingHubStats);
+
 // ── 1. Charge Heads ────────────────────────────────────────────────────────
 router.get(
     "/charge-heads",
