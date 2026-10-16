@@ -17,14 +17,19 @@ class SuperAdminService {
         return SuperAdminRepository.getPaginatedSocieties(p, l, search);
     }
 
+    async getSubscriptionPlans() {
+        return SuperAdminRepository.getSubscriptionPlans();
+    }
+
     async createSuperAdmin(data) {
         return SuperAdminRepository.createSuperAdmin(data);
     }
 
     async createSociety(data) {
-        const { societyDetails, adminDetails } = data;
+        const { societyDetails, adminDetails, subscriptionPlanId } = data;
+        const planId = subscriptionPlanId || societyDetails?.subscriptionPlanId;
 
-        const result = await SuperAdminRepository.createSocietyWithAdmin(societyDetails, adminDetails);
+        const result = await SuperAdminRepository.createSocietyWithAdmin(societyDetails, adminDetails, planId);
 
         // Construct the activation link
         const frontendUrl = FRONTEND_URL;

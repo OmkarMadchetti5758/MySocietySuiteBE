@@ -8,6 +8,27 @@ class RoleRepository {
     _masterDb() { return getMasterConnection(); }
     _opsDb() { return getOperationsConnection(); }
 
+    async getSocietyPlan(societyId) {
+        if (!societyId || societyId === "GLOBAL") return null;
+        const masterDb = this._masterDb();
+        const Society = masterDb.model("Society");
+        const SubscriptionPlan = masterDb.model("SubscriptionPlan");
+
+        let society = null;
+        if (require("mongoose").Types.ObjectId.isValid(societyId)) {
+            society = await Society.findById(societyId).populate("subscriptionPlanId").lean();
+        } else {
+            society = await Society.findOne({ societyCode: societyId }).populate("subscriptionPlanId").lean();
+        }
+
+        if (society?.subscriptionPlanId) {
+            return society.subscriptionPlanId;
+        }
+
+        // Fallback default
+        return SubscriptionPlan.findOne({ slug: "advanced" }).lean();
+    }
+
     async getPermissionCatalog() {
         const Permission = this._masterDb().model("Permission");
         return Permission.find({ isDeprecated: { $ne: true } })
