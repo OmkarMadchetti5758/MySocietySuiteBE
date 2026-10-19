@@ -1,5 +1,6 @@
 "use strict";
 
+const mongoose = require("mongoose");
 const { getMasterConnection } = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
 
@@ -81,15 +82,34 @@ class SuperAdminRepository {
         const Subscription = masterDb.model("Subscription");
 
         // Resolve plan
-        let planId = subscriptionPlanId || societyData.subscriptionPlanId;
+        let planId = subscriptionPlanId || societyData?.subscriptionPlanId;
         let plan = null;
         if (planId) {
-            plan = await SubscriptionPlan.findById(planId);
+            if (mongoose.Types.ObjectId.isValid(planId)) {
+                plan = await SubscriptionPlan.findById(planId);
+            } else if (typeof planId === "string") {
+                const slug = planId.replace("-fallback", "").toLowerCase().trim();
+                plan = await SubscriptionPlan.findOne({ slug });
+            }
         }
         if (!plan) {
-            // Default to Basic if not specified
-            plan = await SubscriptionPlan.findOne({ slug: "basic" }) || await SubscriptionPlan.findOne();
-            if (plan) planId = plan._id;
+            // Default to Basic if not specified or not found
+            plan = await SubscriptionPlan.findOne({ slug: "basic" }) || 
+                   await SubscriptionPlan.findOne({ isActive: true }) || 
+                   await SubscriptionPlan.findOne();
+        }
+        if (!plan) {
+            // Auto-seed if plans don't exist yet
+            try {
+                const seedSubscriptionPlans = require("../../scripts/seedSubscriptionPlans");
+                const planMap = await seedSubscriptionPlans();
+                plan = planMap["basic"] || planMap["advanced"];
+            } catch (seedErr) {
+                console.error("Auto-seed subscription plans error:", seedErr.message);
+            }
+        }
+        if (plan) {
+            planId = plan._id;
         }
 
         // 1. Create Society (PENDING_VERIFICATION)

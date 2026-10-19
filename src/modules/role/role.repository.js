@@ -190,6 +190,7 @@ class RoleRepository {
      * Fetch the latest audit entry for a role (for "last changed by X on Y" UI).
      */
     async getLatestAudit(societyId, roleKey) {
+        if (!societyId || societyId === "GLOBAL") return null;
         const opsDb = this._opsDb();
         const Audit = opsDb.model("RolePermissionAudit");
         return Audit.findOne({ societyId, roleKey })
