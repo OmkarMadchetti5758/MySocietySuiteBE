@@ -6,14 +6,20 @@ const AppError = require("../../common/AppError");
 class RoleService {
 
     async listRoles(societyId) {
-        const [roles, catalog] = await Promise.all([
+        const [roles, catalog, plan] = await Promise.all([
             RoleRepository.getRolesForSociety(societyId),
             RoleRepository.getPermissionCatalog(),
+            RoleRepository.getSocietyPlan(societyId),
         ]);
 
-        const catalogMap = new Map(catalog.map(c => [c.moduleKey, c]));
+        const allowedModules = plan?.modules ? new Set(plan.modules) : null;
+        const filteredCatalog = allowedModules
+            ? catalog.filter(c => allowedModules.has(c.moduleKey))
+            : catalog;
 
-        return roles.map(role => this._enrichRole(role, catalogMap, societyId));
+        const catalogMap = new Map(filteredCatalog.map(c => [c.moduleKey, c]));
+
+        return roles.map(role => this._enrichRole(role, catalogMap, societyId, plan));
     }
 
     async getRole(societyId, roleKey) {
@@ -21,18 +27,24 @@ class RoleService {
             throw new AppError("Super Admin role is not society-editable.", 403);
         }
 
-        const [role, catalog, audit] = await Promise.all([
+        const [role, catalog, audit, plan] = await Promise.all([
             RoleRepository.getRoleByKey(societyId, roleKey),
             RoleRepository.getPermissionCatalog(),
             RoleRepository.getLatestAudit(societyId, roleKey),
+            RoleRepository.getSocietyPlan(societyId),
         ]);
 
         if (!role) {
             throw new AppError(`Role '${roleKey}' not found.`, 404);
         }
 
-        const catalogMap = new Map(catalog.map(c => [c.moduleKey, c]));
-        const enriched = this._enrichRole(role, catalogMap, societyId);
+        const allowedModules = plan?.modules ? new Set(plan.modules) : null;
+        const filteredCatalog = allowedModules
+            ? catalog.filter(c => allowedModules.has(c.moduleKey))
+            : catalog;
+
+        const catalogMap = new Map(filteredCatalog.map(c => [c.moduleKey, c]));
+        const enriched = this._enrichRole(role, catalogMap, societyId, plan);
 
         return {
             ...enriched,
@@ -66,15 +78,28 @@ class RoleService {
             );
         }
 
-        // 3. Load catalog to resolve hardBlockedFor
-        const catalog = await RoleRepository.getPermissionCatalog();
+        // 3. Load catalog and active plan
+        const [catalog, plan] = await Promise.all([
+            RoleRepository.getPermissionCatalog(),
+            RoleRepository.getSocietyPlan(societyId),
+        ]);
+        const allowedModules = plan?.modules ? new Set(plan.modules) : null;
         const catalogMap = new Map(catalog.map(c => [c.moduleKey, c]));
 
-        // 4. Filter out hard-blocked modules and deprecated modules from the diff
+        // 4. Filter out hard-blocked modules, non-plan modules, and deprecated modules
         const safeDiff = {};
         for (const [moduleKey, patch] of Object.entries(permDiff)) {
             const catalogEntry = catalogMap.get(moduleKey);
             if (!catalogEntry) continue; // Deprecated/unknown module - skip silently
+
+            // Plan restriction check
+            if (allowedModules && !allowedModules.has(moduleKey)) {
+                throw new AppError(
+                    `Module '${moduleKey}' is not included in the active subscription plan (${plan?.name || "current"}).`,
+                    403,
+                    "PLAN_RESTRICTION"
+                );
+            }
 
             const hardBlocked = catalogEntry.hardBlockedFor || [];
             if (hardBlocked.includes(roleKey)) continue; // Hard-blocked - skip silently
@@ -109,7 +134,11 @@ class RoleService {
         // 6. Bump permissionsVersion so logged-in users' caches get invalidated
         await RoleRepository.bumpPermissionsVersion(societyId);
 
-        return this._enrichRole(updated, catalogMap, societyId);
+        const filteredCatalogMap = allowedModules
+            ? new Map([...catalogMap.entries()].filter(([k]) => allowedModules.has(k)))
+            : catalogMap;
+
+        return this._enrichRole(updated, filteredCatalogMap, societyId, plan);
     }
 
     async resetRole(societyId, roleKey, actor) {
@@ -144,7 +173,7 @@ class RoleService {
         return this.getRole(societyId, roleKey);
     }
 
-    _enrichRole(role, catalogMap, societyId) {
+    _enrichRole(role, catalogMap, societyId, plan = null) {
         const roleKey = role.roleKey;
         const rawPerms = role.permissions || {};
         // Map might be a plain object or a Map instance (depending on lean() vs doc)
@@ -186,6 +215,13 @@ class RoleService {
             updatedAt: role.updatedAt,
             updatedBy: role.updatedBy,
             permissions: enrichedPermissions,
+            activePlan: plan ? {
+                name: plan.name,
+                slug: plan.slug,
+                tagline: plan.tagline,
+                modules: plan.modules,
+                features: plan.features
+            } : null
         };
     }
 }

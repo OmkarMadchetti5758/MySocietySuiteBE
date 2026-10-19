@@ -10,6 +10,17 @@ const subscriptionPlanSchema = new mongoose.Schema(
             unique: true,
             trim: true,
         },
+        slug: {
+            type: String,
+            required: true,
+            unique: true,
+            lowercase: true,
+            trim: true,
+        },
+        tagline: {
+            type: String,
+            default: "",
+        },
         price: {
             type: Number,
             required: true,
@@ -22,11 +33,17 @@ const subscriptionPlanSchema = new mongoose.Schema(
         maxFlats: {
             type: Number,
             required: true,
+            default: 1000,
         },
         maxUsers: {
             type: Number,
             required: true,
+            default: 5000,
         },
+        modules: [{
+            type: String,
+            trim: true,
+        }],
         features: [{
             type: String
         }],

@@ -201,7 +201,30 @@ async function resolveEffectivePermissionsForRoles(societyId, roleKeys, fallback
         return null;
     }
 
-    return mergePermissionMatrices(valid);
+    const merged = mergePermissionMatrices(valid);
+
+    // Filter by society subscription plan if present
+    if (societyId) {
+        try {
+            const plan = await RoleRepository.getSocietyPlan(String(societyId));
+            if (plan?.modules && Array.isArray(plan.modules)) {
+                const allowedModules = new Set(plan.modules);
+                for (const moduleName of Object.keys(merged)) {
+                    // Check if moduleName or corresponding moduleKey is in allowedModules
+                    if (!allowedModules.has(moduleName)) {
+                        merged[moduleName] = {
+                            level: PERMISSION_LEVELS.NO_ACCESS,
+                            scope: PERMISSION_SCOPE.NONE,
+                        };
+                    }
+                }
+            }
+        } catch (_) {
+            // If plan cannot be checked, proceed with base merged permissions
+        }
+    }
+
+    return merged;
 }
 
 /**

@@ -96,6 +96,10 @@ class SocietyController {
             }
             delete updateData.subscriptionPlan;
 
+            if (updateData.subscriptionPlanId !== undefined && (!updateData.subscriptionPlanId || !mongoose.Types.ObjectId.isValid(updateData.subscriptionPlanId))) {
+                delete updateData.subscriptionPlanId;
+            }
+
             const society = await SocietyService.updateCurrentSociety(req.user.societyId, updateData);
             return sendSuccess(res, 200, "Society updated successfully", { society });
         } catch (error) {
