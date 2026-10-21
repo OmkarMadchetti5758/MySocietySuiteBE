@@ -7,23 +7,55 @@ const {
     MODULES,
     PERMISSION_LEVELS,
     PERMISSION_SCOPE,
+
     ROLES,
 } = require("./constants");
 
 const MODULE_KEY_TO_MODULE = Object.freeze({
     societyFlatSetup: MODULES.SOCIETY_FLAT_SETUP,
+    society_flat_setup: MODULES.SOCIETY_FLAT_SETUP,
+    residents: MODULES.SOCIETY_FLAT_SETUP,
     billingAccounts: MODULES.BILLING_ACCOUNTS,
+    billing_accounts: MODULES.BILLING_ACCOUNTS,
+    billing: MODULES.BILLING_ACCOUNTS,
     visitorManagement: MODULES.VISITOR_MANAGEMENT,
+    visitor_management: MODULES.VISITOR_MANAGEMENT,
+    visitors: MODULES.VISITOR_MANAGEMENT,
     complaintsHelpdesk: MODULES.COMPLAINTS_HELPDESK,
+    complaints_helpdesk: MODULES.COMPLAINTS_HELPDESK,
+    helpdesk: MODULES.COMPLAINTS_HELPDESK,
     noticeBoardPolls: MODULES.NOTICE_BOARD_POLLS,
+    notice_board_polls: MODULES.NOTICE_BOARD_POLLS,
+    notices: MODULES.NOTICE_BOARD_POLLS,
+    polls: MODULES.NOTICE_BOARD_POLLS,
     amenityBooking: MODULES.AMENITY_BOOKING,
+    amenity_booking: MODULES.AMENITY_BOOKING,
+    amenities: MODULES.AMENITY_BOOKING,
     parkingManagement: MODULES.PARKING_MANAGEMENT,
+    parking_management: MODULES.PARKING_MANAGEMENT,
+    parking: MODULES.PARKING_MANAGEMENT,
     vendorManagement: MODULES.VENDOR_MANAGEMENT,
+    vendor_management: MODULES.VENDOR_MANAGEMENT,
+    vendors: MODULES.VENDOR_MANAGEMENT,
     staffManagement: MODULES.STAFF_MANAGEMENT,
+    staff_management: MODULES.STAFF_MANAGEMENT,
+    staff: MODULES.STAFF_MANAGEMENT,
     documentsManager: MODULES.DOCUMENTS_MANAGER,
+    documents_manager: MODULES.DOCUMENTS_MANAGER,
+    documents: MODULES.DOCUMENTS_MANAGER,
     reportsDashboard: MODULES.REPORTS_DASHBOARD,
+    reports_dashboard: MODULES.REPORTS_DASHBOARD,
+    reports: MODULES.REPORTS_DASHBOARD,
     aiAssistant: MODULES.AI_ASSISTANT,
+    ai_assistant: MODULES.AI_ASSISTANT,
+    ai: MODULES.AI_ASSISTANT,
     festivalCollectionManagement: MODULES.FESTIVAL_COLLECTION,
+    festival_collection: MODULES.FESTIVAL_COLLECTION,
+    festivals: MODULES.FESTIVAL_COLLECTION,
+    community_events: MODULES.COMMUNITY_EVENTS,
+    communityEvents: MODULES.COMMUNITY_EVENTS,
+    events: MODULES.COMMUNITY_EVENTS,
+    settings: MODULES.SETTINGS,
 });
 
 /**
@@ -177,6 +209,14 @@ async function resolvePermissionsForRoleKey(societyId, roleKey) {
             ...(effective[moduleName] || { scope: PERMISSION_SCOPE.NONE }),
             level,
         };
+
+        // If festival collection is configured and community events is not explicitly overridden, align them
+        if (moduleName === MODULES.FESTIVAL_COLLECTION && !dbPermissions.community_events && !dbPermissions.events) {
+            effective[MODULES.COMMUNITY_EVENTS] = {
+                ...(effective[MODULES.COMMUNITY_EVENTS] || { scope: PERMISSION_SCOPE.SOCIETY }),
+                level: entry.enabled ? level : PERMISSION_LEVELS.NO_ACCESS,
+            };
+        }
     }
 
     return effective;
@@ -208,10 +248,24 @@ async function resolveEffectivePermissionsForRoles(societyId, roleKeys, fallback
         try {
             const plan = await RoleRepository.getSocietyPlan(String(societyId));
             if (plan?.modules && Array.isArray(plan.modules)) {
-                const allowedModules = new Set(plan.modules);
+                // Normalize all plan module keys to canonical MODULES values.
+                // plan.modules may contain camelCase keys (e.g. "noticeBoardPolls") from the
+                // modules collection, or snake_case aliases. We must resolve them the same way
+                // the permission matrix uses them so the comparison is apples-to-apples.
+                const allowedCanonical = new Set();
+                for (const mk of plan.modules) {
+                    const canonical = MODULE_KEY_TO_MODULE[mk];
+                    if (canonical) {
+                        allowedCanonical.add(canonical);
+                    } else {
+                        // If not in the alias map, keep the raw key so we don't
+                        // accidentally block modules we don't recognise.
+                        allowedCanonical.add(mk);
+                    }
+                }
+
                 for (const moduleName of Object.keys(merged)) {
-                    // Check if moduleName or corresponding moduleKey is in allowedModules
-                    if (!allowedModules.has(moduleName)) {
+                    if (!allowedCanonical.has(moduleName)) {
                         merged[moduleName] = {
                             level: PERMISSION_LEVELS.NO_ACCESS,
                             scope: PERMISSION_SCOPE.NONE,

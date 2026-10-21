@@ -19,21 +19,21 @@ router.use(injectSocietyId);
 // GET /festivals (List)
 router.get(
     "/",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.VIEW),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.VIEW),
     festivalController.getFestivals
 );
 
 // GET /festivals/:id (Details)
 router.get(
     "/:id",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.VIEW),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.VIEW),
     festivalController.getFestivalById
 );
 
 // POST /festivals (Create)
 router.post(
     "/",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.FULL),
     upload.single("image"),
     festivalValidation.createFestivalValidation,
     validate,
@@ -43,7 +43,7 @@ router.post(
 // PATCH /festivals/:id (Update)
 router.patch(
     "/:id",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.FULL),
     upload.single("image"),
     festivalValidation.updateFestivalValidation,
     validate,
@@ -53,28 +53,28 @@ router.patch(
 // POST /festivals/:id/publish
 router.post(
     "/:id/publish",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.FULL),
     festivalController.publishFestival
 );
 
 // POST /festivals/:id/unpublish
 router.post(
     "/:id/unpublish",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.FULL),
     festivalController.unpublishFestival
 );
 
 // POST /festivals/:id/cancel
 router.post(
     "/:id/cancel",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.FULL),
     festivalController.cancelFestival
 );
 
 // DELETE /festivals/:id (Only for DRAFTs)
 router.delete(
     "/:id",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.FULL),
     festivalController.deleteFestival
 );
 

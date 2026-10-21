@@ -8,6 +8,80 @@ class RoleRepository {
     _masterDb() { return getMasterConnection(); }
     _opsDb() { return getOperationsConnection(); }
 
+    async _resolvePlanModules(plan) {
+        if (!plan) return null;
+        const mongoose = require("mongoose");
+        const masterDb = this._masterDb();
+        const SubscriptionPlan = masterDb.model("SubscriptionPlan");
+
+        let allModuleIds = [];
+        let curr = plan;
+        const visitedPlanIds = new Set();
+
+        while (curr && curr._id && !visitedPlanIds.has(String(curr._id))) {
+            visitedPlanIds.add(String(curr._id));
+            if (Array.isArray(curr.modules)) {
+                allModuleIds.push(...curr.modules);
+            }
+            if (curr.inheritsFrom) {
+                curr = await SubscriptionPlan.findById(curr.inheritsFrom).lean();
+            } else {
+                curr = null;
+            }
+        }
+
+        const objectIds = allModuleIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+        const rawStrings = allModuleIds.filter((id) => typeof id === "string" && !mongoose.Types.ObjectId.isValid(id));
+
+        const resolvedKeys = new Set(rawStrings);
+
+        if (objectIds.length > 0) {
+            try {
+                const moduleDocs = await masterDb.collection("modules").find({
+                    _id: { $in: objectIds.map((id) => new mongoose.Types.ObjectId(id)) }
+                }).toArray();
+
+                for (const doc of moduleDocs) {
+                    if (doc.key) resolvedKeys.add(doc.key);
+                }
+            } catch (_) {}
+        }
+
+        const MODULE_ALIASES = {
+            festivals: ["festivals", "festival_collection", "festivalCollectionManagement", "community_events"],
+            festival_collection: ["festivals", "festival_collection", "festivalCollectionManagement", "community_events"],
+            community_events: ["events", "community_events", "festivals", "festival_collection"],
+            notices: ["notices", "notice_board_polls", "noticeBoardPolls"],
+            polls: ["polls", "notice_board_polls", "noticeBoardPolls"],
+            notice_board_polls: ["notices", "polls", "notice_board_polls", "noticeBoardPolls"],
+            society_flat_setup: ["society_flat_setup", "societyFlatSetup", "residents"],
+            residents: ["society_flat_setup", "societyFlatSetup", "residents"],
+            billing_accounts: ["billing_accounts", "billingAccounts", "billing"],
+            visitor_management: ["visitor_management", "visitorManagement", "visitors"],
+            complaints_helpdesk: ["complaints_helpdesk", "complaintsHelpdesk", "helpdesk"],
+            amenity_booking: ["amenity_booking", "amenityBooking", "amenities"],
+            parking_management: ["parking_management", "parkingManagement", "parking"],
+            vendor_management: ["vendor_management", "vendorManagement", "vendors"],
+            staff_management: ["staff_management", "staffManagement", "staff"],
+            documents_manager: ["documents_manager", "documentsManager", "documents"],
+            reports_dashboard: ["reports_dashboard", "reportsDashboard", "reports"],
+            ai_assistant: ["ai_assistant", "aiAssistant", "ai"],
+            settings: ["settings"],
+        };
+
+        const expanded = new Set(resolvedKeys);
+        for (const key of resolvedKeys) {
+            if (MODULE_ALIASES[key]) {
+                MODULE_ALIASES[key].forEach((alias) => expanded.add(alias));
+            }
+        }
+
+        return {
+            ...plan,
+            modules: Array.from(expanded),
+        };
+    }
+
     async getSocietyPlan(societyId) {
         if (!societyId || societyId === "GLOBAL") return null;
         const masterDb = this._masterDb();
@@ -21,12 +95,12 @@ class RoleRepository {
             society = await Society.findOne({ societyCode: societyId }).populate("subscriptionPlanId").lean();
         }
 
-        if (society?.subscriptionPlanId) {
-            return society.subscriptionPlanId;
+        let plan = society?.subscriptionPlanId;
+        if (!plan) {
+            plan = await SubscriptionPlan.findOne({ slug: "advanced" }).lean();
         }
 
-        // Fallback default
-        return SubscriptionPlan.findOne({ slug: "advanced" }).lean();
+        return this._resolvePlanModules(plan);
     }
 
     async getPermissionCatalog() {
