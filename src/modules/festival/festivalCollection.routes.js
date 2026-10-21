@@ -25,31 +25,31 @@ router.post("/:id/pay/online/verify", festivalCollectionController.verifyOnlineP
 // Admin / Accountant Actions
 router.post(
     "/",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.MANAGE),
     festivalCollectionController.createCollection
 );
 
 router.patch(
     "/:id",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.MANAGE),
     festivalCollectionController.updateCollection
 );
 
 router.post(
     "/:id/pay/offline",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL), // Assuming FULL allows recording payment. Adjust if needed.
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.MANAGE),
     festivalCollectionController.recordOfflineContribution
 );
 
 router.get(
     "/:id/contributions",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.MANAGE),
     festivalCollectionController.getContributions
 );
 
 router.get(
     "/:id/report",
-    checkPermission(MODULES.COMMUNITY_EVENTS, PERMISSION_LEVELS.FULL),
+    checkPermission([MODULES.COMMUNITY_EVENTS, MODULES.FESTIVAL_COLLECTION], PERMISSION_LEVELS.MANAGE),
     festivalCollectionController.getCollectionReport
 );
 

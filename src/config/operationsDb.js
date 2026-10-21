@@ -29,6 +29,10 @@ const connectOperationsDB = async () => {
         opsConnection.model("VisitorEntry", require("../modules/visitor/visitorEntry.model"));
         opsConnection.model("MaintenanceBill", require("../modules/maintenance/maintenanceBill.model"));
         opsConnection.model("PaymentTransaction", require("../modules/payment/paymentTransaction.model"));
+        const { paymentSchema, receiptSchema, advanceAccountSchema } = require("../modules/payment/payment.model");
+        opsConnection.model("Payment", paymentSchema);
+        opsConnection.model("Receipt", receiptSchema);
+        opsConnection.model("AdvanceAccount", advanceAccountSchema);
         opsConnection.model("Complaint", require("../modules/complaint/complaint.model"));
         opsConnection.model("ComplaintHistory", require("../modules/complaint/complaintHistory.model"));
         opsConnection.model("Counter", require("../modules/complaint/counter.model"));

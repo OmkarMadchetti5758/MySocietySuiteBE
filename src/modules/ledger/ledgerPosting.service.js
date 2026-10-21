@@ -439,6 +439,58 @@ class LedgerPostingService {
         });
     }
 
+    // 13b. Festival Collection Payment (online or offline)
+    static async postFestivalContribution({ societyId, userId, payment, collectionTitle, db, session }) {
+        const plain = payment && typeof payment.toObject === "function" ? payment.toObject() : { ...payment };
+        const total = Number(plain.amount || 0);
+        if (total <= 0) return null;
+
+        await this.ensureBooksReady(societyId, userId, db);
+
+        const incomeAcc = await this.getSystemAccount(societyId, "4060", db); // Sundry / Event Income
+        const bankAccId = await this.resolveBankOrCashGl(
+            societyId,
+            plain.financialAccountId || plain.paymentAccountId,
+            db,
+            { preferCash: String(plain.paymentMode || "").toUpperCase() === "CASH" }
+        );
+
+        const lines = [
+            {
+                accountId: bankAccId,
+                debit: total,
+                description: `${String(plain.paymentMode || "").toUpperCase() === "CASH" ? "Cash" : "Bank"} - Festival: ${collectionTitle || "Collection"}`,
+                residentId: plain.userId,
+                flatId: plain.flatId
+            },
+            {
+                accountId: incomeAcc,
+                credit: total,
+                description: `Festival Income: ${collectionTitle || "Collection"} (${plain.receiptNumber || ""})`,
+                residentId: plain.userId,
+                flatId: plain.flatId
+            }
+        ];
+
+        return LedgerService.postJournalEntry({
+            societyId,
+            userId,
+            userRole: "system",
+            description: `Festival Collection: ${collectionTitle || ""} (${plain.receiptNumber || plain.paymentNumber || ""})`,
+            transactionDate: plain.paymentDate || new Date(),
+            referenceType: "PAYMENT",
+            referenceId: plain._id,
+            referenceNumber: plain.receiptNumber || plain.paymentNumber,
+            lines,
+            idempotencyKey: `FEST-PAY-${plain._id}`,
+            isAutomatic: true,
+            residentId: plain.userId,
+            flatId: plain.flatId,
+            db,
+            session
+        });
+    }
+
     /**
      * Confirmed collection: dues vs AR, excess vs advance, no-invoice vs unallocated.
      * Does not post INITIATED/pending gateway payments.
