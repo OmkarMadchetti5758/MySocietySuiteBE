@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const mongoose = require("mongoose");
 const { getMasterConnection } = require("../../config/masterDb");
@@ -182,6 +182,83 @@ class SuperAdminRepository {
             admin: adminUser[0],
             plainToken // Return plain token so service can format the invite link
         };
+    }
+
+    async getActiveModules() {
+        const masterDb = getMasterConnection();
+        const Module = masterDb.model("Module");
+        return Module.find({ isActive: true })
+            .sort({ sortOrder: 1, name: 1 })
+            .lean();
+    }
+
+    async findActiveModulesByIds(moduleIds) {
+        const masterDb = getMasterConnection();
+        const Module = masterDb.model("Module");
+        return Module.find({ _id: { $in: moduleIds }, isActive: true }).lean();
+    }
+
+    async getAllPlans() {
+        const masterDb = getMasterConnection();
+        const SubscriptionPlan = masterDb.model("SubscriptionPlan");
+        return SubscriptionPlan.find()
+            .sort({ sortOrder: 1, createdAt: 1 })
+            .populate({
+                path: "modules",
+                select: "_id key name description icon category sortOrder isActive",
+            })
+            .populate({
+                path: "inheritsFrom",
+                select: "_id name slug badge badgeType",
+            })
+            .lean();
+    }
+
+    async getPlanById(planId) {
+        const masterDb = getMasterConnection();
+        const SubscriptionPlan = masterDb.model("SubscriptionPlan");
+        return SubscriptionPlan.findById(planId)
+            .populate({
+                path: "modules",
+                select: "_id key name description icon category sortOrder isActive",
+            })
+            .populate({
+                path: "inheritsFrom",
+                select: "_id name slug badge badgeType",
+            });
+    }
+
+    async getPlanBySlugOrName(slug, name, excludeId = null) {
+        const masterDb = getMasterConnection();
+        const SubscriptionPlan = masterDb.model("SubscriptionPlan");
+        const conditions = [];
+        if (slug) {
+            conditions.push({ slug: slug.toLowerCase() });
+        }
+        if (name) {
+            conditions.push({ name: { $regex: `^${name.trim()}$`, $options: "i" } });
+        }
+        if (conditions.length === 0) return null;
+
+        const query = { $or: conditions };
+        if (excludeId) {
+            query._id = { $ne: excludeId };
+        }
+        return SubscriptionPlan.findOne(query).lean();
+    }
+
+    async createPlan(planData) {
+        const masterDb = getMasterConnection();
+        const SubscriptionPlan = masterDb.model("SubscriptionPlan");
+        const created = await SubscriptionPlan.create(planData);
+        return this.getPlanById(created._id);
+    }
+
+    async updatePlan(planId, updateData) {
+        const masterDb = getMasterConnection();
+        const SubscriptionPlan = masterDb.model("SubscriptionPlan");
+        await SubscriptionPlan.findByIdAndUpdate(planId, { $set: updateData }, { new: true, runValidators: true });
+        return this.getPlanById(planId);
     }
 }
 

@@ -1,12 +1,13 @@
-{
+﻿{
   "name": "mysocietysuite-be",
   "version": "1.0.0",
   "description": "MySocietySuite - Multi-Tenant Society Management SaaS Backend",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon --watch src src/server.js",
-    "start:prod": "NODE_ENV=production node src/server.js"
+    "dev": "nodemon --watch src",
+    "start:prod": "NODE_ENV=production node src/server.js",
+    "seed:plans": "node src/scripts/seedPlansAndModules.js"
   },
   "author": "MSquare",
   "license": "ISC",
@@ -38,3 +39,5 @@
     "braces": "^3.0.3"
   }
 }
+
+

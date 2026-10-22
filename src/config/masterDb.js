@@ -17,6 +17,7 @@ const connectMasterDB = async () => {
 
         // Register Master-only (control plane) Models
         masterConnection.model("Society", require("../modules/society/society.model"));
+        masterConnection.model("Module", require("../modules/module/module.model"));
         masterConnection.model("SubscriptionPlan", require("../modules/subscriptionPlan/subscriptionPlan.model"));
         masterConnection.model("Subscription", require("../modules/subscription/subscription.model"));
         masterConnection.model("SuperAdmin", require("../modules/superAdmin/superAdmin.model"));

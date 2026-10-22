@@ -4,6 +4,43 @@ const { getMasterConnection } = require("../../config/masterDb");
 const { getOperationsConnection } = require("../../config/operationsDb");
 const { bustPermissionsVersionCache } = require("../../common/permissionsVersionCache");
 
+const MODULE_ALIASES_MAP = Object.freeze({
+    society_flat_setup: ["societyFlatSetup", "society_flat_setup", "society_setup"],
+    societyFlatSetup: ["society_flat_setup", "societyFlatSetup", "society_setup"],
+    residents: ["residents", "societyFlatSetup", "society_flat_setup"],
+    visitor_management: ["visitorManagement", "visitor_management", "visitors"],
+    visitorManagement: ["visitor_management", "visitorManagement", "visitors"],
+    complaints_helpdesk: ["complaintsHelpdesk", "complaints_helpdesk", "helpdesk"],
+    complaintsHelpdesk: ["complaints_helpdesk", "complaintsHelpdesk", "helpdesk"],
+    notices: ["notices", "noticeBoardPolls", "notice_board_polls"],
+    polls: ["polls", "noticeBoardPolls", "notice_board_polls"],
+    notice_board_polls: ["noticeBoardPolls", "notice_board_polls", "notices", "polls"],
+    noticeBoardPolls: ["notice_board_polls", "noticeBoardPolls", "notices", "polls"],
+    amenity_booking: ["amenityBooking", "amenity_booking", "amenities"],
+    amenityBooking: ["amenity_booking", "amenityBooking", "amenities"],
+    parking_management: ["parkingManagement", "parking_management", "parking"],
+    parkingManagement: ["parking_management", "parkingManagement", "parking"],
+    vendor_management: ["vendorManagement", "vendor_management", "vendors"],
+    vendorManagement: ["vendor_management", "vendorManagement", "vendors"],
+    staff_management: ["staffManagement", "staff_management", "staff"],
+    staffManagement: ["staff_management", "staffManagement", "staff"],
+    documents_manager: ["documentsManager", "documents_manager", "documents"],
+    documentsManager: ["documents_manager", "documentsManager", "documents"],
+    reports_dashboard: ["reportsDashboard", "reports_dashboard", "reports"],
+    reportsDashboard: ["reports_dashboard", "reportsDashboard", "reports"],
+    ai_assistant: ["aiAssistant", "ai_assistant", "ai"],
+    aiAssistant: ["ai_assistant", "aiAssistant", "ai"],
+    festivals: ["festivals", "festivalCollectionManagement", "festival_collection"],
+    festival_collection: ["festivalCollectionManagement", "festival_collection", "festivals"],
+    festivalCollectionManagement: ["festival_collection", "festivalCollectionManagement", "festivals"],
+    community_events: ["community_events", "communityEvents", "events"],
+    communityEvents: ["community_events", "communityEvents", "events"],
+    events: ["community_events", "communityEvents", "events"],
+    settings: ["settings"],
+    billing_accounts: ["billingAccounts", "billing_accounts", "billing"],
+    billingAccounts: ["billing_accounts", "billingAccounts", "billing"],
+});
+
 class RoleRepository {
     _masterDb() { return getMasterConnection(); }
     _opsDb() { return getOperationsConnection(); }
@@ -89,10 +126,14 @@ class RoleRepository {
         const SubscriptionPlan = masterDb.model("SubscriptionPlan");
 
         let society = null;
-        if (require("mongoose").Types.ObjectId.isValid(societyId)) {
+        const mongoose = require("mongoose");
+        if (mongoose.Types.ObjectId.isValid(societyId)) {
             society = await Society.findById(societyId).populate("subscriptionPlanId").lean();
-        } else {
-            society = await Society.findOne({ societyCode: societyId }).populate("subscriptionPlanId").lean();
+        }
+        if (!society) {
+            society = await Society.findOne({
+                $or: [{ societyCode: societyId }, { name: societyId }]
+            }).populate("subscriptionPlanId").lean();
         }
 
         let plan = society?.subscriptionPlanId;
