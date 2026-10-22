@@ -16,7 +16,6 @@ class RoleService {
         const filteredCatalog = allowedModules
             ? catalog.filter(c => allowedModules.has(c.moduleKey))
             : catalog;
-
         const catalogMap = new Map(filteredCatalog.map(c => [c.moduleKey, c]));
 
         return roles.map(role => this._enrichRole(role, catalogMap, societyId, plan));
@@ -42,7 +41,6 @@ class RoleService {
         const filteredCatalog = allowedModules
             ? catalog.filter(c => allowedModules.has(c.moduleKey))
             : catalog;
-
         const catalogMap = new Map(filteredCatalog.map(c => [c.moduleKey, c]));
         const enriched = this._enrichRole(role, catalogMap, societyId, plan);
 
@@ -84,7 +82,10 @@ class RoleService {
             RoleRepository.getSocietyPlan(societyId),
         ]);
         const allowedModules = plan?.modules ? new Set(plan.modules) : null;
-        const catalogMap = new Map(catalog.map(c => [c.moduleKey, c]));
+        const filteredCatalog = allowedModules
+            ? catalog.filter(c => allowedModules.has(c.moduleKey))
+            : catalog;
+        const catalogMap = new Map(filteredCatalog.map(c => [c.moduleKey, c]));
 
         // 4. Filter out hard-blocked modules, non-plan modules, and deprecated modules
         const safeDiff = {};
@@ -134,11 +135,7 @@ class RoleService {
         // 6. Bump permissionsVersion so logged-in users' caches get invalidated
         await RoleRepository.bumpPermissionsVersion(societyId);
 
-        const filteredCatalogMap = allowedModules
-            ? new Map([...catalogMap.entries()].filter(([k]) => allowedModules.has(k)))
-            : catalogMap;
-
-        return this._enrichRole(updated, filteredCatalogMap, societyId, plan);
+        return this._enrichRole(updated, catalogMap, societyId, plan);
     }
 
     async resetRole(societyId, roleKey, actor) {
