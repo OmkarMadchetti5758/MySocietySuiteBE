@@ -21,16 +21,26 @@ class BlockController {
             if (Array.isArray(wings)) {
                 wings = wings.map((wing) => {
                     const cleaned = { ...wing };
+                    // Clean empty assignedStaff
                     if (!cleaned.assignedStaff) {
                         delete cleaned.assignedStaff;
                     }
-                    // Coerce numeric strings to numbers
-                    if (cleaned.totalFloors !== undefined && cleaned.totalFloors !== '') {
-                        cleaned.totalFloors = Number(cleaned.totalFloors);
-                    }
-                    if (cleaned.totalFlats !== undefined && cleaned.totalFlats !== '') {
-                        cleaned.totalFlats = Number(cleaned.totalFlats);
-                    }
+                    // Coerce numeric fields and clean empty string values so Mongoose doesn't fail CastError
+                    const numFields = ['totalFloors', 'totalFlats', 'unitCount', 'carpetArea', 'builtUpArea', 'parking4W'];
+                    numFields.forEach((field) => {
+                        if (cleaned[field] !== undefined) {
+                            if (cleaned[field] === '' || cleaned[field] === null) {
+                                delete cleaned[field];
+                            } else {
+                                const parsed = Number(cleaned[field]);
+                                if (!isNaN(parsed)) {
+                                    cleaned[field] = parsed;
+                                } else {
+                                    delete cleaned[field];
+                                }
+                            }
+                        }
+                    });
                     return cleaned;
                 });
             }
