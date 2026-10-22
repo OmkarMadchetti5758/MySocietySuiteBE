@@ -112,6 +112,22 @@ const PERMISSION_CATALOG = [
         hardBlockedFor: ["security_guard", "vendor"],
         description: "Manage festival fund collections and contributions.",
     },
+    {
+        moduleKey: "communityEvents",
+        moduleName: "Community Events",
+        sortOrder: 14,
+        validAccessLevels: ["none", "view", "full"],
+        hardBlockedFor: ["vendor"],
+        description: "Organize, participate in, and manage society community events.",
+    },
+    {
+        moduleKey: "settings",
+        moduleName: "Society Settings",
+        sortOrder: 15,
+        validAccessLevels: ["none", "view", "full"],
+        hardBlockedFor: ["vendor", "security_guard", "facility_manager"],
+        description: "Configure society parameters, wings, and access controls.",
+    },
 ];
 
 // ─── GLOBAL Role Templates (BRD §7.2) ─────────────────────────────────────────
@@ -209,19 +225,6 @@ const GLOBAL_ROLES = [
         isEditable: true,
         permissions: {
             societyFlatSetup: { access: "none", enabled: false },
-            billingAccounts: { access: "none", enabled: false },
-            visitorManagement: { access: "full", enabled: true }, // Entry logging only (guard interface)
-            complaintsHelpdesk: { access: "none", enabled: false },
-            noticeBoardPolls: { access: "view", enabled: true },
-            amenityBooking: { access: "none", enabled: false },
-            parkingManagement: { access: "manage", enabled: true },
-            vendorManagement: { access: "none", enabled: false },
-            staffManagement: { access: "none", enabled: false },
-            documentsManager: { access: "none", enabled: false },
-            reportsDashboard: { access: "none", enabled: false },
-            aiAssistant: { access: "none", enabled: false },
-            festivalCollectionManagement: { access: "none", enabled: false },
-            societyFlatSetup: { access: "view", enabled: true },
             billingAccounts: { access: "none", enabled: false },
             visitorManagement: { access: "full", enabled: true }, // Entry logging only (guard interface)
             complaintsHelpdesk: { access: "none", enabled: false },

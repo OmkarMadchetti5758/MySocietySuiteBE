@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 const rolePermissionAuditSchema = new mongoose.Schema(
     {
         societyId: {
-            type: mongoose.Schema.Types.ObjectId,
+            type: mongoose.Schema.Types.Mixed,
             required: true,
             index: true,
         },

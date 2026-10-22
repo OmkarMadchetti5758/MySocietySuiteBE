@@ -153,7 +153,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         [MODULES.REPORTS_DASHBOARD]: { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.FINANCIAL },
         [MODULES.AI_ASSISTANT]: { level: PERMISSION_LEVELS.VIEW, scope: PERMISSION_SCOPE.FINANCIAL },
         [MODULES.FESTIVAL_COLLECTION]: { level: PERMISSION_LEVELS.FULL, scope: PERMISSION_SCOPE.FINANCIAL },
-        [MODULES.COMMUNITY_EVENTS]: { level: PERMISSION_LEVELS.VIEW, scope: PERMISSION_SCOPE.SOCIETY },
+        [MODULES.COMMUNITY_EVENTS]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
         [MODULES.SETTINGS]: { level: PERMISSION_LEVELS.NO_ACCESS, scope: PERMISSION_SCOPE.NONE },
     },
 
@@ -667,12 +667,17 @@ const STAFF_TYPE = Object.freeze({
 });
 
 const DOCUMENT_TYPE = Object.freeze({
+    LEGAL: "Legal",
+    GOVERNANCE: "Governance",
+    PLANS_LAYOUTS: "Plans & Layouts",
+    NOC: "NOC",
+    MARKETING: "Marketing",
     MINUTES_OF_MEETING: "Minutes of Meeting",
     CIRCULARS: "Circulars",
     COMPLIANCE: "Compliance",
     FINANCIAL: "Financial",
     AGREEMENT: "agreement",
-    NOC: "noc",
+    NOC_LOWER: "noc",
     AUDIT_REPORT: "audit_report",
     OTHER: "other",
 });

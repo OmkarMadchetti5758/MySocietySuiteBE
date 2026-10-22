@@ -13,6 +13,15 @@ class SuperAdminController {
         }
     }
 
+    async getSubscriptionPlans(req, res, next) {
+        try {
+            const plans = await SuperAdminService.getSubscriptionPlans();
+            return sendSuccess(res, 200, "Subscription plans fetched successfully", plans);
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async getSocieties(req, res, next) {
         try {
             const { page, limit, search } = req.query;

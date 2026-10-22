@@ -24,6 +24,12 @@ const MODULE_KEY_TO_MODULE = Object.freeze({
     reportsDashboard: MODULES.REPORTS_DASHBOARD,
     aiAssistant: MODULES.AI_ASSISTANT,
     festivalCollectionManagement: MODULES.FESTIVAL_COLLECTION,
+    festival_collection: MODULES.FESTIVAL_COLLECTION,
+    festivals: MODULES.FESTIVAL_COLLECTION,
+    communityEvents: MODULES.COMMUNITY_EVENTS,
+    community_events: MODULES.COMMUNITY_EVENTS,
+    events: MODULES.COMMUNITY_EVENTS,
+    settings: MODULES.SETTINGS,
 });
 
 /**
@@ -131,6 +137,22 @@ function mergePermissionMatrices(matrices) {
 /**
  * Resolve permissions for a single roleKey, overlaying society DB overrides when present.
  */
+let catalogCache = null;
+let catalogCacheTime = 0;
+async function getCachedCatalog() {
+    const now = Date.now();
+    if (catalogCache && (now - catalogCacheTime < 60000)) {
+        return catalogCache;
+    }
+    try {
+        catalogCache = await RoleRepository.getPermissionCatalog();
+        catalogCacheTime = now;
+        return catalogCache || [];
+    } catch (_) {
+        return catalogCache || [];
+    }
+}
+
 async function resolvePermissionsForRoleKey(societyId, roleKey) {
     const normalizedKey = resolveRoleKey(roleKey);
     const base = getRolePermissions(normalizedKey) || getRolePermissions(roleKey);
@@ -179,6 +201,21 @@ async function resolvePermissionsForRoleKey(societyId, roleKey) {
         };
     }
 
+    // Enforce hard-blocked modules for this role
+    try {
+        const catalog = await getCachedCatalog();
+        for (const item of catalog) {
+            if (item.hardBlockedFor && item.hardBlockedFor.includes(normalizedKey)) {
+                const moduleName = MODULE_KEY_TO_MODULE[item.moduleKey] || item.moduleKey;
+                effective[moduleName] = {
+                    level: PERMISSION_LEVELS.NO_ACCESS,
+                    scope: PERMISSION_SCOPE.NONE,
+                };
+            }
+        }
+    } catch (_) {
+    }
+
     return effective;
 }
 
@@ -201,7 +238,30 @@ async function resolveEffectivePermissionsForRoles(societyId, roleKeys, fallback
         return null;
     }
 
-    return mergePermissionMatrices(valid);
+    const merged = mergePermissionMatrices(valid);
+
+    // Filter by society subscription plan if present (skip for platform super_admin)
+    const isSuperAdmin = keys.includes(ROLES.SUPER_ADMIN);
+    if (societyId && !isSuperAdmin) {
+        try {
+            const plan = await RoleRepository.getSocietyPlan(String(societyId));
+            if (plan?.modules && Array.isArray(plan.modules)) {
+                const allowedModules = new Set(plan.modules);
+                for (const moduleName of Object.keys(merged)) {
+                    if (!allowedModules.has(moduleName)) {
+                        merged[moduleName] = {
+                            level: PERMISSION_LEVELS.NO_ACCESS,
+                            scope: PERMISSION_SCOPE.NONE,
+                        };
+                    }
+                }
+            }
+        } catch (_) {
+            // If plan cannot be checked, proceed with base merged permissions
+        }
+    }
+
+    return merged;
 }
 
 /**

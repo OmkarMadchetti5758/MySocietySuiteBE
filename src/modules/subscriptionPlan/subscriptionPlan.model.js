@@ -32,6 +32,17 @@ const subscriptionPlanSchema = new mongoose.Schema(
             default: "",
             trim: true,
         },
+        slug: {
+            type: String,
+            required: true,
+            unique: true,
+            lowercase: true,
+            trim: true,
+        },
+        tagline: {
+            type: String,
+            default: "",
+        },
         price: {
             type: Number,
             required: [true, "Plan price is required"],
@@ -50,6 +61,10 @@ const subscriptionPlanSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        modules: [{
+            type: String,
+            trim: true,
+        }],
         features: [{
             type: String,
         }],

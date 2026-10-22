@@ -22,6 +22,7 @@ const requireSuperAdmin = (req, res, next) => {
 router.use(requireSuperAdmin);
 
 router.get("/stats", SuperAdminController.getStats);
+router.get("/subscription-plans", SuperAdminController.getSubscriptionPlans);
 router.get("/societies", SuperAdminController.getSocieties);
 router.get("/modules", SuperAdminController.getAvailableModules);
 router.get("/plans", SuperAdminController.getPlans);

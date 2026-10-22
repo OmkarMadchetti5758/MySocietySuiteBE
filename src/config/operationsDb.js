@@ -54,6 +54,7 @@ const connectOperationsDB = async () => {
         opsConnection.model("Gate",                  require("../modules/gate/gate.model"));
         opsConnection.model("GuardGateAssignment",   require("../modules/guard/guardGateAssignment.model"));
         opsConnection.model("QRDigitalPass",         require("../modules/visitor/qrDigitalPass.model"));
+        opsConnection.model("SocietyContact",        require("../modules/societyContact/societyContact.model"));
         // ────────────────────────────────────────────────────────────────────
         const billingModels = require("../modules/billing/billing.model");
         opsConnection.model("ChargeHead", billingModels.chargeHeadSchema);
