@@ -1,10 +1,9 @@
-"use strict";
+﻿"use strict";
 
 const SuperAdminService = require("./superAdmin.service");
 const { sendSuccess } = require("../../utils/response.utils");
 
 class SuperAdminController {
-    
     async getStats(req, res, next) {
         try {
             const stats = await SuperAdminService.getDashboardStats();
@@ -33,13 +32,46 @@ class SuperAdminController {
         }
     }
 
+    async getAvailableModules(req, res, next) {
+        try {
+            const modules = await SuperAdminService.getAvailableModules();
+            return sendSuccess(res, 200, "Available modules fetched successfully", { modules });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getPlans(req, res, next) {
+        try {
+            const plans = await SuperAdminService.getPlans();
+            return sendSuccess(res, 200, "Subscription plans fetched successfully", { plans });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async createPlan(req, res, next) {
+        try {
+            const plan = await SuperAdminService.createPlan(req.body);
+            return sendSuccess(res, 201, "Subscription plan created successfully", { plan });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async updatePlan(req, res, next) {
+        try {
+            const plan = await SuperAdminService.updatePlan(req.params.id, req.body);
+            return sendSuccess(res, 200, "Subscription plan updated successfully", { plan });
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async createSuperAdmin(req, res, next) {
         try {
             const { name, email, password } = req.body;
-            // The pre-save hook on SuperAdmin model hashes the password automatically
             const newAdmin = await SuperAdminService.createSuperAdmin({ name, email, password });
-            
-            // Remove password from response
             newAdmin.password = undefined;
 
             return sendSuccess(res, 201, "Super Admin created successfully", { admin: newAdmin });
