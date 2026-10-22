@@ -52,8 +52,16 @@ class SocietyController {
             if (!updateData.contactPhone || updateData.contactPhone === "undefined") delete updateData.contactPhone;
             if (!updateData.contactEmail || updateData.contactEmail === "undefined") delete updateData.contactEmail;
 
-            // Validate enum for societyType
-            if (!updateData.societyType || !["Residential", "Commercial", "Mixed"].includes(updateData.societyType)) {
+            // Validate enum for societyType (must match all values defined in society.model.js)
+            const VALID_SOCIETY_TYPES = [
+                "Residential",
+                "Commercial",
+                "Mixed",
+                "Mixed (Residential + Commercial)",
+                "Co-operative Housing Society",
+                "Gated Community / Villa",
+            ];
+            if (!updateData.societyType || !VALID_SOCIETY_TYPES.includes(updateData.societyType)) {
                 delete updateData.societyType;
             }
 
@@ -72,6 +80,24 @@ class SocietyController {
             }
             if (updateData.blocks && !Array.isArray(updateData.blocks)) {
                 updateData.blocks = [updateData.blocks];
+            }
+
+            // Parse projectInfo JSON string (sent via multipart/form-data)
+            if (typeof updateData.projectInfo === 'string') {
+                try {
+                    updateData.projectInfo = JSON.parse(updateData.projectInfo);
+                } catch (e) {
+                    delete updateData.projectInfo;
+                }
+            }
+
+            // Parse parkingConfig JSON string (sent via multipart/form-data)
+            if (typeof updateData.parkingConfig === 'string') {
+                try {
+                    updateData.parkingConfig = JSON.parse(updateData.parkingConfig);
+                } catch (e) {
+                    delete updateData.parkingConfig;
+                }
             }
 
             // Extract address fields if they're flat
