@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const express = require("express");
 const SuperAdminController = require("./superAdmin.controller");
@@ -9,7 +9,6 @@ const router = express.Router();
 // All super admin routes must be authenticated and restricted to super_admin role
 router.use(authenticate);
 
-// We can add a simple middleware here to verify super admin role
 const requireSuperAdmin = (req, res, next) => {
     if (req.user.role !== "super_admin") {
         return res.status(403).json({
@@ -24,6 +23,10 @@ router.use(requireSuperAdmin);
 
 router.get("/stats", SuperAdminController.getStats);
 router.get("/societies", SuperAdminController.getSocieties);
+router.get("/modules", SuperAdminController.getAvailableModules);
+router.get("/plans", SuperAdminController.getPlans);
+router.post("/plans", SuperAdminController.createPlan);
+router.put("/plans/:id", SuperAdminController.updatePlan);
 router.post("/societies", SuperAdminController.createSociety);
 router.post("/admins", SuperAdminController.createSuperAdmin);
 
