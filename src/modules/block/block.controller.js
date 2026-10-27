@@ -52,6 +52,24 @@ class BlockController {
         }
     }
 
+    async getInventory(req, res, next) {
+        try {
+            const inventory = await BlockService.getInventory(req.user.societyId);
+            return sendSuccess(res, 200, "Inventory retrieved successfully", inventory);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async saveInventory(req, res, next) {
+        try {
+            const inventory = await BlockService.saveInventory(req.user.societyId, req.body);
+            return sendSuccess(res, 200, "Inventory saved successfully", inventory);
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async getStaffList(req, res, next) {
         try {
             const staff = await BlockService.getStaffList(req.user.societyId);
