@@ -23,8 +23,19 @@ router.put(
 );
 
 router.get(
+    "/inventory",
+    checkPermission([MODULES.SOCIETY_FLAT_SETUP, MODULES.SETTINGS], PERMISSION_LEVELS.VIEW),
+    BlockController.getInventory.bind(BlockController)
+);
+router.put(
+    "/inventory",
+    checkPermission([MODULES.SOCIETY_FLAT_SETUP, MODULES.SETTINGS], PERMISSION_LEVELS.FULL),
+    BlockController.saveInventory.bind(BlockController)
+);
+
+router.get(
     "/staff",
-    checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.VIEW),
+    checkPermission([MODULES.SOCIETY_FLAT_SETUP, MODULES.SETTINGS], PERMISSION_LEVELS.VIEW),
     BlockController.getStaffList.bind(BlockController)
 );
 
