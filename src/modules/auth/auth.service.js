@@ -412,8 +412,13 @@ class AuthService {
         if (!user) throw new AppError("Associated user not found", 404);
 
         const isSocietyAdminInvite = user.role === ROLES.ADMIN;
-        if (isSocietyAdminInvite && society.status !== SOCIETY_STATUS.PENDING_VERIFICATION) {
-            throw new AppError("Society is no longer pending verification", 400);
+        if (isSocietyAdminInvite) {
+            if (society.status === SOCIETY_STATUS.SUSPENDED) {
+                throw new AppError("Society is suspended. Cannot activate account.", 400);
+            }
+            if (user.status !== "invited") {
+                throw new AppError("Admin account has already been activated", 400);
+            }
         }
 
         return {
@@ -465,7 +470,7 @@ class AuthService {
         await user.save();
 
         // Activate society only for pending society-admin invites
-        if (user.role === ROLES.ADMIN && society.status === SOCIETY_STATUS.PENDING_VERIFICATION) {
+        if (user.role === ROLES.ADMIN && [SOCIETY_STATUS.PENDING_VERIFICATION, SOCIETY_STATUS.PENDING_APPROVAL].includes(society.status)) {
             society.status = SOCIETY_STATUS.TRIAL;
             await society.save();
         }

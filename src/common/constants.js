@@ -324,6 +324,7 @@ const SOCIETY_STATUS = Object.freeze({
     SUSPENDED: "suspended",
     TRIAL: "trial",
     PENDING_VERIFICATION: "pending_verification",
+    PENDING_APPROVAL: "pending_approval",
 });
 
 const USER_STATUS = Object.freeze({

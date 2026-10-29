@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 const SuperAdminService = require("./superAdmin.service");
 const { sendSuccess } = require("../../utils/response.utils");
@@ -24,8 +24,8 @@ class SuperAdminController {
 
     async getSocieties(req, res, next) {
         try {
-            const { page, limit, search } = req.query;
-            const data = await SuperAdminService.getSocieties(page, limit, search);
+            const { page, limit, search, status, plan } = req.query;
+            const data = await SuperAdminService.getSocieties(page, limit, search, { status, plan });
             return sendSuccess(res, 200, "Societies fetched successfully", data);
         } catch (error) {
             next(error);
@@ -84,6 +84,39 @@ class SuperAdminController {
         try {
             const data = await SuperAdminService.createSociety(req.body);
             return sendSuccess(res, 201, "Society created and admin invited successfully", data);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getSocietyById(req, res, next) {
+        try {
+            const society = await SuperAdminService.getSocietyById(req.params.id);
+            return sendSuccess(res, 200, "Society fetched successfully", { society });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async updateSociety(req, res, next) {
+        try {
+            const data = await SuperAdminService.updateSociety(req.params.id, req.body);
+            return sendSuccess(res, 200, "Society updated successfully", data);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async updateSocietyStatus(req, res, next) {
+        try {
+            const { status } = req.body;
+            const data = await SuperAdminService.updateSocietyStatus(req.params.id, status);
+            return sendSuccess(
+                res,
+                200,
+                `Society ${status === "active" ? "activated" : "deactivated"} successfully`,
+                data
+            );
         } catch (error) {
             next(error);
         }

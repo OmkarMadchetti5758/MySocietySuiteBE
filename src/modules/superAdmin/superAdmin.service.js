@@ -1,20 +1,22 @@
-﻿"use strict";
+"use strict";
 
 const mongoose = require("mongoose");
 const SuperAdminRepository = require("./superAdmin.repository");
 const emailService = require("../../services/email.service");
 const { FRONTEND_URL } = require("../../config/env");
 const { getAvailableModules: getFallbackModules } = require("../../common/moduleRegistry");
+const { SOCIETY_STATUS } = require("../../common/constants");
+const AppError = require("../../common/AppError");
 
 class SuperAdminService {
     async getDashboardStats() {
         return SuperAdminRepository.getDashboardStats();
     }
 
-    async getSocieties(page, limit, search) {
+    async getSocieties(page, limit, search, filters = {}) {
         const p = parseInt(page) || 1;
         const l = parseInt(limit) || 10;
-        return SuperAdminRepository.getPaginatedSocieties(p, l, search);
+        return SuperAdminRepository.getPaginatedSocieties(p, l, search, filters);
     }
 
     async getAvailableModules() {
@@ -329,6 +331,51 @@ class SuperAdminService {
             admin: result.admin,
             ...(process.env.NODE_ENV === "development" ? { devInviteLink: inviteLink } : {}),
         };
+    }
+
+    async getSocietyById(id) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new AppError("Invalid society ID.", 400);
+        }
+        const society = await SuperAdminRepository.getSocietyById(id);
+        if (!society) {
+            throw new AppError("Society not found.", 404);
+        }
+        return society;
+    }
+
+    async updateSociety(id, data) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new AppError("Invalid society ID.", 400);
+        }
+
+        const societyDetails = data.societyDetails || {
+            name: data.societyName || data.name,
+            city: data.city,
+            state: data.state,
+            status: data.status,
+        };
+
+        const adminDetails = data.adminDetails || {
+            name: data.adminName,
+            email: data.adminEmail || data.email,
+            phone: data.adminPhone || data.phone || data.mobile,
+        };
+
+        return SuperAdminRepository.updateSociety(id, { societyDetails, adminDetails });
+    }
+
+    async updateSocietyStatus(id, status) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw new AppError("Invalid society ID.", 400);
+        }
+        if (!status) {
+            throw new AppError("Status is required.", 400);
+        }
+        if (!Object.values(SOCIETY_STATUS).includes(status)) {
+            throw new AppError(`Invalid status. Must be one of: ${Object.values(SOCIETY_STATUS).join(", ")}`, 400);
+        }
+        return SuperAdminRepository.updateSocietyStatus(id, status);
     }
 }
 
