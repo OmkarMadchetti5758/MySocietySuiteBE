@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 const mongoose = require("mongoose");
 const { getMasterConnection } = require("../../config/masterDb");
@@ -34,13 +34,94 @@ class SuperAdminRepository {
         return SubscriptionPlan.find({ isActive: true }).sort({ price: 1 }).lean();
     }
 
-    async getPaginatedSocieties(page = 1, limit = 10, search = "") {
+    async getPaginatedSocieties(page = 1, limit = 10, search = "", filters = {}) {
         const masterDb = getMasterConnection();
         const Society = masterDb.model("Society");
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        const User = opsDb.model("User");
 
         const query = {};
+        const andConditions = [];
+
         if (search) {
-            query.name = { $regex: search, $options: "i" };
+            andConditions.push({ name: { $regex: search, $options: "i" } });
+        }
+
+        if (filters.status && filters.status !== "all") {
+            const s = filters.status.toLowerCase().trim();
+            if (s === "pending_verification" || s === "pending") {
+                let pendingAdminIds = [];
+                let pendingSocietyIds = [];
+                try {
+                    const pendingAdmins = await User.find({
+                        role: "admin",
+                        status: { $in: ["invited", "pending", "pending_verification"] },
+                    }).select("_id societyId").lean();
+
+                    pendingAdminIds = pendingAdmins.map((u) => u._id).filter(Boolean);
+                    pendingSocietyIds = pendingAdmins.map((u) => u.societyId).filter(Boolean);
+                } catch (err) {
+                    console.error("Error querying pending admins for status filter:", err.message);
+                }
+
+                const pendingOr = [
+                    { status: { $in: ["pending_verification", "pending_approval"] } },
+                ];
+                if (pendingSocietyIds.length > 0) {
+                    pendingOr.push({ _id: { $in: pendingSocietyIds } });
+                }
+                if (pendingAdminIds.length > 0) {
+                    pendingOr.push({ adminId: { $in: pendingAdminIds } });
+                }
+                andConditions.push({ $or: pendingOr });
+            } else if (s === "active" || s === "trial") {
+                let pendingAdminIds = [];
+                let pendingSocietyIds = [];
+                try {
+                    const pendingAdmins = await User.find({
+                        role: "admin",
+                        status: { $in: ["invited", "pending", "pending_verification"] },
+                    }).select("_id societyId").lean();
+
+                    pendingAdminIds = pendingAdmins.map((u) => u._id).filter(Boolean);
+                    pendingSocietyIds = pendingAdmins.map((u) => u.societyId).filter(Boolean);
+                } catch (err) {
+                    console.error("Error querying pending admins for status filter:", err.message);
+                }
+
+                const condition = { status: s };
+                if (pendingSocietyIds.length > 0) {
+                    condition._id = { $nin: pendingSocietyIds };
+                }
+                if (pendingAdminIds.length > 0) {
+                    condition.adminId = { $nin: pendingAdminIds };
+                }
+                andConditions.push(condition);
+            } else if (s === "inactive") {
+                andConditions.push({ status: "inactive" });
+            } else {
+                andConditions.push({ status: s });
+            }
+        }
+
+        if (filters.plan && filters.plan !== "all") {
+            const p = filters.plan.toLowerCase().trim();
+            if (p === "trial") {
+                andConditions.push({
+                    $or: [
+                        { subscriptionPlanId: null },
+                        { subscriptionPlanId: { $exists: false } }
+                    ]
+                });
+            } else if (p === "premium") {
+                andConditions.push({ subscriptionPlanId: { $ne: null } });
+            } else if (mongoose.Types.ObjectId.isValid(filters.plan)) {
+                andConditions.push({ subscriptionPlanId: new mongoose.Types.ObjectId(filters.plan) });
+            }
+        }
+
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
         }
 
         const skip = (page - 1) * limit;
@@ -55,13 +136,285 @@ class SuperAdminRepository {
             Society.countDocuments(query)
         ]);
 
+        const adminIds = societies.map((s) => s.adminId).filter(Boolean);
+        const societyIds = societies.map((s) => s._id);
+
+        const [adminsById, adminsBySociety] = await Promise.all([
+            adminIds.length > 0 ? User.find({ _id: { $in: adminIds } }).select("_id name email mobile status").lean() : [],
+            societyIds.length > 0 ? User.find({ societyId: { $in: societyIds }, role: "admin" }).select("_id societyId name email mobile status").lean() : [],
+        ]);
+
+        const adminMap = new Map();
+        adminsById.forEach((a) => adminMap.set(String(a._id), a));
+        const societyAdminMap = new Map();
+        adminsBySociety.forEach((a) => societyAdminMap.set(String(a.societyId), a));
+
+        const enrichedSocieties = societies.map((s) => {
+            const admin = (s.adminId && adminMap.get(String(s.adminId))) || societyAdminMap.get(String(s._id));
+            const adminStatus = admin?.status || "";
+            return {
+                ...s,
+                adminName: admin?.name || "",
+                adminStatus,
+                isOnboarded: adminStatus === "active",
+                contactEmail: s.contactEmail || admin?.email || "",
+                contactPhone: s.contactPhone || admin?.mobile || "",
+                adminDetails: admin
+                    ? {
+                          name: admin.name,
+                          email: admin.email,
+                          phone: admin.mobile,
+                          status: admin.status,
+                      }
+                    : null,
+            };
+        });
+
         return {
-            societies,
+            societies: enrichedSocieties,
             total,
             page,
             limit,
             totalPages: Math.ceil(total / limit)
         };
+    }
+
+    async getSocietyById(societyId) {
+        const masterDb = getMasterConnection();
+        const Society = masterDb.model("Society");
+
+        const society = await Society.findById(societyId)
+            .populate("subscriptionPlanId", "name slug price features tagline")
+            .lean();
+
+        if (!society) return null;
+
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        const User = opsDb.model("User");
+
+        let admin = null;
+        if (society.adminId) {
+            admin = await User.findById(society.adminId).select("_id name email mobile status").lean();
+        }
+        if (!admin) {
+            admin = await User.findOne({ societyId: society._id, role: "admin" }).select("_id name email mobile status").lean();
+        }
+
+        const adminStatus = admin?.status || "";
+        return {
+            ...society,
+            adminName: admin?.name || "",
+            adminStatus,
+            isOnboarded: adminStatus === "active",
+            contactEmail: society.contactEmail || admin?.email || "",
+            contactPhone: society.contactPhone || admin?.mobile || "",
+            adminDetails: admin
+                ? {
+                      name: admin.name,
+                      email: admin.email,
+                      phone: admin.mobile,
+                      status: admin.status,
+                  }
+                : null,
+        };
+    }
+
+    async updateSociety(societyId, { societyDetails = {}, adminDetails = {} }) {
+        const masterDb = getMasterConnection();
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        const Society = masterDb.model("Society");
+        const User = opsDb.model("User");
+        const AppError = require("../../common/AppError");
+
+        const society = await Society.findById(societyId);
+        if (!society) {
+            throw new AppError("Society not found", 404);
+        }
+
+        // Update society details
+        if (societyDetails.name !== undefined) {
+            const trimmedName = societyDetails.name.trim();
+            if (!trimmedName) throw new AppError("Society name is required", 400);
+            society.name = trimmedName;
+        }
+
+        if (societyDetails.city !== undefined || societyDetails.state !== undefined) {
+            society.address = society.address || {};
+            if (societyDetails.city !== undefined) society.address.city = societyDetails.city.trim();
+            if (societyDetails.state !== undefined) society.address.state = societyDetails.state.trim();
+        }
+
+        if (adminDetails.email !== undefined) {
+            const email = adminDetails.email.trim().toLowerCase();
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                throw new AppError("Please enter a valid email address", 400);
+            }
+            society.contactEmail = email;
+        }
+
+        if (adminDetails.phone !== undefined) {
+            const phone = adminDetails.phone.trim();
+            if (phone && !/^\+?[0-9\s-]{10,15}$/.test(phone)) {
+                throw new AppError("Please enter a valid phone number", 400);
+            }
+            society.contactPhone = phone;
+        }
+
+        if (societyDetails.status !== undefined) {
+            if (["active", "trial"].includes(societyDetails.status)) {
+                let existingAdmin = null;
+                if (society.adminId) {
+                    existingAdmin = await User.findById(society.adminId);
+                }
+                if (!existingAdmin) {
+                    existingAdmin = await User.findOne({ societyId: society._id, role: "admin" });
+                }
+                if (existingAdmin && existingAdmin.status === "invited") {
+                    throw new AppError(
+                        "Cannot activate a society whose admin has not completed the onboarding invitation flow.",
+                        400
+                    );
+                }
+                if (["pending_verification", "pending_approval"].includes(society.status)) {
+                    throw new AppError(
+                        "Cannot activate a pending society. The society admin must complete the onboarding invitation flow first.",
+                        400
+                    );
+                }
+            }
+            society.status = societyDetails.status;
+        }
+
+        await society.save();
+
+        // Find or create admin user in opsDb
+        let adminUser = null;
+        if (society.adminId) {
+            adminUser = await User.findById(society.adminId);
+        }
+        if (!adminUser) {
+            adminUser = await User.findOne({ societyId: society._id, role: "admin" });
+        }
+
+        if (adminUser) {
+            const oldEmail = adminUser.email;
+            const oldMobile = adminUser.mobile;
+
+            if (adminDetails.name !== undefined) {
+                const trimmedName = adminDetails.name.trim();
+                if (!trimmedName) throw new AppError("Admin name is required", 400);
+                adminUser.name = trimmedName;
+            }
+
+            if (adminDetails.email !== undefined) {
+                adminUser.email = adminDetails.email.trim().toLowerCase();
+            }
+
+            if (adminDetails.phone !== undefined) {
+                adminUser.mobile = adminDetails.phone.trim();
+            }
+
+            await adminUser.save();
+
+            // Link adminId to Society if missing
+            if (!society.adminId) {
+                society.adminId = adminUser._id;
+                await society.save();
+            }
+
+            // Sync UserSocietyMapping if email or mobile changed
+            const emailChanged = adminDetails.email && adminDetails.email.trim().toLowerCase() !== oldEmail;
+            const mobileChanged = adminDetails.phone && adminDetails.phone.trim() !== oldMobile;
+
+            if (emailChanged || mobileChanged) {
+                const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+                const Mapping = masterDb.model("UserSocietyMapping");
+
+                const newIdentifiers = MappingRepository.collectIdentifiers(adminUser.email, adminUser.mobile);
+
+                // Remove mappings for this admin user that no longer match the new identifiers
+                await Mapping.deleteMany({
+                    societyId: society._id,
+                    userId: adminUser._id,
+                    identifier: { $nin: newIdentifiers },
+                });
+
+                // Ensure new identifiers are mapped
+                await MappingRepository.ensureIdentifierMappings(society._id, adminUser, {
+                    roleKeys: ["admin"],
+                    status: society.status === "active" ? "active" : "deactivated",
+                });
+            }
+        } else if (adminDetails.name || adminDetails.email || adminDetails.phone) {
+            // Admin user did not exist, create one
+            const newAdminUser = await User.create({
+                societyId: society._id,
+                name: adminDetails.name ? adminDetails.name.trim() : "Admin",
+                email: (adminDetails.email || society.contactEmail || "").trim().toLowerCase(),
+                mobile: (adminDetails.phone || society.contactPhone || "").trim(),
+                role: "admin",
+                status: "active",
+            });
+
+            society.adminId = newAdminUser._id;
+            await society.save();
+
+            const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
+            await MappingRepository.createMappings({
+                societyId: society._id,
+                userId: newAdminUser._id,
+                email: newAdminUser.email,
+                mobile: newAdminUser.mobile,
+                roleKeys: ["admin"],
+            });
+            adminUser = newAdminUser;
+        }
+
+        return this.getSocietyById(society._id);
+    }
+
+    async updateSocietyStatus(societyId, status) {
+        const masterDb = getMasterConnection();
+        const Society = masterDb.model("Society");
+        const AppError = require("../../common/AppError");
+
+        const society = await Society.findById(societyId);
+        if (!society) {
+            throw new AppError("Society not found", 404);
+        }
+
+        if (["pending_verification", "pending_approval"].includes(society.status)) {
+            throw new AppError(
+                "Cannot change status of a pending society. The society admin must complete the onboarding invitation flow first.",
+                400
+            );
+        }
+
+        const opsDb = require("../../config/operationsDb").getOperationsConnection();
+        const User = opsDb.model("User");
+        let adminUser = null;
+        if (society.adminId) {
+            adminUser = await User.findById(society.adminId);
+        }
+        if (!adminUser) {
+            adminUser = await User.findOne({ societyId: society._id, role: "admin" });
+        }
+
+        if (adminUser && adminUser.status === "invited") {
+            throw new AppError(
+                "Cannot change status of a society whose admin has not completed the onboarding invitation flow.",
+                400
+            );
+        }
+
+        society.status = status;
+        await society.save();
+
+        const Mapping = masterDb.model("UserSocietyMapping");
+        const mappingStatus = status === "active" ? "active" : "deactivated";
+        await Mapping.updateMany({ societyId: society._id }, { $set: { status: mappingStatus } });
+
+        return this.getSocietyById(society._id);
     }
 
     async createSuperAdmin(adminData) {
