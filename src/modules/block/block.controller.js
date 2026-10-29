@@ -26,7 +26,7 @@ class BlockController {
                         delete cleaned.assignedStaff;
                     }
                     // Coerce numeric fields and clean empty string values so Mongoose doesn't fail CastError
-                    const numFields = ['totalFloors', 'totalFlats', 'unitCount', 'carpetArea', 'builtUpArea', 'parking4W'];
+                    const numFields = ['totalFloors', 'unitsPerFloor', 'totalFlats', 'unitCount', 'carpetArea', 'builtUpArea', 'parking4W'];
                     numFields.forEach((field) => {
                         if (cleaned[field] !== undefined) {
                             if (cleaned[field] === '' || cleaned[field] === null) {

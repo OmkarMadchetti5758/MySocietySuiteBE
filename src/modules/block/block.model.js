@@ -19,6 +19,10 @@ const wingSchema = new mongoose.Schema(
             required: [true, "Number of floors is required"],
             min: 1,
         },
+        unitsPerFloor: {
+            type: Number,
+            min: 1,
+        },
         totalFlats: {
             type: Number,
             min: 0,
