@@ -46,6 +46,7 @@ class BlockService {
             name: w.name,
             code: w.code || "",
             totalFloors: w.totalFloors ?? 0,
+            unitsPerFloor: w.unitsPerFloor ?? (w.totalFloors > 0 && (w.unitCount || w.totalFlats) ? Math.ceil((w.unitCount || w.totalFlats) / w.totalFloors) : 4),
             totalFlats: w.totalFlats ?? w.unitCount ?? 0,
             propertyType: w.propertyType || "Flat / Apartment",
             configuration: w.configuration || "2 BHK",
@@ -117,14 +118,18 @@ class BlockService {
             cleanedWings = wingsData.map((w) => {
                 const rawWingName = (w.wing || w.name || "A Wing").trim();
                 const code = (w.code || rawWingName.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase()) || "W1";
+                const unitCount = Number(w.unitCount || w.totalFlats) || 0;
+                const totalFloors = Number(w.totalFloors) || (w.unitsPerFloor && unitCount ? Math.ceil(unitCount / Number(w.unitsPerFloor)) : 1);
+                const unitsPerFloor = Number(w.unitsPerFloor) || (totalFloors > 0 && unitCount > 0 ? Math.ceil(unitCount / totalFloors) : 4);
                 const item = {
                     name: rawWingName,
                     code,
-                    totalFloors: Number(w.totalFloors) || 1,
-                    totalFlats: Number(w.unitCount || w.totalFlats) || 0,
+                    totalFloors,
+                    unitsPerFloor,
+                    totalFlats: unitCount,
                     propertyType: w.propertyType || "Flat / Apartment",
                     configuration: w.configuration || "2 BHK",
-                    unitCount: Number(w.unitCount || w.totalFlats) || 0,
+                    unitCount,
                     carpetArea: Number(w.carpetArea) || 0,
                     builtUpArea: Number(w.builtUpArea) || 0,
                     parking4W: Number(w.parking4W) || 0,

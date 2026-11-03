@@ -107,16 +107,32 @@ class SocietySetupService {
             propertyType: society.projectInfo?.propertyType || society.societyType || "Residential",
         };
 
-        const residentialInventory = (blockDoc?.wings || []).map((w, idx) => ({
-            id: w._id ? w._id.toString() : `res-${idx + 1}`,
-            wing: w.name,
-            propertyType: w.propertyType || "Flat / Apartment",
-            configuration: w.configuration || "2 BHK",
-            unitCount: w.unitCount || w.totalFlats || 0,
-            carpetArea: w.carpetArea || 650,
-            builtUpArea: w.builtUpArea || 900,
-            parking4W: w.parking4W || 0,
-        }));
+        const residentialInventory = (blockDoc?.wings || []).map((w, idx) => {
+            const unitCount = w.unitCount || w.totalFlats || 0;
+            // Preserve existing totalFloors if present, otherwise calculate safely without forcing 1
+            const totalFloors = w.totalFloors && w.totalFloors > 0
+                ? w.totalFloors
+                : (unitCount > 0 ? Math.ceil(unitCount / 4) : 1);
+            // Safe fallback for unitsPerFloor matching existing records and 4-unit generator
+            const unitsPerFloor = w.unitsPerFloor && w.unitsPerFloor > 0
+                ? w.unitsPerFloor
+                : (totalFloors > 0 && unitCount > 0 && Math.ceil(unitCount / totalFloors) > 4
+                    ? Math.ceil(unitCount / totalFloors)
+                    : 4);
+
+            return {
+                id: w._id ? w._id.toString() : `res-${idx + 1}`,
+                wing: w.name,
+                propertyType: w.propertyType || "Flat / Apartment",
+                configuration: w.configuration || "2 BHK",
+                unitCount,
+                carpetArea: w.carpetArea || 650,
+                builtUpArea: w.builtUpArea || 900,
+                parking4W: w.parking4W || 0,
+                totalFloors,
+                unitsPerFloor,
+            };
+        });
 
         const commercialInventory = (blockDoc?.commercialUnits || []).map((c, idx) => ({
             id: c._id ? c._id.toString() : `com-${idx + 1}`,
@@ -285,14 +301,18 @@ class SocietySetupService {
         const wings = (residentialInventory || []).map((item) => {
             const rawWingName = item.wing || "A Wing";
             const code = rawWingName.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() || "W1";
+            const unitCount = Number(item.unitCount) || 0;
+            const unitsPerFloor = Number(item.unitsPerFloor) || (Number(item.totalFloors) && unitCount ? Math.ceil(unitCount / Number(item.totalFloors)) : 4);
+            const totalFloors = Number(item.totalFloors) || (unitCount > 0 ? Math.ceil(unitCount / unitsPerFloor) : 1);
             return {
                 name: rawWingName,
                 code,
-                totalFloors: Number(item.totalFloors) || 10,
-                totalFlats: Number(item.unitCount) || 0,
+                totalFloors,
+                unitsPerFloor,
+                totalFlats: unitCount,
                 propertyType: item.propertyType || "Flat / Apartment",
                 configuration: item.configuration || "2 BHK",
-                unitCount: Number(item.unitCount) || 0,
+                unitCount,
                 carpetArea: Number(item.carpetArea) || 0,
                 builtUpArea: Number(item.builtUpArea) || 0,
                 parking4W: Number(item.parking4W) || 0,
@@ -539,35 +559,42 @@ class SocietySetupService {
         await society.save();
 
         // Auto-generate flats if none exist
-        const existingFlatsCount = await Flat.countDocuments({ societyId });
+        const existingFlats = await Flat.find({ societyId }).select("flatNumber").lean();
+        const existingFlatsCount = existingFlats.length;
         if (existingFlatsCount === 0) {
             const blockDoc = await Block.findOne({ societyId });
             if (blockDoc && Array.isArray(blockDoc.wings)) {
+                const existingSet = new Set(existingFlats.map((f) => f.flatNumber));
                 const flatsToCreate = [];
 
                 for (const wing of blockDoc.wings) {
                     const wingLetter = (wing.name || "A").trim().split(" ")[0] || "A";
                     const count = wing.unitCount || wing.totalFlats || 0;
                     const perUnitParking = wing.unitCount > 0 && wing.parking4W ? Math.floor(wing.parking4W / wing.unitCount) : 0;
+                    const unitsPerFloor = Number(wing.unitsPerFloor) || (wing.totalFloors && count ? Math.ceil(count / wing.totalFloors) : 4);
 
                     for (let i = 1; i <= count; i++) {
-                        const floorNum = Math.floor((i - 1) / 4) + 1;
-                        const unitInFloor = ((i - 1) % 4) + 1;
-                        const flatNumber = `${wingLetter}-${floorNum}0${unitInFloor}`;
+                        const floorNum = Math.floor((i - 1) / unitsPerFloor) + 1;
+                        const unitInFloor = ((i - 1) % unitsPerFloor) + 1;
+                        const unitSuffix = String(unitInFloor).padStart(2, "0");
+                        const flatNumber = `${wingLetter}-${floorNum}${unitSuffix}`;
 
-                        flatsToCreate.push({
-                            societyId,
-                            blockId: blockDoc._id,
-                            flatNumber,
-                            floor: floorNum,
-                            type: wing.configuration || "2 BHK",
-                            area: wing.carpetArea || 650,
-                            ownershipType: "Owned",
-                            occupancyStatus: "Vacant",
-                            parkingSlots: perUnitParking,
-                            status: "vacant",
-                            isActive: true,
-                        });
+                        if (!existingSet.has(flatNumber)) {
+                            existingSet.add(flatNumber);
+                            flatsToCreate.push({
+                                societyId,
+                                blockId: blockDoc._id,
+                                flatNumber,
+                                floor: floorNum,
+                                type: wing.configuration || "2 BHK",
+                                area: wing.carpetArea || 650,
+                                ownershipType: "Owned",
+                                occupancyStatus: "Vacant",
+                                parkingSlots: perUnitParking,
+                                status: "vacant",
+                                isActive: true,
+                            });
+                        }
                     }
                 }
 
