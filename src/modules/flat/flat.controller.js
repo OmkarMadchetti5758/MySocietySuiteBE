@@ -446,8 +446,9 @@ class FlatController {
                 return sendError(res, 400, "Flat is already occupied");
             }
 
-            const { userId, name, email, phone, residentType } = req.body;
+            const { userId, name, email, phone, residentType, occupancyStatus } = req.body;
             const isOwner = residentType === "owner";
+            const isVacant = isOwner && (occupancyStatus === "Vacant" || occupancyStatus === "vacant");
 
             let resultUser;
             let devInviteLink;
@@ -467,7 +468,7 @@ class FlatController {
                             flatId: flat._id,
                             residentType,
                             isActive: true,
-                            moveInDate: new Date(),
+                            moveInDate: isVacant ? null : new Date(),
                         },
                     },
                     { upsert: true, new: true }
@@ -483,6 +484,7 @@ class FlatController {
                     flatId: flat._id,
                     flatNumber: flat.flatNumber,
                     blockId: flat.blockId,
+                    occupancyStatus: isVacant ? "Vacant" : (isOwner ? "Owner Occupied" : "Tenant Occupied"),
                 });
                 resultUser = result.user;
                 devInviteLink = result.devInviteLink;
@@ -495,6 +497,8 @@ class FlatController {
                 {
                     ownerName: isOwner ? (resultUser.name || name) : undefined,
                     ownerContact: isOwner ? (resultUser.mobile || phone) : undefined,
+                    occupancyStatus: isVacant ? "Vacant" : (isOwner ? "Owner Occupied" : "Tenant Occupied"),
+                    isVacant,
                 }
             );
 

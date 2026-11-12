@@ -21,6 +21,7 @@ const STORAGE_FOLDERS = {
     SOCIETY: "society",
     PARKING: "parking",
     DOCUMENTS: "documents",
+    TENANTS: "tenants",
 };
 
 const ALLOWED_FOLDERS = new Set(Object.values(STORAGE_FOLDERS));

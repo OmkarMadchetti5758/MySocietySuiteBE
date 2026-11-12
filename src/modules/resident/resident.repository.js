@@ -43,8 +43,14 @@ class ResidentRepository {
                 updates.ownerContact = "";
             }
         } else {
-            updates.status = FLAT_STATUS.OCCUPIED;
-            updates.occupancyStatus = tenant && !owner ? "Tenant Occupied" : "Owner Occupied";
+            const isVacant = extras.occupancyStatus === "Vacant" || extras.isVacant;
+            if (isVacant) {
+                updates.status = FLAT_STATUS.VACANT;
+                updates.occupancyStatus = "Vacant";
+            } else {
+                updates.status = FLAT_STATUS.OCCUPIED;
+                updates.occupancyStatus = tenant && !owner ? "Tenant Occupied" : "Owner Occupied";
+            }
 
             const displayUserId = owner?.userId || tenant?.userId || residents[0].userId;
             const displayUser = displayUserId
@@ -163,12 +169,13 @@ class ResidentRepository {
             // Update flat's ownerName so it shows correctly in the Guard's Walk-in Visitor dropdown
             const Flat = opsDb.model("Flat");
             const isOwner = residentType === RESIDENT_TYPE.OWNER;
+            const isVacant = data.occupancyStatus === "Vacant" || data.isVacant;
             await Flat.findOneAndUpdate(
                 { _id: flat._id },
                 {
                     $set: {
-                        status: FLAT_STATUS.OCCUPIED,
-                        occupancyStatus: isOwner ? "Owner Occupied" : "Tenant Occupied",
+                        status: isVacant ? FLAT_STATUS.VACANT : FLAT_STATUS.OCCUPIED,
+                        occupancyStatus: isVacant ? "Vacant" : (isOwner ? "Owner Occupied" : "Tenant Occupied"),
                         ownerName: isOwner ? data.name : flat.ownerName || data.name,
                     }
                 }
@@ -199,6 +206,8 @@ class ResidentRepository {
             await this.syncFlatOccupancy(societyId, flat._id, {
                 ownerName: residentType === RESIDENT_TYPE.OWNER ? data.name : undefined,
                 ownerContact: residentType === RESIDENT_TYPE.OWNER ? phone : undefined,
+                occupancyStatus: data.occupancyStatus,
+                isVacant,
             });
 
             const MappingRepository = require("../userSocietyMapping/userSocietyMapping.repository");
