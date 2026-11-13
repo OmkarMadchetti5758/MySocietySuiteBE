@@ -51,6 +51,10 @@ const flatSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
         },
+        currentTenantRegistrationId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "TenantRegistration",
+        },
         numberOfResidents: {
             type: Number,
             default: 0,
