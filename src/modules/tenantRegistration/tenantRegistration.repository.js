@@ -272,6 +272,8 @@ class TenantRegistrationRepository {
         const updateData = { status };
         if (status === "Vacated" && moveOutDate) {
             updateData.moveOutDate = moveOutDate;
+        } else if (status !== "Vacated") {
+            updateData.moveOutDate = null;
         }
 
         return TenantRegistration.findOneAndUpdate(

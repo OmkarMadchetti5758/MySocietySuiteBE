@@ -130,6 +130,22 @@ class TenantRegistrationController {
             next(error);
         }
     }
+
+    async updateTenant(req, res, next) {
+        try {
+            const isAdmin = isAdminRole(req.user);
+            const record = await TenantRegistrationService.updateTenant(
+                req.societyId,
+                req.params.id,
+                req.user.id,
+                isAdmin,
+                req.body
+            );
+            return sendSuccess(res, 200, "Tenant details updated successfully", { record });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 module.exports = new TenantRegistrationController();

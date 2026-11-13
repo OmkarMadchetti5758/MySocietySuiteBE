@@ -10,7 +10,11 @@ const checkPermission = require("../../middleware/checkPermission");
 const validate = require("../../middleware/validate");
 const documentUpload = require("../../middleware/documentUpload.middleware");
 const { MODULES, PERMISSION_LEVELS } = require("../../common/constants");
-const { createTenantValidation, updateStatusValidation } = require("./tenantRegistration.validation");
+const {
+    createTenantValidation,
+    updateStatusValidation,
+    updateTenantValidation,
+} = require("./tenantRegistration.validation");
 
 // All routes require authentication + society scope
 router.use(authenticate, injectSocietyId);
@@ -62,6 +66,15 @@ router.get(
     "/:id",
     checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.VIEW),
     TenantRegistrationController.getTenantById
+);
+
+// PUT /:id — update tenant registration details
+router.put(
+    "/:id",
+    checkPermission(MODULES.SOCIETY_FLAT_SETUP, PERMISSION_LEVELS.VIEW),
+    updateTenantValidation,
+    validate,
+    TenantRegistrationController.updateTenant
 );
 
 // PUT /:id/status — change status (Active / Inactive / Vacated)

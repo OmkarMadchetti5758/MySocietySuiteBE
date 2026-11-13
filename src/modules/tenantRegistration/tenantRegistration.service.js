@@ -10,6 +10,50 @@ const emailService = require("../../services/email.service");
 const { FRONTEND_URL } = require("../../config/env");
 const { ROLES, USER_STATUS, RESIDENT_TYPE, FLAT_STATUS } = require("../../common/constants");
 
+/**
+ * Safely verify whether requester (userId) has permission to manage a tenant registration.
+ * Handles populated { _id, ... } and unpopulated ObjectId, and falls back to flat primary owner or owner resident.
+ */
+async function hasTenantRecordAccess(societyId, record, userId, isAdmin, opsDb) {
+    if (isAdmin) return true;
+    if (!record || !userId) return false;
+
+    const requesterIdStr = userId.toString();
+
+    // 1. Direct ownerId match (handles populated { _id, ... } and raw ObjectId / string)
+    const rawOwnerId = record.ownerId?._id || record.ownerId;
+    if (rawOwnerId && rawOwnerId.toString() !== "[object Object]" && rawOwnerId.toString() === requesterIdStr) {
+        return true;
+    }
+
+    // 2. Fallback: check if requester is primaryOwner of the flat, or registered as resident owner
+    const rawFlatId = record.flatId?._id || record.flatId;
+    if (rawFlatId && opsDb) {
+        try {
+            const Flat = opsDb.model("Flat");
+            const flat = await Flat.findOne({ _id: rawFlatId, societyId }).select("primaryOwner").lean();
+            if (flat?.primaryOwner && flat.primaryOwner.toString() === requesterIdStr) {
+                return true;
+            }
+
+            const Resident = opsDb.model("Resident");
+            const isResidentOwner = await Resident.exists({
+                societyId,
+                flatId: rawFlatId,
+                userId,
+                residentType: RESIDENT_TYPE.OWNER || "owner",
+            });
+            if (isResidentOwner) {
+                return true;
+            }
+        } catch (e) {
+            // Silently fall through to false
+        }
+    }
+
+    return false;
+}
+
 class TenantRegistrationService {
     /**
      * Register a tenant for a flat owned by ownerId.
@@ -361,11 +405,13 @@ class TenantRegistrationService {
      * Get a single tenant registration by id.
      */
     async getTenantById(societyId, id, ownerId, isAdmin) {
+        const opsDb = getOperationsConnection();
         const record = await TenantRegistrationRepository.getById(societyId, id);
         if (!record) {
             throw new AppError(TENANT_ERRORS.TENANT_NOT_FOUND, 404);
         }
-        if (!isAdmin && record.ownerId.toString() !== ownerId.toString()) {
+        const hasAccess = await hasTenantRecordAccess(societyId, record, ownerId, isAdmin, opsDb);
+        if (!hasAccess) {
             throw new AppError(TENANT_ERRORS.FORBIDDEN, 403);
         }
         return record;
@@ -383,9 +429,13 @@ class TenantRegistrationService {
         if (!record) {
             throw new AppError(TENANT_ERRORS.TENANT_NOT_FOUND, 404);
         }
-        if (!isAdmin && record.ownerId.toString() !== ownerId.toString()) {
+        const hasAccess = await hasTenantRecordAccess(societyId, record, ownerId, isAdmin, opsDb);
+        if (!hasAccess) {
             throw new AppError(TENANT_ERRORS.FORBIDDEN, 403);
         }
+
+        const flatId = record.flatId?._id || record.flatId;
+        const tenantUserId = record.tenantUserId?._id || record.tenantUserId;
 
         let moveOutDate = null;
 
@@ -393,37 +443,50 @@ class TenantRegistrationService {
             moveOutDate = new Date();
 
             // Update flat: mark Vacant, clear activeTenant + currentTenantRegistrationId
-            await Flat.findOneAndUpdate(
-                { _id: record.flatId, societyId },
-                {
-                    $set: {
-                        occupancyStatus: "Vacant",
-                        status: FLAT_STATUS.VACANT,
-                        activeTenant: null,
-                        currentTenantRegistrationId: null,
+            if (flatId) {
+                await Flat.findOneAndUpdate(
+                    { _id: flatId, societyId },
+                    {
+                        $set: {
+                            occupancyStatus: "Vacant",
+                            status: FLAT_STATUS.VACANT,
+                            activeTenant: null,
+                            currentTenantRegistrationId: null,
+                        },
                     },
-                },
-                { new: true }
-            );
+                    { new: true }
+                );
+            }
 
             // Deactivate the Resident record for this tenant
-            await Resident.findOneAndUpdate(
-                { societyId, flatId: record.flatId, userId: record.tenantUserId },
-                { $set: { isActive: false, moveOutDate } }
-            );
+            if (flatId && tenantUserId) {
+                await Resident.findOneAndUpdate(
+                    { societyId, flatId, userId: tenantUserId },
+                    { $set: { isActive: false, moveOutDate } }
+                );
+            }
         } else if (status === "Active") {
-            await Flat.findOneAndUpdate(
-                { _id: record.flatId, societyId },
-                {
-                    $set: {
-                        occupancyStatus: "Tenant Occupied",
-                        status: FLAT_STATUS.OCCUPIED,
-                        activeTenant: record.tenantUserId,
-                        currentTenantRegistrationId: record._id,
+            if (flatId) {
+                await Flat.findOneAndUpdate(
+                    { _id: flatId, societyId },
+                    {
+                        $set: {
+                            occupancyStatus: "Tenant Occupied",
+                            status: FLAT_STATUS.OCCUPIED,
+                            activeTenant: tenantUserId,
+                            currentTenantRegistrationId: record._id,
+                        },
                     },
-                },
-                { new: true }
-            );
+                    { new: true }
+                );
+            }
+
+            if (flatId && tenantUserId) {
+                await Resident.findOneAndUpdate(
+                    { societyId, flatId, userId: tenantUserId },
+                    { $set: { isActive: true, moveOutDate: null } }
+                );
+            }
         }
 
         return TenantRegistrationRepository.updateStatus(societyId, id, status, moveOutDate);
@@ -476,7 +539,8 @@ class TenantRegistrationService {
         }
 
         // Owner scope check
-        if (!isAdmin && registration.ownerId.toString() !== requesterId.toString()) {
+        const hasAccess = await hasTenantRecordAccess(societyId, registration, requesterId, isAdmin, opsDb);
+        if (!hasAccess) {
             throw new AppError(TENANT_ERRORS.FLAT_NOT_OWNED, 403);
         }
 
@@ -535,6 +599,100 @@ class TenantRegistrationService {
             message: "Invitation resent successfully",
             ...(process.env.NODE_ENV === "development" ? { devInviteLink: inviteLink } : {}),
         };
+    }
+
+    /**
+     * Update tenant registration details (personal, tenancy, professional, reference).
+     */
+    async updateTenant(societyId, id, requesterId, isAdmin, data) {
+        const opsDb = getOperationsConnection();
+        const TenantRegistration = opsDb.model("TenantRegistration");
+        const User = opsDb.model("User");
+
+        const record = await TenantRegistration.findOne({ _id: id, societyId });
+        if (!record) {
+            throw new AppError(TENANT_ERRORS.TENANT_NOT_FOUND, 404);
+        }
+
+        // Owner scope check
+        const hasAccess = await hasTenantRecordAccess(societyId, record, requesterId, isAdmin, opsDb);
+        if (!hasAccess) {
+            throw new AppError(TENANT_ERRORS.FLAT_NOT_OWNED, 403);
+        }
+
+        const allowedFields = [
+            "fullName",
+            "mobileNumber",
+            "email",
+            "dateOfBirth",
+            "gender",
+            "numberOfOccupants",
+            "completeAddress",
+            "emergencyContactNumber",
+            "employmentType",
+            "companyName",
+            "companyDescription",
+            "organizationName",
+            "organizationAddress",
+            "yearOfIncorporation",
+            "moveInDate",
+            "monthlyRent",
+            "securityDeposit",
+            "rentDueDay",
+            "petAllowed",
+            "referenceName",
+            "referenceContactNumber",
+            "referenceRelation",
+        ];
+
+        const updateData = {};
+        for (const field of allowedFields) {
+            if (data[field] !== undefined) {
+                updateData[field] = data[field];
+            }
+        }
+
+        if (updateData.monthlyRent !== undefined) {
+            updateData.monthlyRent = updateData.monthlyRent !== "" && updateData.monthlyRent !== null
+                ? Number(updateData.monthlyRent)
+                : null;
+        }
+        if (updateData.securityDeposit !== undefined) {
+            updateData.securityDeposit = updateData.securityDeposit !== "" && updateData.securityDeposit !== null
+                ? Number(updateData.securityDeposit)
+                : null;
+        }
+        if (updateData.rentDueDay !== undefined) {
+            updateData.rentDueDay = updateData.rentDueDay !== "" && updateData.rentDueDay !== null
+                ? Number(updateData.rentDueDay)
+                : null;
+        }
+        if (updateData.numberOfOccupants !== undefined) {
+            updateData.numberOfOccupants = updateData.numberOfOccupants !== "" && updateData.numberOfOccupants !== null
+                ? Number(updateData.numberOfOccupants)
+                : null;
+        }
+        if (updateData.petAllowed !== undefined) {
+            updateData.petAllowed = Boolean(updateData.petAllowed);
+        }
+        if (updateData.moveInDate) {
+            updateData.moveInDate = new Date(updateData.moveInDate);
+        }
+        if (updateData.dateOfBirth) {
+            updateData.dateOfBirth = new Date(updateData.dateOfBirth);
+        }
+
+        // Synchronize linked User if fullName / mobile / email changed
+        if (record.tenantUserId && (updateData.fullName || updateData.mobileNumber || updateData.email)) {
+            const userUpdates = {};
+            if (updateData.fullName) userUpdates.name = updateData.fullName.trim();
+            if (updateData.mobileNumber) userUpdates.mobile = updateData.mobileNumber.trim();
+            if (updateData.email) userUpdates.email = updateData.email.toLowerCase().trim();
+            await User.findByIdAndUpdate(record.tenantUserId, { $set: userUpdates });
+        }
+
+        const updated = await TenantRegistrationRepository.updateRegistration(societyId, id, updateData);
+        return updated;
     }
 }
 
